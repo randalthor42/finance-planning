@@ -15,6 +15,8 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
+import { calendar } from '../components/calendar.js';
+import { SPENDING, planCalendar } from '../components/calendarData.js';
 import { cashChart, netBars } from '../components/charts.js';
 import { amt, bar, budgetText, card, page, prow, row } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
@@ -549,6 +551,46 @@ function safeToSpend(projection, fromK, cushion) {
       : $t('{0} already goes below zero', M.label(lowest.k, true)),
   };
 }
+/**
+ * The calendar of the Overview, as set in Settings › Calendar: by default what goes out day by day (bills, purchases
+ * and spends, loan payments, trips and wishes), with what each day costs. It opens on this month; the arrows page
+ * through the plan and the month shown is kept for the visit. Null when it is switched off.
+ */
+function overviewCalendar() {
+  const prefs = Store.db.calendar;
+  if (!prefs.overview) {
+    return null;
+  }
+  // called a spending calendar while it only shows spending; "Calendar" once income or savings are added in Settings
+  const spendingOnly = prefs.overviewGroups.every(group => SPENDING.includes(group));
+  const title = spendingOnly ? $t('Spending calendar') : $t('Calendar');
+  return h(
+    'div',
+    { class: 'ov-wide' },
+    card(
+      title,
+      spendingOnly
+        ? $t('What goes out each day. Choose a day to see its lines.')
+        : $t('Your plan day by day. Choose a day to see its lines.'),
+      null,
+      calendar({
+        ...planCalendar({
+          only: prefs.overviewGroups,
+          figure: prefs.overviewFigure === 'none' ? null : prefs.overviewFigure,
+          openPlanner: true,
+        }),
+        id: 'overview',
+        mode: prefs.overviewLayout,
+        // below the fold on most screens: the first time, the top of the Overview is painted before it is drawn
+        defer: true,
+        label: title,
+        // on a phone the grid and the chosen day are enough here; the month planner has the full list
+        monthList: false,
+      }),
+    ),
+  );
+}
+
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -701,6 +743,7 @@ V.overview = () => {
       h('div', { class: 'ov-hero' }, nowCard()),
       h('div', { class: 'ov-side' }, insightsCard()),
       h('div', { class: 'ov-wide' }, card($t('Where your money is heading'), null, null, cashChart())),
+      overviewCalendar(),
     ),
     // the rest flows into as many columns as fit, most used first
     h(

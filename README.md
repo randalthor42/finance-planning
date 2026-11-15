@@ -72,6 +72,7 @@ tests/
 
 | Module | Exports |
 |---|---|
+| `src/models/calendarPrefs.js` | `CAL_LAYOUTS`, `CAL_FIGURES`, `CAL_GROUPS`, `CAL_ADD`, `CAL_LINE`, `SPENDING`, `calendarDefaults`, `normCalendar` |
 | `src/models/categories.js` | `CATS`, `INCATS`, `CAT_NAME`, `EVERY`, `SHIFTS`, `KEY_RE` |
 | `src/models/db.js` | `normDB` |
 | `src/models/plan.js` | `normPlan` |
@@ -82,6 +83,7 @@ tests/
 | Module | Exports |
 |---|---|
 | `src/logic/advice.js` | `roomSeries`, `firstFit`, `budgetTrend` |
+| `src/logic/calendar.js` | `monthRange`, `weekPos`, `calendarWeeks`, `normEvents`, `lastDay`, `layoutEvents`, `eventsOn`, `eventsIn`, `totals`, `entryGroup`, `entryEvents`, `tripEvents`, `dayBalances` |
 | `src/logic/loans.js` | `loanCalc`, `payoffPlan` |
 | `src/logic/projection.js` | `recurs`, `project` |
 | `src/logic/trips.js` | `tripSpan`, `tripParts` |
@@ -107,6 +109,8 @@ tests/
 |---|---|
 | `src/ui/app.js` | `App` |
 | `src/ui/components/button.js` | `btn`, `ibtn` |
+| `src/ui/components/calendar.js` | `CAL_MODES`, `calendarState`, `calendar` |
+| `src/ui/components/calendarData.js` | `PLAN_GROUPS`, `SPENDING`, `addChoices`, `lineChoices`, `planCalendar` |
 | `src/ui/components/charts.js` | `cashChart`, `netBars`, `sparkline` |
 | `src/ui/components/form.js` | `NOTE`, `formModal` |
 | `src/ui/components/info.js` | `info`, `linkify` |
@@ -135,6 +139,7 @@ tests/
 | `src/ui/modals/wish.js` | `wishModal` |
 | `src/ui/state.js` | `UI`, `nowK`, `curK`, `selK`, `monthAt`, `rangeLabel` |
 | `src/ui/views/accounts.js` | (registers its view) |
+| `src/ui/views/calendarSettings.js` | `calendarSettingsCards` |
 | `src/ui/views/forecast.js` | (registers its view) |
 | `src/ui/views/goals.js` | (registers its view) |
 | `src/ui/views/items.js` | (registers its view) |
@@ -152,6 +157,40 @@ tests/
 | `src/ui/views/welcome.js` | (registers its view) |
 | `src/ui/views/wishes.js` | (registers its view) |
 
+## Calendar component
+
+`calendar(options)` in `src/ui/components/calendar.js` shows anything dated on a month grid, in four layouts: `full` (a page-wide month with every line and its amount), `tablet` (the same grid, names only and the day's net), `mobile` (days with coloured dots, the lines listed underneath) and `compact` (a mini month for a card). The default, `auto`, picks full, tablet or mobile by the width the calendar itself gets, so it also fits a narrow column on a wide screen.
+
+It does not read the store: a page passes events (`{ id, title, date, end?, amount?, group? }`, see `CalendarEvent` in `src/types.js`) and groups for the legend, colours and filters. `planCalendar()` in `calendarData.js` returns ready-made options for the open plan: every ledger line, trips with dates as bars, a figure on each day (the end-of-day balance, or with `figure: 'spent'` what went out that day), payday months, and clicks that open the usual windows.
+
+Where it is used:
+
+- **Overview**, "Spending calendar": money going out day by day (`only: SPENDING`, `figure: 'spent'`). It opens on this month and the arrows page through the plan.
+- **Month planner**, the **Calendar** view mode next to "By type" and "Day by day": the planner's month (`month: k`, `header: false`), kept in step with the month strip both ways, with the end-of-day balance on each day.
+
+Both have context menus (`dayMenu` and `eventMenu` options; `planCalendar` fills them). Right click a day, or press the menu key or Shift+F10 on it, to add something there, in three sections: *On this day* (an expense, a spend from a budget, income), *Plans* (a trip or an event starting that day, with the last day left to pick in the window's date picker; a wish for that month) and *From this day on* (a recurring bill, a subscription, a recurring income, a savings goal, a loan). Right click a line to edit it, tick it off, skip it this month or copy it. **Delete** always asks first, with Confirm and Cancel, and says what goes: one transaction, a bill or budget from every month, a loan with all its payments, a trip with its costs. Undo still works after confirming. On touch screens "+", Add and the "⋯" button on each line in the day panel open the same menus. A calendar filtered to some groups only offers to add what it shows (the Overview's spending calendar does not offer income).
+
+```js
+calendar({ ...planCalendar(), id: 'planner-cal' });                                         // the whole plan
+calendar({ ...planCalendar({ only: ['bill', 'loan'] }), id: 'due-cal', mode: 'compact' });  // what is due
+calendar({ ...planCalendar({ only: SPENDING, figure: 'spent' }), id: 'spent-cal' });        // what goes out
+calendar({ id: 'my-cal', events, groups, onEvent: ev => ... });                             // any data
+```
+
+**Settings › Calendar** decides how both calendars look and what their menus offer: the first day of the week (Monday or Sunday), always six weeks, lines per day, trips as bars, the legend; for the Overview whether it shows a calendar, its layout, the number on each day and which groups it shows; for the Month planner its layout and number on each day; and a switch for the context menus and for each thing they can add or do (Edit is always there). The settings are kept with the browser preferences (`db.calendar`, cleaned by `normCalendar` in `src/models/calendarPrefs.js`), like the theme: the same for every plan and not in backups. `planCalendar()` reads them, so a new calendar gets them for free; an option passed to it wins. The switches are built from the same lists as the menus (`addChoices`, `lineChoices`), so a new menu option needs a key in `CAL_ADD` and a line in `addChoices`.
+
+**Performance** (`npm run perf:calendar`, or `node scripts/perf-calendar.cjs sample|heavy <cpu slowdown> [page] [--profile]` to compare builds or see where the time goes). What keeps it fast, worth keeping in mind when changing it:
+
+- Dates as text reuse one `Intl.DateTimeFormat` per language and set of options (`core/dates.js`). `toLocaleDateString` builds a new one on every call and was about 70% of a calendar's drawing time; the whole app gains from it (the month strip, "Day by day"). The text is the same (`tests/unit/dates.test.js` compares them).
+- A calendar asks the page for a month's events once and keeps them while it is on the page, so choosing a day, a filter or "Show more" does not rebuild them.
+- There is one "+" per calendar that moves to the day under the pointer, instead of one per day; the day menu's choices are worked out once per calendar and the lines' records are looked up in a Map, not a list.
+- The mobile month list draws whole days up to 150 lines, then "Show 150 more", like the paged tables (a month of daily spending would otherwise be thousands of elements).
+- Only a guessed layout is checked right after drawing (it forces a layout); afterwards the ResizeObserver follows the width, so a calendar in a card below the fold is not laid out before it is needed.
+- Choosing a day changes only the two days and what is under the grid; the rest of the calendar is not drawn again.
+- `defer: true` (the Overview uses it) draws a calendar further down a page just after the page's first paint, the first time in a visit, keeping about its height meanwhile; later redraws are immediate.
+
+Every option is described at the top of `calendar.js`; the arithmetic (weeks, spans, totals, balances) is in `src/logic/calendar.js` and tested in `tests/unit/calendar.test.js`; `tests/regression/calendar.ui.cjs` checks both pages in a browser (part of `npm run test:ui`, needs only the sample plan).
+
 ## Translations
 
 Every user-facing text is written as `$t('English sentence {0}', value)`. The build collects all of them into the virtual module `virtual:i18n-keys` (see `vite.config.js`), which feeds "Export language" in Settings. New text only needs the `$t()` call.
@@ -159,7 +198,3 @@ Every user-facing text is written as `$t('English sentence {0}', value)`. The bu
 ## Test data
 
 `tests/fixtures/real*.json` are real backups and are ignored by git. Do not publish them. The engine tests need them; replace them with made-up plans before sharing the repository.
-
-## Known debt
-
-See the last section of `AGENTS.md`.

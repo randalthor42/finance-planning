@@ -3,6 +3,7 @@
  */
 import { APP } from '../config.js';
 import { isObj, uid } from '../core/util.js';
+import { normCalendar } from './calendarPrefs.js';
 import { normPlan } from './plan.js';
 
 export function normDB(raw) {
@@ -28,6 +29,7 @@ export function normDB(raw) {
     toastPos: ['tr', 'br', 'tl', 'bl'].includes(raw.toastPos) ? raw.toastPos : 'tr',
     tripView: raw.tripView === 'list' ? 'list' : 'grid',
     wishView: raw.wishView === 'list' ? 'list' : 'grid',
+    calendar: normCalendar(raw.calendar),
     log: Array.isArray(raw.log)
       ? raw.log
           .filter(isObj)

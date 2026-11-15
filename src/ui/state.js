@@ -12,6 +12,7 @@ export const UI = {
   tools: { name: '', price: 0, cost: 0, uPrice: 0, uses: 0 },
   view: 'overview',
   month: null,
+  /** Month planner layout: 'list' (by type), 'days' (day by day) or 'calendar'. */
   mview: 'list',
   fview: 'month',
   rview: 'month',
@@ -40,6 +41,8 @@ export const UI = {
   lists: {},
   /** Rows shown in each paged data table by its id (dataTable pageSize), for this visit. */
   tableLimit: {},
+  /** Each calendar by its id (components/calendar.js): month shown, selected day, layout, hidden groups, for this visit. */
+  calendars: {},
   /** Audit page: show the ledger of the current month or of the whole plan. */
   auditScope: 'month',
   /** Forecast page: which way of looking ahead, and its two inputs. */

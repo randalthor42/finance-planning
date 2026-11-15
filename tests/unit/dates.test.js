@@ -41,3 +41,62 @@ test('a payday on a weekend moves to the next working day when asked', () => {
   // 26 Dec 2026 is a Saturday, so the salary (and the start of January's budget month) moves to Monday 28 Dec
   assert.equal(D.key(Period.start(settings, M.parse('2027-01'))), '2026-12-28');
 });
+
+/* Dates as text reuse their Intl formatters (a calendar writes a hundred dates per redraw). The text must stay
+   exactly what toLocaleDateString gives, for every option the app uses, in any language. */
+test('dates as text are exactly what toLocaleDateString gives', async () => {
+  const { FMT } = await import('../../src/core/format.js');
+  const before = FMT.dloc;
+  const dayOptions = [
+    undefined,
+    { weekday: 'short' },
+    { year: 'numeric' },
+    { weekday: 'short', year: 'numeric' },
+    { weekday: 'long', year: 'numeric' },
+    { weekday: 'long', month: 'long' },
+  ];
+  const start = D.parse('2026-01-01');
+  try {
+    for (const locale of ['en-GB', 'en-US', 'de', 'es', 'fr', 'ja']) {
+      FMT.dloc = locale;
+      for (let n = start; n < start + 366; n += 5) {
+        for (const o of dayOptions) {
+          const expected = D.js(n).toLocaleDateString(locale, {
+            timeZone: 'UTC',
+            day: 'numeric',
+            month: 'short',
+            ...o,
+          });
+          assert.equal(D.label(n, o), expected, `${locale} ${D.key(n)} ${JSON.stringify(o)}`);
+        }
+        for (const width of ['long', 'short', 'narrow']) {
+          assert.equal(
+            D.fmt(n, { weekday: width }),
+            D.js(n).toLocaleDateString(locale, { weekday: width, timeZone: 'UTC' }),
+          );
+        }
+      }
+      for (let k = M.parse('2026-01'); k < M.parse('2028-01'); k++) {
+        assert.equal(M.label(k), M.date(k).toLocaleDateString(locale, { month: 'short', year: 'numeric' }));
+        assert.equal(M.label(k, true), M.date(k).toLocaleDateString(locale, { month: 'long', year: 'numeric' }));
+        assert.equal(M.short(k), M.date(k).toLocaleDateString(locale, { month: 'short' }));
+      }
+    }
+  } finally {
+    FMT.dloc = before;
+  }
+});
+
+test('a change of language gives text in the new language at once', async () => {
+  const { FMT } = await import('../../src/core/format.js');
+  const before = FMT.dloc;
+  const n = D.parse('2026-11-02');
+  try {
+    FMT.dloc = 'en-GB';
+    assert.equal(D.fmt(n, { weekday: 'long' }), 'Monday');
+    FMT.dloc = 'de';
+    assert.equal(D.fmt(n, { weekday: 'long' }), 'Montag');
+  } finally {
+    FMT.dloc = before;
+  }
+});

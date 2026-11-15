@@ -77,4 +77,21 @@
  * @property {number} worth
  */
 
+/**
+ * One thing on a calendar (components/calendar.js). Anything dated can be shown: a page builds these from its data,
+ * and logic/calendar.js normEvents cleans them. entryEvents and tripEvents build them from the plan.
+ * @typedef {object} CalendarEvent
+ * @property {string} id Unique among the events shown.
+ * @property {string} title
+ * @property {?number} date Day number (D.of) or 'YYYY-MM-DD'; null means "no fixed day" in the month shown.
+ * @property {?number} [end] Last day, for something that lasts several days (a trip): drawn as a bar across them.
+ * @property {?number} [amount] Signed like a ledger line: money in is positive, money out negative. Null when none.
+ * @property {string} [group] Key of a group given to the calendar: its legend entry, colour and filter.
+ * @property {string} [tone] Colour of this event only: good, bad, warn, acc, cash, save, debt, trip, wish, muted.
+ * @property {string} [color] Any CSS colour for this event only; wins over tone.
+ * @property {string} [sub] A second line in lists and tooltips.
+ * @property {boolean} [done] Paid or received: drawn quieter.
+ * @property {*} [data] Anything the page wants back in onEvent (the plan adapters keep the ledger line here).
+ */
+
 export {};
