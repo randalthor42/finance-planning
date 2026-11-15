@@ -20,6 +20,15 @@ function fieldEl(f, v, ctx) {
   if (f.type === 'sec') {
     return h('div', { class: 'form-sec', text: f.label });
   }
+  // a block drawn by the caller; apply(changes) sets values, redraws the form and counts as an edit
+  if (f.type === 'custom') {
+    const apply = changes => {
+      Object.assign(v, changes);
+      ctx.redraw();
+      ctx.touch();
+    };
+    return f.render(v, apply);
+  }
   const changed = () => {
     if (f.then) {
       for (const k of f.then(v) || []) {
@@ -234,6 +243,7 @@ function fieldEl(f, v, ctx) {
  * Declarative form in a modal. onSave(values) returns an error string to keep the modal open.
  * auto:true lets the form follow the autosave setting. Field options: show(v), live (redraw on change), then(v) -> keys of other fields to refresh,
  * hint (short line under the field), info (longer explanation behind an "i" button).
+ * type 'custom': render(values, apply) returns an element; apply({ key: value }) fills fields (e.g. quick picks).
  */
 export function formModal({ title, fields, values, onSave, onDelete, saveLabel, preview, extra, wide, auto }) {
   const v = { ...values };

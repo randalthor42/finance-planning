@@ -866,3 +866,22 @@ tr.dim td {
 .ov-side .note > .btn {
   margin-left: 26px;
 }
+/* Transactions: search, filters and the count of what is shown */
+.logbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.logbar input[type='search'] {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.logbar select {
+  flex: 0 1 auto;
+  width: auto;
+}
+.logbar .logcount {
+  margin-left: auto;
+}

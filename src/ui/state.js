@@ -19,7 +19,11 @@ export const UI = {
   series: { save: true, debt: true },
   open: new Set(),
   itemFilter: 'upcoming',
+  /** Transactions page: search text, filters and order, for this visit. */
+  logFilter: { text: '', kind: 'all', budget: '', order: 'new' },
   afford: { amount: 0, month: null },
+  /** The budget the last spend was logged against, for "Log a spend" (this visit only). */
+  lastBudget: null,
   /** The "Check against reality" card was closed for this visit. Not saved: it is back after a reload. */
   hideCheck: false,
   /** Overview: every insight is shown, not only the three most urgent. */
@@ -28,7 +32,7 @@ export const UI = {
   closedGroups: new Set(),
   /** Month planner: budgets whose logged spends are unfolded ('YYYY-MM:billId'). Folded by default. */
   openBudgets: new Set(),
-  /** Purchase log: months the person folded or opened by hand ({ 'YYYY-MM': true when folded }). Past months start folded. */
+  /** Transactions page: months the person folded or opened by hand ({ 'YYYY-MM': true when folded }). Past months start folded. */
   itemMonths: {},
   /** Sort of each data table by its id: { column, descending }. */
   sort: {},

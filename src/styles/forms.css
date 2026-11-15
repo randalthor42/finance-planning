@@ -127,3 +127,17 @@ textarea.inp {
 .switch input:checked::after {
   transform: translateX(16px);
 }
+/* "Often logged" quick picks in Add transaction */
+.quickpicks .acts {
+  gap: 6px;
+}
+.qpick {
+  cursor: pointer;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.82rem;
+}
+.qpick:hover,
+.qpick:focus-visible {
+  border-color: var(--accent);
+}

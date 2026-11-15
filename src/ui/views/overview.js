@@ -25,7 +25,7 @@ import { balanceChip, balancesModal } from '../modals/balances.js';
 import { monthEquation } from '../components/monthEquation.js';
 import { monthPosition } from '../../logic/position.js';
 import { goalModal } from '../modals/goal.js';
-import { itemModal, logPurchase, logSpend } from '../modals/item.js';
+import { itemModal, lastBudget, logPurchase, logSpend } from '../modals/item.js';
 import { recModal } from '../modals/recurring.js';
 import { rollModal, settingsModal } from '../modals/settings.js';
 import { tripModal } from '../modals/trip.js';
@@ -458,7 +458,7 @@ function nowCard() {
       'div',
       { class: 'acts' },
       btn($t('Add transaction'), () => logPurchase(m), 'primary sm', 'plus'),
-      budgets.length ? btn($t('Log a spend'), () => logSpend(budgets[0].id, m), 'sm', 'plus') : null,
+      budgets.length ? btn($t('Log a spend'), () => logSpend(lastBudget(budgets).id, m), 'sm', 'plus') : null,
       btn($t('Update balances'), balancesModal, 'sm', 'edit'),
       h(
         'button',
@@ -738,7 +738,7 @@ V.overview = () => {
         ? card(
             $t('Budgets this month'),
             $t('What you have spent from each budget so far.'),
-            btn($t('Log a spend'), () => logSpend(budgets[0].id, m), 'sm', 'plus'),
+            btn($t('Log a spend'), () => logSpend(lastBudget(budgets).id, m), 'sm', 'plus'),
             budgets.map(e =>
               prow(
                 e.label,

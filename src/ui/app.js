@@ -35,7 +35,7 @@ const NAV = [
       ['accounts', $t('Accounts'), 'bank'],
       ['recurring', $t('Income and bills'), 'repeat'],
       ['subs', $t('Subscriptions'), 'list'],
-      ['items', $t('Purchase log'), 'tag'],
+      ['items', $t('Transactions'), 'tag'],
     ],
   ],
   [
