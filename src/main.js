@@ -99,7 +99,16 @@ Store.init();
 App.render();
 
 // Last line of defence: an error in an event handler or a promise shows a readable message instead of failing silently.
+/**
+ * Browser messages that are not errors of the app. "ResizeObserver loop …" only says some size reports were moved to
+ * the next frame (Chrome and Firefox word it differently); nothing failed and no data is involved.
+ */
+const HARMLESS = /^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/;
 const reportError = error => {
+  const message = String((error && error.message) || error || '');
+  if (HARMLESS.test(message)) {
+    return;
+  }
   console.error(error);
   toast($t('Something went wrong: {0}. Your data is safe.', String((error && error.message) || error)), {
     kind: 'bad',

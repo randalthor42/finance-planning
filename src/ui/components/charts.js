@@ -41,18 +41,29 @@ function sized(id, build) {
   const box = h('div', { class: 'chart' });
   let width = UI.chartWidth[id] || 640;
   box.replaceChildren(...build(width));
+  let frame = 0;
   const observer = new ResizeObserver(entries => {
     // the page was drawn again and this chart is gone: stop watching it
     if (!box.isConnected) {
       observer.disconnect();
+      cancelAnimationFrame(frame);
       return;
     }
     const next = Math.round(entries[0].contentRect.width);
-    if (next > 0 && Math.abs(next - width) > 2) {
+    if (next <= 0 || Math.abs(next - width) <= 2) {
+      return;
+    }
+    // redraw in the next frame, not inside the callback: changing what is observed while the browser reports sizes
+    // makes it warn "ResizeObserver loop completed with undelivered notifications". Several reports, one redraw.
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      if (!box.isConnected) {
+        return;
+      }
       width = next;
       UI.chartWidth[id] = next;
       box.replaceChildren(...build(next));
-    }
+    });
   });
   observer.observe(box);
   return box;
