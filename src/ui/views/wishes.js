@@ -14,8 +14,9 @@ import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { linkify } from '../components/info.js';
 import { dataTable } from '../components/dataTable.js';
-import { card, cardDel, chip, designPage, empty, row, segc } from '../components/layout.js';
+import { card, cardDel, chip, designPage, empty, moreMenu, row, segc } from '../components/layout.js';
 import { h } from '../dom.js';
+import { remove } from '../helpers.js';
 import { wishModal } from '../modals/wish.js';
 import { curK } from '../state.js';
 import { memo } from '../memo.js';
@@ -205,9 +206,18 @@ V.wishes = () => {
         h(
           'div',
           { class: 'acts' },
-          Wd.flex ? null : h('label', { class: 'switch', title: $t('Count it in my plan') }, sw),
-          ibtn($t('Edit'), () => wishModal(Wd.id), 'sm', 'edit'),
-          cardDel('wishes', Wd.id),
+          Wd.flex
+            ? null
+            : h(
+                'label',
+                { class: 'switch inplan', title: $t('Count it in my plan') },
+                sw,
+                h('span', { text: $t('In plan') }),
+              ),
+          moreMenu([
+            [$t('Edit'), () => wishModal(Wd.id)],
+            [$t('Delete'), () => remove('wishes', Wd.id), 'danger'],
+          ]),
         ),
       ),
       Wd.note ? h('p', { class: 'small tnotes' }, linkify(Wd.note)) : null,

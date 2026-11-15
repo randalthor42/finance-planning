@@ -148,6 +148,20 @@ export const mono = name => {
     text: (name.trim()[0] || '?').toUpperCase(),
   });
 };
+/** A ⋯ button that opens a menu of [label, action, class] items (Edit, Delete…), keeping card headers to one line. */
+export const moreMenu = items =>
+  h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn icon ghost sm',
+      'aria-label': $t('More actions'),
+      title: $t('More actions'),
+      'aria-haspopup': 'menu',
+      onclick: event => ctxMenu(event, items),
+    },
+    icon('menu'),
+  );
 export const cardDel = (list, id) => ibtn($t('Delete'), () => remove(list, id), 'ghost sm', 'trash');
 export const keep = (key, summary, build) => {
   const d = h('details', { class: 'more', open: UI.open.has(key) }, h('summary', { text: summary }));

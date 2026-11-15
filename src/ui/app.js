@@ -138,6 +138,7 @@ function renderSide() {
         {
           type: 'button',
           class: 'navi',
+          'data-view': n[0],
           'aria-current': UI.view === n[0] ? 'page' : null,
           'aria-expanded': hasSub ? String(!UI.subClosed) : null,
           title: n[1],

@@ -12,9 +12,23 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { linkify } from '../components/info.js';
-import { amt, bar, card, cardDel, chip, designPage, empty, keep, row, segc, tile } from '../components/layout.js';
+import {
+  amt,
+  bar,
+  card,
+  cardDel,
+  chip,
+  designPage,
+  empty,
+  keep,
+  moreMenu,
+  row,
+  segc,
+  tile,
+} from '../components/layout.js';
 import { dataTable } from '../components/dataTable.js';
 import { h } from '../dom.js';
+import { remove } from '../helpers.js';
 import { tripModal } from '../modals/trip.js';
 import { curK, monthAt } from '../state.js';
 import { memo } from '../memo.js';
@@ -217,7 +231,9 @@ V.trips = () => {
       'aria-label': $t('Count in my plan'),
       onchange: () => Actions.toggle('trips', t.id, c.checked),
     });
-    return t.kind === 'idea' ? null : h('label', { class: 'switch', title: $t('Count in my plan') }, c);
+    return t.kind === 'idea'
+      ? null
+      : h('label', { class: 'switch inplan', title: $t('Count in my plan') }, c, h('span', { text: $t('In plan') }));
   };
   const details = (t, I) => () =>
     h(
@@ -280,8 +296,10 @@ V.trips = () => {
           'div',
           { class: 'acts' },
           sw(t),
-          ibtn($t('Edit'), () => tripModal(t.id), 'sm', 'edit'),
-          cardDel('trips', t.id),
+          moreMenu([
+            [$t('Edit'), () => tripModal(t.id)],
+            [$t('Delete'), () => remove('trips', t.id), 'danger'],
+          ]),
         ),
       ),
       h(

@@ -386,6 +386,7 @@ V.settings = () => {
         }),
       ),
     ),
-    h('div', { class: 'stack', style: 'max-width:760px' }, pages[tab]()),
+    // one column on narrow screens; on wide ones the cards of a section sit in two columns (settings-cols)
+    h('div', { class: 'settings-cols' }, pages[tab]()),
   );
 };

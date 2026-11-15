@@ -833,3 +833,53 @@ tr.dim td {
 .logbar .logcount {
   margin-left: auto;
 }
+
+/* v0.9 S10: cards and navigation */
+/* a credit card's big number is what it owes */
+.acard .abig-l {
+  font-size: 0.9rem;
+  font-weight: 550;
+  color: var(--muted);
+  margin-left: 6px;
+}
+/* what uses an account, as counts */
+.achips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+/* the "In plan" switch on trip and wish cards says what it does */
+.switch.inplan span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+/* Settings: one column, two on wide screens */
+.settings-cols {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1200px) {
+  .settings-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* one sub-navigation at a time: the menu's sub-items on wide screens, the tab bar on phones (where the menu is a drawer) */
+@media (min-width: 861px) {
+  main[data-view='settings'] .subnav,
+  main[data-view='tools'] .subnav {
+    display: none;
+  }
+}
+@media (max-width: 860px) {
+  .nav .subitems {
+    display: none;
+  }
+  /* Forecast has no tab bar of its own: keep its sub-items in the menu */
+  .nav .navi[data-view='forecast'] + .subitems {
+    display: flex;
+  }
+}

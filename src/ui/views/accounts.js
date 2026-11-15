@@ -3,14 +3,14 @@
  */
 import { D, M } from '../../core/dates.js';
 import { fmtNum, money, signed } from '../../core/format.js';
-import { $t } from '../../core/i18n.js';
+import { $t, plural } from '../../core/i18n.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { info } from '../components/info.js';
 import { dataTable } from '../components/dataTable.js';
-import { bar, card, cardDel, designPage, empty, segc } from '../components/layout.js';
+import { bar, card, cardDel, chip, designPage, empty, segc } from '../components/layout.js';
 import { fixNote } from '../components/monthNotes.js';
 import { monthEquation } from '../components/monthEquation.js';
 import { monthPosition as positionOf } from '../../logic/position.js';
@@ -22,6 +22,28 @@ import { UI, curK, monthAt } from '../state.js';
 import { designable } from '../components/designPages.js';
 import { V } from './registry.js';
 
+/** What uses an account, as counts ("1 income · 12 bills"); the names are behind the "i". */
+function usedChips(account, plan) {
+  const incomes = plan.incomes.filter(income => income.account === account.id);
+  const bills = plan.bills.filter(bill => bill.account === account.id);
+  const payments = plan.bills.filter(bill => bill.payTo === account.id);
+  if (!incomes.length && !bills.length && !payments.length) {
+    return null;
+  }
+  const names = [
+    ...incomes.map(income => $t('{0} comes in', income.name)),
+    ...bills.map(bill => bill.name),
+    ...payments.map(bill => $t('paid off by “{0}”, {1} a month', bill.name, money(bill.amount))),
+  ].join(', ');
+  return h(
+    'div',
+    { class: 'achips' },
+    incomes.length ? chip(plural(incomes.length, 'income')) : null,
+    bills.length ? chip(plural(bills.length, 'bill')) : null,
+    payments.length ? chip(plural(payments.length, 'card payment'), 'acc') : null,
+    info(names),
+  );
+}
 /**
  * One account as a card. A credit card shows the three numbers that used to disagree between pages, side by side:
  * what you owe today (the account), what this month's plan still adds and pays off, and where that leaves the card.
@@ -30,13 +52,7 @@ function accountCard(account, plan, projection, monthPosition, allAccounts) {
   const typeName = ACC_TYPES.find(type => type[0] === account.type)[1];
   const isCredit = account.type === 'credit';
   const canBeMain = account.type === 'debit' || account.type === 'cash';
-  const usedBy = [
-    ...plan.incomes.filter(income => income.account === account.id).map(income => $t('{0} comes in', income.name)),
-    ...plan.bills.filter(bill => bill.account === account.id).map(bill => bill.name),
-    ...plan.bills
-      .filter(bill => bill.payTo === account.id)
-      .map(bill => $t('paid off by “{0}”, {1} a month', bill.name, money(bill.amount))),
-  ].join(', ');
+  const used = usedChips(account, plan);
 
   const actions = h(
     'div',
@@ -60,31 +76,13 @@ function accountCard(account, plan, projection, monthPosition, allAccounts) {
   );
 
   if (!isCredit) {
-    // where this money counts, and how much of the spending money it is: gives the card the same shape as a credit card
-    const line = (label, value) =>
-      h(
-        'div',
-        { class: 'aline' },
-        h('span', { class: 'muted', text: label }),
-        h('span', { class: 'num', text: value }),
-      );
-    const spends = account.type === 'debit' || account.type === 'cash';
-    const share = spends ? spendable(allAccounts) : 0;
+    // the balance, and what uses the account: no share-of-money bar (it read as a warning)
     return h(
       'section',
       { class: 'card acard' },
       header,
       h('div', { class: 'abig ' + (account.balance < 0 ? 'bad' : ''), text: money(account.balance) }),
-      spends && share > 0 ? bar(Math.max(0, Math.min(100, (account.balance / share) * 100)), 'warn') : null,
-      h(
-        'div',
-        { class: 'alines' },
-        line($t('Counted in'), spends ? $t('To spend now') : $t('Available if needed')),
-        spends && share > 0
-          ? line($t('Share of your spending money'), fmtNum(Math.round((account.balance / share) * 100)) + '%')
-          : null,
-      ),
-      usedBy ? h('p', { class: 'small muted', text: usedBy }) : null,
+      used,
       account.note ? h('p', { class: 'small muted', text: account.note }) : null,
     );
   }
@@ -100,19 +98,23 @@ function accountCard(account, plan, projection, monthPosition, allAccounts) {
     'section',
     { class: 'card acard' },
     header,
-    h('div', { class: 'abig', text: money(Math.max(0, account.limit - owedNow)) }),
+    // a card is a debt: its big number is what is owed today, with how much of the limit is used under it
+    h('div', { class: 'abig' }, money(owedNow), h('span', { class: 'abig-l', text: $t('owed') })),
     bar(account.limit ? (owedNow / account.limit) * 100 : 0, owedNow > account.limit * 0.9 ? 'over' : 'warn'),
-    h('p', { class: 'small muted', text: $t('available today, of a {0} limit', money(account.limit)) }),
+    h('p', {
+      class: 'small muted',
+      text: $t('{0} available of {1}', money(Math.max(0, account.limit - owedNow)), money(account.limit)),
+    }),
     h(
       'div',
       { class: 'alines' },
-      line($t('Owed today'), money(owedNow)),
       addedThisMonth ? line($t('Still planned on it this month'), signed(addedThisMonth)) : null,
       paidThisMonth ? line($t('Still to pay off this month'), signed(-paidThisMonth)) : null,
       line($t('Owed at the end of the month'), money(owedAtEnd)),
       line($t('Available then'), money(Math.max(0, account.limit - owedAtEnd))),
+      account.apr ? line($t('Interest a year'), fmtNum(account.apr) + '%') : null,
     ),
-    usedBy ? h('p', { class: 'small muted', text: usedBy + (account.apr ? ` · ${fmtNum(account.apr)}%` : '') }) : null,
+    used,
     account.note ? h('p', { class: 'small muted', text: account.note }) : null,
   );
 }
