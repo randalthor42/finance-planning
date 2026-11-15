@@ -173,7 +173,9 @@ V.months = () => {
             title: e.of
               ? $t('Logged spends are always counted as paid')
               : b
-                ? $t('Done with this budget for the month')
+                ? b.reserve
+                  ? $t('Done with this budget for the month')
+                  : $t('Nothing is set aside for this budget, so only logged spends count')
                 : e.amount > 0
                   ? $t('Received')
                   : $t('Paid'),
@@ -204,7 +206,13 @@ V.months = () => {
         e.vary && !e.over ? chip($t('estimate')) : null,
         b
           ? chip(
-              b.closed ? $t('closed, rest released') : b.done ? $t('done') : $t('budget'),
+              !b.reserve
+                ? $t('tracked, nothing set aside')
+                : b.closed
+                  ? $t('closed, rest released')
+                  : b.done
+                    ? $t('done')
+                    : $t('budget'),
               b.left < 0 ? 'bad' : 'acc',
             )
           : null,
@@ -391,7 +399,40 @@ V.months = () => {
   });
   note.value = plan.notes[m.key] || '';
   note.addEventListener('change', () => Actions.setNote(m.key, note.value));
-  const budgetLeft = budgets.reduce((a, e) => a + Math.max(0, e.budget.left), 0);
+  // only reserved budgets hold money back; tracked ones just show what you spent against a limit
+  const reservedBudgets = budgets.filter(e => e.budget.reserve);
+  const trackedBudgets = budgets.filter(e => !e.budget.reserve);
+  const budgetLeft = reservedBudgets.reduce((a, e) => a + Math.max(0, e.budget.left), 0);
+  const trackedSpent = trackedBudgets.reduce((a, e) => a + e.budget.spent, 0);
+  const budgetsNote = () => {
+    const parts = [];
+    if (reservedBudgets.length) {
+      parts.push(
+        trackedBudgets.length
+          ? $t(
+              '{0} still set aside, about {1} a day for {2}.',
+              money(budgetLeft),
+              money(budgetLeft / daysLeft),
+              plural(daysLeft, 'day'),
+            )
+          : $t(
+              '{0} left in total, about {1} a day for {2}.',
+              money(budgetLeft),
+              money(budgetLeft / daysLeft),
+              plural(daysLeft, 'day'),
+            ),
+      );
+    }
+    if (trackedBudgets.length) {
+      parts.push(
+        $t(
+          'Tracked budgets set nothing aside: the {0} you spent on them comes out of your free money.',
+          money(trackedSpent),
+        ),
+      );
+    }
+    return parts.join(' ');
+  };
   const daysLeft = Store.day >= m.start && Store.day <= m.end ? m.end - Store.day + 1 : 0;
   // one button, one menu: everything that can be added to this month
   const addMenu = event =>
@@ -532,19 +573,19 @@ V.months = () => {
               over
                 ? $t('This month is over. What you did not spend went back into your cash.')
                 : daysLeft
-                  ? $t(
-                      '{0} left in total, about {1} a day for {2}.',
-                      money(budgetLeft),
-                      money(budgetLeft / daysLeft),
-                      plural(daysLeft, 'day'),
-                    )
+                  ? budgetsNote()
                   : $t('Log what you spend and see what is left.'),
               null,
               budgets.map(e =>
                 h(
                   'div',
                   { class: 'prow' },
-                  h('div', { class: 'top' }, h('span', { text: e.label }), h('span', { text: budgetText(e.budget) })),
+                  h(
+                    'div',
+                    { class: 'top' },
+                    h('span', null, e.label, e.budget.reserve ? null : [' ', chip($t('tracked'), 'acc')]),
+                    h('span', { text: budgetText(e.budget) }),
+                  ),
                   bar(
                     e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
                     e.budget.left < 0 ? 'over' : 'good',
@@ -566,7 +607,7 @@ V.months = () => {
           : card(
               $t('Budgets'),
               $t(
-                'For money you spend bit by bit: groceries, fuel, going out, pets, “everything else”. The full budget is counted in your plan even if you log nothing; logging just shows what is left.',
+                'For money you spend bit by bit: groceries, fuel, going out, pets, “everything else”. A reserved budget is counted in full even if you log nothing; a tracked one counts only what you log.',
               ),
               null,
               btn($t('Add a budget'), () => recModal('bills', null, { budget: true }), 'sm', 'plus'),

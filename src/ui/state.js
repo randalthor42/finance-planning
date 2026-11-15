@@ -24,6 +24,8 @@ export const UI = {
   hideCheck: false,
   /** Groups of the month planner that are folded away (Income, Bills, …). */
   closedGroups: new Set(),
+  /** Purchase log: months the person folded or opened by hand ({ 'YYYY-MM': true when folded }). Past months start folded. */
+  itemMonths: {},
   /** Sort of each data table by its id: { column, descending }. */
   sort: {},
   /** Audit page: show the ledger of the current month or of the whole plan. */

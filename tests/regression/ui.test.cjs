@@ -288,6 +288,20 @@ const FILE=PAGE;
  ok(await pg.locator('dialog .seg button',{hasText:'Tracked'}).count()===1,'a budget offers Reserved and Tracked');
  await pg.locator('dialog .seg button',{hasText:'Tracked'}).click();await pg.locator('dialog input[inputmode=decimal]').first().pressSequentially('120');await pg.getByRole('button',{name:'Save'}).click();await pg.waitForTimeout(120);
  ok(await pg.evaluate(()=>{const b=Store.plan.bills.find(x=>x.name==='Eating out test');return b&&b.budget&&b.reserve===false&&monthAt(curK()).entries.find(e=>e.label==='Eating out test').amount===0}),'a tracked budget is saved and sets nothing aside');
+ // the month planner says clearly that a tracked budget holds nothing back
+ await pg.evaluate(()=>App.go('months'));await pg.waitForTimeout(150);
+ const trow=pg.locator('.prow',{hasText:'Eating out test'});
+ ok(await trow.locator('.chip',{hasText:'tracked'}).count()===1&&/limit/.test(await trow.innerText()),'a tracked budget is marked and shown against its limit in the month planner');
+ ok(/set nothing aside/.test(await pg.locator('.card',{hasText:'Budgets'}).first().innerText()),'the Budgets card explains that tracked budgets set nothing aside');
+ ok(await pg.locator('.row',{hasText:'Eating out test'}).locator('.chip',{hasText:'tracked, nothing set aside'}).count()===1,'the ledger line of a tracked budget says nothing is set aside');
+ // purchase log: one card per month that folds and opens
+ await pg.locator('.nav button[title="Purchase log"]').click();await pg.waitForTimeout(100);
+ const logCards=pg.locator('.card:has(.grp-toggle)');const nCards=await logCards.count();
+ ok(nCards>=1&&await pg.locator('.card .grp-toggle').count()===nCards,'purchase log shows one card per month');
+ const firstTog=pg.locator('.card .grp-toggle').first();const wasOpen=await firstTog.getAttribute('aria-expanded');
+ await firstTog.click();await pg.waitForTimeout(80);
+ ok(await pg.locator('.card .grp-toggle').first().getAttribute('aria-expanded')!==wasOpen,'a month card in the purchase log folds and opens');
+ await pg.locator('.card .grp-toggle').first().click();
  // plans: create one with everything a plan needs, and rename any plan, open or not
  await pg.evaluate(()=>App.go('settings',{stab:'plans'}));
  await pg.getByRole('button',{name:'New plan',exact:true}).click();

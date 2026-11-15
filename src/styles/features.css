@@ -195,10 +195,10 @@
   font-size: 0.9rem;
   margin-bottom: 4px;
 }
-.prow .top span:last-child {
+.prow .top > span:last-child {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  text-align: right;
 }
 .bar.over > i {
   background: var(--bad);
