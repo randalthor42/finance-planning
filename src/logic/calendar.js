@@ -156,7 +156,7 @@ export function totals(events) {
 /* --- adapters: the plan and its projection as calendar events --- */
 
 /** A tracked budget with nothing logged holds nothing back: the month planner leaves it out, and so does the calendar. */
-const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
+export const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
 const inMonth = (e, month) => e.date !== null && e.date >= month.start && e.date <= month.end;
 
 /**
@@ -227,4 +227,39 @@ export function dayBalances(month) {
     out.set(n, balance);
   }
   return out;
+}
+
+/**
+ * The days ahead in one line (audit 6.6, under the Overview calendar): the payments still due from `today` for
+ * `count` days, what they add up to, and the lowest end-of-day balance in that window. Balances come from dayBalances,
+ * so they match the calendar and Day by day.
+ * @param {import('../types.js').Month[]} months the projected months
+ * @param {number} today day number
+ * @param {number} [count] how many days, today included
+ * @returns {{payments: number, out: number, lowest: ?{day: number, balance: number}}}
+ */
+export function nextDays(months, today, count = 7) {
+  const last = today + count - 1;
+  let payments = 0;
+  let out = 0;
+  let lowest = null;
+  for (const month of months) {
+    if (month.end < today || month.start > last) {
+      continue;
+    }
+    for (const e of month.entries) {
+      if (!quiet(e) && !e.paid && e.amount < 0 && inMonth(e, month) && e.date >= today && e.date <= last) {
+        payments++;
+        out += -e.amount;
+      }
+    }
+    const balances = dayBalances(month);
+    for (let n = Math.max(today, month.start); n <= Math.min(last, month.end); n++) {
+      const balance = balances.get(n);
+      if (lowest === null || balance < lowest.balance) {
+        lowest = { day: n, balance };
+      }
+    }
+  }
+  return { payments, out: r2(out), lowest };
 }

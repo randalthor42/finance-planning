@@ -124,7 +124,7 @@ const profileMode = (profileArg && profileArg.split('=')[1]) || 'full';
     out.calendarBuildAndLayout = {};
     out.calendarNodes = {};
     const prefs = Store.db.calendar;
-    for (const mode of ['full', 'tablet', 'mobile', 'compact']) {
+    for (const mode of ['full', 'compact', 'mini']) {
       const opts = { ...planCalendar(), id: 'perf-' + mode, mode };
       out.calendarBuild[mode] = time(() => calendar(opts), 20);
       out.calendarBuildAndLayout[mode] = time(() => {
@@ -133,8 +133,8 @@ const profileMode = (profileArg && profileArg.split('=')[1]) || 'full';
       }, 20);
       out.calendarNodes[mode] = host.querySelectorAll('*').length;
     }
-    const ovOpts = { ...planCalendar({ only: prefs.overviewGroups, figure: prefs.overviewFigure, openPlanner: true }), id: 'perf-ov', mode: 'full' };
-    out.calendarBuild.overviewFull = time(() => calendar(ovOpts), 20);
+    const ovOpts = { ...planCalendar({ only: prefs.overviewGroups, figure: null, openPlanner: true, ahead: true }), id: 'perf-ov', mode: 'mini' };
+    out.calendarBuild.overviewMini = time(() => calendar(ovOpts), 20);
     out.planCalendarOptions = time(() => planCalendar(), 50);
     host.remove();
     // interactions on the Overview calendar (each redraws the calendar only)

@@ -16,7 +16,8 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { calendar } from '../components/calendar.js';
-import { SPENDING, planCalendar } from '../components/calendarData.js';
+import { planCalendar } from '../components/calendarData.js';
+import { nextDays } from '../../logic/calendar.js';
 import { cashChart, netBars } from '../components/charts.js';
 import { amt, bar, budgetText, card, page, prow, row } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
@@ -552,43 +553,42 @@ function safeToSpend(projection, fromK, cushion) {
   };
 }
 /**
- * The calendar of the Overview, as set in Settings › Calendar: by default what goes out day by day (bills, purchases
- * and spends, loan payments, trips and wishes), with what each day costs. It opens on this month; the arrows page
- * through the plan and the month shown is kept for the visit. Null when it is switched off.
+ * The calendar card of the Overview (audit 6.6): the mini month, what is ahead (income, bills, planned one-offs,
+ * loans and trips by default; Settings › Calendar can change the groups), and one line about the next 7 days.
+ * A day opens a short summary; "Open the month" in its menu goes to the planner. Null when it is switched off.
  */
 function overviewCalendar() {
   const prefs = Store.db.calendar;
   if (!prefs.overview) {
     return null;
   }
-  // called a spending calendar while it only shows spending; "Calendar" once income or savings are added in Settings
-  const spendingOnly = prefs.overviewGroups.every(group => SPENDING.includes(group));
-  const title = spendingOnly ? $t('Spending calendar') : $t('Calendar');
-  return h(
-    'div',
-    { class: 'ov-wide' },
-    card(
-      title,
-      spendingOnly
-        ? $t('What goes out each day. Choose a day to see its lines.')
-        : $t('Your plan day by day. Choose a day to see its lines.'),
-      null,
-      calendar({
-        ...planCalendar({
-          only: prefs.overviewGroups,
-          figure: prefs.overviewFigure === 'none' ? null : prefs.overviewFigure,
-          openPlanner: true,
-        }),
-        id: 'overview',
-        mode: prefs.overviewLayout,
-        // below the fold on most screens: the first time, the top of the Overview is painted before it is drawn
-        defer: true,
-        label: title,
-        // on a phone the grid and the chosen day are enough here; the month planner has the full list
-        monthList: false,
-      }),
-    ),
+  const next = nextDays(Store.proj.months, Store.day);
+  return card(
+    $t('Calendar'),
+    nextDaysText(next),
+    null,
+    calendar({
+      ...planCalendar({ only: prefs.overviewGroups, figure: null, openPlanner: true, ahead: true }),
+      id: 'overview',
+      mode: 'mini',
+      // dots only: the legend of the planner calendar would be bigger than the month itself
+      legend: false,
+      // below the fold on most screens: the first time, the top of the Overview is painted before it is drawn
+      defer: true,
+      label: $t('Calendar'),
+      monthList: false,
+    }),
   );
+}
+/** "Next 7 days: 4 payments · 610 € · lowest 54 € on Mon 30 Nov" (or that nothing is due). */
+function nextDaysText(next) {
+  const lowest = next.lowest
+    ? $t('lowest {0} on {1}', money(next.lowest.balance), D.label(next.lowest.day, { weekday: 'short' }))
+    : '';
+  if (!next.payments) {
+    return lowest ? $t('Next 7 days: nothing due · {0}', lowest) : $t('Next 7 days: nothing due');
+  }
+  return $t('Next 7 days: {0} · {1} · {2}', plural(next.payments, 'payment'), money(next.out), lowest);
 }
 
 V.overview = () => {
@@ -743,7 +743,7 @@ V.overview = () => {
       h('div', { class: 'ov-hero' }, nowCard()),
       h('div', { class: 'ov-side' }, insightsCard()),
       h('div', { class: 'ov-wide' }, card($t('Where your money is heading'), null, null, cashChart())),
-      overviewCalendar(),
+      h('div', { class: 'ov-side' }, overviewCalendar()),
     ),
     // the rest flows into as many columns as fit, most used first
     h(

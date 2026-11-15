@@ -42,14 +42,14 @@ fs.mkdirSync(SHOTS, { recursive: true });
   /* ================= Overview: spending calendar ================= */
   const ov = pg.locator('[data-cal="overview"]');
   const ovTitle = () => ov.locator('.cal-title b').textContent();
-  ok(await ov.count() === 1, 'overview has a spending calendar');
+  ok(await ov.count() === 1, 'overview has a calendar');
   const seen = await pg.evaluate(() => window.__calSeen);
   ok(seen && seen.children === 0 && seen.minHeight > 500, 'its first drawing waits for the page to be painted, keeping its room meanwhile ' + JSON.stringify(seen));
   ok(await pg.evaluate(() => { App.render(); return document.querySelector('[data-cal="overview"]').childElementCount > 0; }), 'after that, redrawing the page draws it at once');
-  ok(await ov.getAttribute('data-mode') === 'full', 'full layout on a wide screen');
+  ok(await ov.getAttribute('data-mode') === 'mini', 'the Overview shows the mini month (audit 6.6)');
   ok(await ovTitle() === first.label, 'opens on this month: ' + first.label);
-  const legend = await ov.locator('.cal-lg').allTextContents();
-  ok(!legend.includes('Income') && !legend.includes('Savings') && legend.includes('Bills') && legend.includes('Transactions'), 'only spending in the legend: ' + legend.join(', '));
+  ok(await ov.locator('.cal-legend').count() === 0, 'the mini month has no legend');
+  ok(JSON.stringify(await pg.evaluate(() => Store.db.calendar.overviewGroups)) === '["inc","bill","spend","trip","loan"]', 'by default it shows what is ahead: income, bills, planned one-offs, trips, loans');
   ok(await ov.locator('.cal-e', { hasText: 'Salary' }).count() === 0 && await ov.locator('.cal-e', { hasText: 'Emergency fund' }).count() === 0, 'no income or savings lines');
   const spent = await pg.evaluate(() => { const m = Store.proj.months[0]; return money(-m.entries.filter(e => e.amount < 0 && ['bill', 'loan', 'trip', 'wish', 'item'].includes(e.group) && !e.budget).reduce((s, e) => s + e.amount, 0)); });
   const sumText = await ov.locator('.cal-sum').textContent();
@@ -355,9 +355,9 @@ fs.mkdirSync(SHOTS, { recursive: true });
   ok(await pg.evaluate(d => (Store.plan.items.find(i => i.name === 'Menu test') || {}).date === D.key(d), rentDay), 'an expense added from the menu is dated that day');
   // where the grid shows dots, the day menu starts with a way to list the day
   await mc.locator('.cal-panel').getByRole('button', { name: 'Close the day' }).click();
-  await pg.evaluate(() => { UI.calendars.months.mode = 'compact'; App.render(); });
+  await pg.evaluate(() => { UI.calendars.months.mode = 'mini'; App.render(); });
   await mc.locator(`.cal-d[data-day="${rentDay}"]`).click({ button: 'right' });
-  ok((await menu())[0] === 'Show this day', 'compact: "Show this day" first');
+  ok((await menu())[0] === 'Show this day', 'mini: "Show this day" first');
   await pg.keyboard.press('Escape');
   await pg.evaluate(() => { UI.calendars.months.mode = null; App.render(); });
   // the Overview: a spending calendar offers what it shows, and a way to the planner
@@ -386,10 +386,13 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await pg.evaluate(() => { UI.mview = 'calendar'; App.go('months', { month: null }); });
 
   /* ================= tablets and phones ================= */
+  // the page chooses the density when it is drawn: full from 768 px of window, compact below (audit 6.4)
   await pg.setViewportSize({ width: 820, height: 1000 });
-  ok(await layoutOf('months', 'tablet') === 'tablet', 'planner: tablet layout at 820');
+  await pg.evaluate(() => { delete UI.calendars.months.mode; App.render(); });
+  ok(await layoutOf('months', 'full') === 'full', 'planner: full at 820');
   await pg.setViewportSize({ width: 390, height: 800 });
-  ok(await layoutOf('months', 'mobile') === 'mobile', 'planner: mobile layout at 390');
+  await pg.evaluate(() => App.render());
+  ok(await layoutOf('months', 'mobile') === 'mobile', 'planner: compact (drawn as dots and an agenda) at 390');
   ok(await mc.locator('.cal-agenda .row').count() > 5, 'planner on a phone lists the month under the grid');
   ok(await mc.locator('.cal-agenda .tblmore').count() === 0, 'an ordinary month is listed whole, with no "Show more"');
   // a month with hundreds of lines lists whole days up to about 150 lines, then "Show 150 more"
@@ -401,7 +404,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
     const host = document.createElement('div');
     host.style.width = '360px';
     document.getElementById('main').append(host);
-    const draw = () => host.replaceChildren(calendar({ id: 'paging', mode: 'mobile', initial: k, events }));
+    const draw = () => host.replaceChildren(calendar({ id: 'paging', mode: 'compact', initial: k, events }));
     draw();
     const rows = () => host.querySelectorAll('.cal-agenda .row').length;
     const out = { total: events.length, first: rows(), more: host.querySelector('.tblmore')?.textContent };
@@ -423,7 +426,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await pg.screenshot({ path: path.join(SHOTS, 'cal-planner-phone.png'), fullPage: true });
   await pg.evaluate(() => App.go('overview'));
   await ov.scrollIntoViewIfNeeded();
-  ok(await layoutOf('overview', 'mobile') === 'mobile', 'overview: mobile layout at 390');
+  ok(await layoutOf('overview', 'mini') === 'mini', 'overview: still the mini month at 390');
   ok(await ov.locator('.cal-agenda').count() === 0, 'overview on a phone stays short: no month list');
   // the day chosen earlier (Rent) is remembered for the visit; tap another one, then tap it again to close it
   await ov.locator(`.cal-d[data-day="${gymDay}"] .cal-n`).click();
@@ -499,25 +502,23 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await segBtn('Lines per day', '1').click();
   await sw('Trips as bars').uncheck();
   await sw('Legend').uncheck();
-  await segBtn('Layout', 'Full page').nth(1).click();
-  await pg.getByRole('group', { name: 'Number on each day' }).nth(1).getByRole('button', { name: 'What went out', exact: true }).click();
+  await pg.getByRole('group', { name: 'Number on each day' }).getByRole('button', { name: 'Spent that day', exact: true }).click();
   await toPlanner();
   ok(await mc.locator('.cal-grid > .cal-row').count() === 7, 'six weeks (and the weekday row)');
   const busiest = await mc.locator('.cal-d').evaluateAll(cells => Math.max(...cells.map(c => c.querySelectorAll('.cal-e:not(.cal-span):not(.cal-gap)').length)));
   ok(busiest === 1 && await mc.locator('.cal-more').count() > 0, 'one line per day, the rest behind "+N more"');
   ok(await mc.locator('.cal-span').count() === 0 && await pg.evaluate(() => Store.plan.trips.some(t => t.from)), 'trips with dates are not drawn as bars');
   ok(await mc.locator('.cal-legend').count() === 0, 'no legend');
-  ok(await mc.getAttribute('data-mode') === 'full', 'the planner layout is Full page');
+  ok(await mc.getAttribute('data-mode') === 'full', 'the planner is drawn full on a wide screen');
   const spentThatDay = await pg.evaluate(d => money(-Store.proj.months[0].entries.filter(e => e.date === d && e.amount < 0).reduce((sum, e) => sum + e.amount, 0)), rentDay);
   ok(await mc.locator(`.cal-d[data-day="${rentDay}"] .cal-v`).textContent() === spentThatDay, 'and each day shows what went out: ' + spentThatDay);
   // the Overview calendar
   await settings();
-  await groupBtn('Income').click();
-  ok((await prefs()).overviewGroups.includes('inc'), 'Income added to the Overview');
-  await segBtn('Layout', 'Compact').first().click();
+  await groupBtn('Wishlist').click();
+  ok((await prefs()).overviewGroups.includes('wish'), 'Wishlist added to the Overview');
   await toOverview();
-  ok(await ov.getAttribute('data-mode') === 'compact', 'the Overview layout is Compact');
-  ok(await pg.locator('section.card h2', { hasText: /^Calendar$/ }).count() === 1, 'with income in it, it is called "Calendar", not "Spending calendar"');
+  ok(await ov.getAttribute('data-mode') === 'mini', 'the Overview is always the mini month');
+  ok(await pg.locator('section.card h2', { hasText: /^Calendar$/ }).count() === 1, 'it is called "Calendar"');
   ok(await ov.locator('.cal-d .cal-dot.cal-c-good').count() > 0, 'and income shows on it');
   await settings();
   for (const g of ['Income', 'Bills', 'Trips and events', 'Loans', 'Wishlist']) await groupBtn(g).click();
@@ -533,7 +534,7 @@ fs.mkdirSync(SHOTS, { recursive: true });
   await dialog.getByRole('button', { name: 'Reset', exact: true }).click();
   ok(await pg.evaluate(() => JSON.stringify(Store.db.calendar) === JSON.stringify(calendarDefaults())), 'Reset puts every setting back');
   await toOverview();
-  ok(await pg.locator('[data-cal="overview"]').count() === 1 && await pg.locator('section.card h2', { hasText: 'Spending calendar' }).count() === 1, 'and the spending calendar is back');
+  ok(await pg.locator('[data-cal="overview"]').count() === 1 && await pg.locator('section.card h2', { hasText: /^Calendar$/ }).count() === 1, 'and the calendar is back');
   ok(!(await noise()).bad, 'no broken text after all that');
 
   console.log(`\n${passed} passed`);

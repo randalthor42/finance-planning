@@ -1,11 +1,11 @@
 /**
- * @file Calendar: dated money on a month grid. One component, four layouts:
- *   full     a page-wide month: each day lists its lines with amounts, trips with dates are bars across the days
- *   tablet   the same grid, tighter: names only, and the day's net at the bottom
- *   mobile   a small grid with coloured dots; underneath, the lines of the chosen day (or of the whole month)
- *   compact  a mini month for a card or a side column: dots and the colour of each day only
- *   auto     (default) full, tablet or mobile by the width the calendar itself gets, not the screen's: in a narrow
- *            card on a wide screen it still fits
+ * @file Calendar: dated money on a month grid. Three densities (v0.9 audit, 6.3); the PAGE chooses one:
+ *   full     the Month planner on a wide screen: each day lists its lines with amounts, trips are bars across the days,
+ *            the chosen day's lines below the grid
+ *   compact  the Month planner on a tablet or phone: from 600 px of calendar width the grid with names and the day's
+ *            net, narrower a grid of dots (cells at least 44 px) with the day's or the month's lines underneath
+ *   mini     a small month in a card (the Overview): dots and the status colour of each day only
+ * Inside, compact is drawn by two renderers ("tablet" and "mobile", by width); the page never picks those.
  * It knows nothing about the plan: a page hands it events. calendarData.js has ready-made events for the plan.
  * The arithmetic (weeks, spans, totals) is in logic/calendar.js; this file only draws.
  *
@@ -16,11 +16,11 @@
  *     groups: [{ key: 'bill', label: $t('Bills'), tone: 'bad' }],
  *     onEvent: ev => …,
  *   })
- *   calendar({ ...planCalendar(), id: 'overview-cal', mode: 'compact' })   // the plan (calendarData.js)
+ *   calendar({ ...planCalendar(), id: 'overview-cal', mode: 'mini' })      // the plan (calendarData.js)
  *
  * Options (only `id` is required; use one id per calendar on screen, it keys the state in UI.calendars):
- *   mode         'auto' | 'full' | 'tablet' | 'mobile' | 'compact'. Default 'auto'.
- *   modes        layouts the person may switch between, e.g. ['auto', 'full', 'compact']. Omit for no switch.
+ *   mode         'full' | 'compact' | 'mini' (CAL_MODES). Default 'full'. Chosen by the page, never by the calendar.
+ *   modes        densities the person may switch between, e.g. ['full', 'compact']. Omit for no switch.
  *   events       an array of events (types.js CalendarEvent), or a function of the days drawn that returns one:
  *                ({ k, start, end, from, to }) => events. k is the month, start…end its days, from…to the whole grid.
  *                It is asked once per month shown and the answer is kept while the calendar is on the page (redraw
@@ -40,7 +40,7 @@
  *   today        day number (D.today()) to mark.
  *   maxChips     lines shown in a day in the full layout before "+2 more" (tablet: at most 2). Default 3.
  *   header       show the title and ‹ Today ›. Default true; false when the page has its own month controls.
- *   legend       show the groups as on/off filters. Default true, false in compact.
+ *   legend       show the groups as on/off filters. Default true, false in mini.
  *   summary      show money in, out and net of the month (only the figures that are not zero). Default true.
  *   monthList    mobile: list the whole month under the grid while no day is chosen. Default true.
  *   listPage     that list draws whole days up to about this many lines, then "Show 150 more". Default 150.
@@ -85,22 +85,19 @@ import { btn, ibtn } from './button.js';
 import { amt, row } from './layout.js';
 import { ctxMenu } from './popover.js';
 
-/** Every layout, in the order of the switch. */
-export const CAL_MODES = ['auto', 'full', 'tablet', 'mobile', 'compact'];
+/** The densities a page can choose (audit 6.3), in the order of the switch. */
+export const CAL_MODES = ['full', 'compact', 'mini'];
 const MODE_LABELS = {
-  auto: $t('Auto'),
-  full: $t('Full page'),
-  tablet: $t('Tablet'),
-  mobile: $t('Mobile'),
+  full: $t('Full'),
   compact: $t('Compact'),
+  mini: $t('Mini'),
 };
 const TONES = new Set(['good', 'bad', 'warn', 'acc', 'cash', 'save', 'debt', 'trip', 'wish', 'muted']);
 /** A colour from the page goes into a style attribute: allow colour syntax only, never a second declaration. */
 const COLOR = /^[#a-zA-Z0-9(),.%\s-]{1,60}$/;
-/** What "auto" becomes at a width (px) of the calendar itself. */
+/** How the compact density is drawn at a width (px) of the calendar: names and nets, or dots and an agenda (6.4). */
 const FIT = [
-  [860, 'full'],
-  [560, 'tablet'],
+  [600, 'tablet'],
   [0, 'mobile'],
 ];
 const fitFor = width => FIT.find(([min]) => width >= min)[1];
@@ -151,10 +148,53 @@ function watchWidth(root, fit) {
   observer.observe(root);
 }
 
-/** Amounts in a small cell: exact below 10 000, "12K" above. */
-const short = n => (Math.abs(n) >= 10000 ? (n > 0 ? '+' : '') + compact(n) : signed(n));
+/** Amounts in a small cell: exact below 10 000, "+12K" above. */
+function short(n) {
+  if (Math.abs(n) < 10000) {
+    return signed(n);
+  }
+  return (n > 0 ? '+' : '') + compact(n);
+}
 const weekday = (n, width) => D.fmt(n, { weekday: width });
+/** The day an arrow, Home or End key moves to from day n, or null for any other key. */
+function keyTarget(key, n, moves, weekStart) {
+  if (moves[key]) {
+    return n + moves[key];
+  }
+  if (key === 'Home') {
+    return n - weekPos(n, weekStart);
+  }
+  if (key === 'End') {
+    return n + 6 - weekPos(n, weekStart);
+  }
+  return null;
+}
 const longDay = n => D.label(n, { weekday: 'long', month: 'long' });
+/**
+ * What a screen reader says for a day: whole sentences, each translated on its own, with the status of the day in
+ * words as well as in colour ("Below zero.", "Under your cushion."), and the day's markers (payday, lowest day…).
+ */
+function dayLabel(n, today, list, t, info) {
+  const parts = [longDay(n) + '.'];
+  if (n === today) {
+    parts.push($t('Today.'));
+  }
+  if (list.length) {
+    parts.push($t('{0}: {1} in, {2} out.', plural(list.length, 'item'), money(t.in), money(t.out)));
+  }
+  if (info && (info.title || info.text)) {
+    parts.push(info.title || info.text);
+  }
+  if (info && info.tone === 'bad') {
+    parts.push($t('Below zero.'));
+  } else if (info && info.tone === 'warn') {
+    parts.push($t('Under your cushion.'));
+  }
+  for (const mark of (info && info.marks) || []) {
+    parts.push(mark.title);
+  }
+  return parts.join(' ');
+}
 
 /**
  * Draws a calendar. Returns its element; month, day and layout changes redraw only the calendar, not the page.
@@ -162,7 +202,7 @@ const longDay = n => D.label(n, { weekday: 'long', month: 'long' });
  */
 export function calendar(options) {
   const o = {
-    mode: 'auto',
+    mode: 'full',
     weekStart: 1,
     maxChips: 3,
     header: true,
@@ -205,13 +245,14 @@ export function calendar(options) {
   const groups = new Map((o.groups || []).map(g => [g.key, g]));
   const root = h('div', { class: ('cal ' + (o.className || '')).trim(), 'data-cal': o.id });
 
-  const chosenMode = () => state.mode || o.mode;
+  const chosenMode = () => state.mode || o.mode || 'full';
   /** The layout comes from a guess, not from a width measured earlier: it is checked as soon as it is on the page. */
   let guessed = false;
+  /** The renderer for the density the page chose: full and mini as they are, compact by the calendar's width. */
   const currentMode = () => {
     const chosen = chosenMode();
-    if (chosen !== 'auto') {
-      return CAL_MODES.includes(chosen) ? chosen : 'full';
+    if (chosen !== 'compact') {
+      return chosen === 'mini' ? 'mini' : 'full';
     }
     if (!state.fit) {
       // a first guess from the page width; corrected before the first paint once the calendar is on the page
@@ -229,7 +270,7 @@ export function calendar(options) {
     state.fit = fitFor(width);
     // compare with what this calendar drew, not with the shared state: it may have been drawn with an older guess.
     // Not drawn yet (a deferred first drawing): it will use this width when it is drawn.
-    if (chosenMode() === 'auto' && root.dataset.mode && root.dataset.mode !== state.fit) {
+    if (chosenMode() === 'compact' && root.dataset.mode && root.dataset.mode !== state.fit) {
       draw();
     }
   };
@@ -424,13 +465,7 @@ export function calendar(options) {
       return;
     }
     const moves = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
-    const to = moves[e.key]
-      ? n + moves[e.key]
-      : e.key === 'Home'
-        ? n - weekPos(n, o.weekStart)
-        : e.key === 'End'
-          ? n + 6 - weekPos(n, o.weekStart)
-          : null;
+    const to = keyTarget(e.key, n, moves, o.weekStart);
     if (to === null) {
       return;
     }
@@ -481,7 +516,7 @@ export function calendar(options) {
     next.dataset.focus = 'next';
     const todayK = periodOf(today);
     const todayBtn =
-      mode === 'compact'
+      mode === 'mini'
         ? null
         : h('button', {
             type: 'button',
@@ -537,7 +572,7 @@ export function calendar(options) {
       ...[...present].filter(key => !groups.has(key)).map(key => ({ key, label: key })),
     ];
     const legend =
-      (o.legend ?? mode !== 'compact') && legendGroups.length > 1
+      (o.legend ?? mode !== 'mini') && legendGroups.length > 1
         ? h(
             'div',
             { class: 'cal-legend', role: 'group', 'aria-label': $t('Show or hide') },
@@ -578,8 +613,8 @@ export function calendar(options) {
         ? h(
             'div',
             { class: 'cal-sum' },
-            sum.in && !(both && mode === 'compact') ? figure($t('Money in'), signed(sum.in), 'good') : null,
-            sum.out && !(both && mode === 'compact') ? figure($t('Money out'), money(-sum.out)) : null,
+            sum.in && !(both && mode === 'mini') ? figure($t('Money in'), signed(sum.in), 'good') : null,
+            sum.out && !(both && mode === 'mini') ? figure($t('Money out'), money(-sum.out)) : null,
             both ? figure($t('Net'), signed(sum.net), sum.net < 0 ? 'bad' : 'good') : null,
           )
         : null;
@@ -653,15 +688,7 @@ export function calendar(options) {
       const info = o.dayInfo ? o.dayInfo(n, mode, list) : null;
       const t = totals(list);
       const first = D.js(n).getUTCDate() === 1 || n === from;
-      const label = [
-        longDay(n),
-        n === today ? $t('today') : null,
-        list.length ? plural(list.length, 'item') : null,
-        t.in || t.out ? signed(t.net) : null,
-        info ? info.title || info.text : null,
-      ]
-        .filter(Boolean)
-        .join(', ');
+      const label = dayLabel(n, today, list, t, info);
       const body = [];
       if (wide) {
         const cap = mode === 'full' ? o.maxChips : Math.min(2, o.maxChips);
@@ -688,7 +715,7 @@ export function calendar(options) {
           body.push(h('span', { class: 'cal-net' + (t.net > 0 ? ' good' : ''), text: short(t.net) }));
         }
       } else if (list.length) {
-        // mobile and compact: one dot per group, so a busy day does not look like a different colour each time
+        // mobile and mini: one dot per group, so a busy day does not look like a different colour each time
         const seen = new Set();
         const dots = list.filter(ev => !seen.has(ev.group) && seen.add(ev.group)).slice(0, mode === 'mobile' ? 4 : 3);
         body.push(h('span', { class: 'cal-dots' }, dots.map(dot)));
@@ -706,7 +733,8 @@ export function calendar(options) {
             (D.weekend(n) ? ' we' : '') +
             (n === today ? ' today' : '') +
             (n === sel ? ' sel' : '') +
-            (info && info.tone ? ' t-' + info.tone : ''),
+            (info && info.tone ? ' t-' + info.tone : '') +
+            ((info && info.marks) || []).map(mark => ' m-' + mark.kind).join(''),
           tabindex: n === focusDay ? 0 : -1,
           'aria-selected': String(n === sel),
           'aria-label': label,
@@ -719,6 +747,14 @@ export function calendar(options) {
           'div',
           { class: 'cal-dh' },
           h('span', { class: 'cal-n', text: wide && first ? D.label(n) : String(D.js(n).getUTCDate()) }),
+          ((info && info.marks) || []).map(mark =>
+            h('span', {
+              class: 'cal-mark ' + mark.kind,
+              title: mark.title,
+              'aria-hidden': 'true',
+              text: wide ? mark.short : '',
+            }),
+          ),
           wide && info && info.text
             ? h('span', { class: 'cal-v' + (info.tone ? ' ' + info.tone : ''), text: info.text, title: info.title })
             : null,
@@ -796,11 +832,12 @@ export function calendar(options) {
     const lineOf = (ev, n) => {
       const l = look(ev);
       const span = lastDay(ev) > ev.date && ev.date !== null;
-      const when = span
-        ? n !== null && n !== undefined
-          ? $t('Day {0} of {1}', n - ev.date + 1, lastDay(ev) - ev.date + 1)
-          : D.label(ev.date) + ' – ' + D.label(lastDay(ev))
-        : null;
+      let when = null;
+      if (span && n !== null && n !== undefined) {
+        when = $t('Day {0} of {1}', n - ev.date + 1, lastDay(ev) - ev.date + 1);
+      } else if (span) {
+        when = $t('{0} – {1}', D.label(ev.date), D.label(lastDay(ev)));
+      }
       const menu = o.eventMenu ? o.eventMenu(ev).filter(Boolean) : [];
       const line = row({
         left: h('i', { class: 'cal-dot' + l.class, style: l.style, 'aria-hidden': 'true' }),
@@ -933,17 +970,20 @@ export function calendar(options) {
         : null;
     /** What goes under the grid for the chosen day (or none): its lines, its one-line summary, or the month list. */
     const belowFor = day => {
-      if (mode === 'compact') {
-        const list = day !== null ? eventsOn(layout, day) : [];
-        return day !== null
-          ? h(
-              'div',
-              { class: 'cal-cap' },
-              h('b', { text: D.label(day, { weekday: 'short' }) }),
-              ' · ',
-              list.length ? plural(list.length, 'item') + ' · ' + signed(totals(list).net) : $t('Nothing on this day.'),
+      if (mode === 'mini') {
+        if (day === null) {
+          return null;
+        }
+        const list = eventsOn(layout, day);
+        const text = list.length
+          ? $t(
+              '{0}: {1}, {2}',
+              D.label(day, { weekday: 'short' }),
+              plural(list.length, 'item'),
+              signed(totals(list).net),
             )
-          : null;
+          : $t('{0}: nothing on this day.', D.label(day, { weekday: 'short' }));
+        return h('div', { class: 'cal-cap', text });
       }
       if (day !== null) {
         return dayPanel(day);
@@ -962,7 +1002,7 @@ export function calendar(options) {
     // the first time in this visit, draw once the page has been painted (a calendar further down the page should not
     // hold up the top of it); keep about its height meanwhile, so nothing below it moves when it appears
     const weeks = calendarWeeks(rangeOf(state.k).start, rangeOf(state.k).end, o.weekStart, !!o.fixedWeeks).length;
-    const row = { full: 113, tablet: 93, mobile: 51, compact: 36 }[currentMode()];
+    const row = { full: 113, tablet: 93, mobile: 51, mini: 36 }[currentMode()];
     root.style.minHeight = 150 + weeks * row + 'px';
     const later = () => {
       if (root.isConnected && !root.childElementCount) {
@@ -973,7 +1013,7 @@ export function calendar(options) {
   } else {
     build();
   }
-  if (chosenMode() === 'auto' || o.modes) {
+  if (chosenMode() === 'compact' || o.modes) {
     watchWidth(root, fit);
     // Only a guess is checked at once (the page puts the calendar in place in this task, before the first paint).
     // Reading the width forces a layout, and inside a card below the fold (content-visibility: auto) it would lay out

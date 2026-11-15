@@ -11,6 +11,7 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { calendar } from '../components/calendar.js';
+import { dayBalances, quiet } from '../../logic/calendar.js';
 import { planCalendar } from '../components/calendarData.js';
 import { info } from '../components/info.js';
 import { amt, bar, budgetText, card, chip, empty, page, row, segc } from '../components/layout.js';
@@ -266,7 +267,6 @@ V.months = () => {
     });
   };
   // a tracked budget with nothing logged holds nothing back, so it stays out of the lines, the counts and "tick all"
-  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
   const shown = m.entries.filter(e => !quiet(e));
   const body = [];
   /**
@@ -308,9 +308,10 @@ V.months = () => {
     const prefs = Store.db.calendar;
     body.push(
       calendar({
-        // layout and the number on each day as set in Settings › Calendar
-        ...planCalendar({ figure: prefs.plannerFigure === 'none' ? null : prefs.plannerFigure }),
-        mode: prefs.plannerLayout,
+        // the number on each day as set in Settings › Calendar; the density is the page's choice (audit 6.1, 6.4):
+        // the full grid on a wide screen, compact on a tablet or phone
+        ...planCalendar({ figure: prefs.plannerFigure }),
+        mode: matchMedia('(min-width: 768px)').matches ? 'full' : 'compact',
         id: 'months',
         month: k,
         label: M.label(k, true),
@@ -388,7 +389,8 @@ V.months = () => {
     const und = shown.filter(e => !inR(e));
     const by = {};
     shown.filter(inR).forEach(e => (by[e.date] = by[e.date] || []).push(e));
-    let bal = r2(m.open + und.reduce((a, e) => a + e.amount, 0));
+    // the same end-of-day balances as the calendar (logic/calendar.js dayBalances), so the two can never drift apart
+    const balances = dayBalances(m);
     let low = Infinity;
     let lowDay = null;
     if (und.length) {
@@ -409,7 +411,7 @@ V.months = () => {
     }
     for (let n = m.start; n <= m.end; n++) {
       const es = by[n] || [];
-      bal = r2(bal + es.reduce((a, e) => a + e.amount, 0));
+      const bal = balances.get(n);
       if (bal < low) {
         low = bal;
         lowDay = n;

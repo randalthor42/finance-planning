@@ -62,14 +62,16 @@ function choice(focusKey, label, options, current, onPick) {
   return control;
 }
 
-const layouts = () => [
-  ['auto', $t('Auto')],
-  ['full', $t('Full page')],
-  ['tablet', $t('Tablet')],
-  ['mobile', $t('Mobile')],
-  ['compact', $t('Compact')],
-];
-
+/** The line under "Use context menus" while they are off: what a right click and "+" do then. */
+function menusHint(prefs) {
+  if (prefs.menus) {
+    return null;
+  }
+  return prefs.add.expense
+    ? $t('Off: “+” adds an expense, and a right click shows the browser’s own menu.')
+    : $t('Off: a right click shows the browser’s own menu.');
+}
+/** The cards of Settings › Calendar: general look, the Overview calendar, the Month planner calendar, the menus. */
 export function calendarSettingsCards() {
   const prefs = Store.db.calendar;
   const set = (key, value, focusKey) => save({ [key]: value }, focusKey || key);
@@ -182,30 +184,8 @@ export function calendarSettingsCards() {
       prefs.overview
         ? [
             option(
-              $t('Layout'),
-              $t('Auto picks full page, tablet or mobile by the space the calendar gets.'),
-              choice('overviewLayout', $t('Layout'), layouts(), prefs.overviewLayout, (value, focusKey) =>
-                set('overviewLayout', value, focusKey),
-              ),
-            ),
-            option(
-              $t('Number on each day'),
-              null,
-              choice(
-                'overviewFigure',
-                $t('Number on each day'),
-                [
-                  ['spent', $t('What went out')],
-                  ['balance', $t('Balance')],
-                  ['none', $t('None')],
-                ],
-                prefs.overviewFigure,
-                (value, focusKey) => set('overviewFigure', value, focusKey),
-              ),
-            ),
-            option(
               $t('What it shows'),
-              $t('At first, what goes out: bills, transactions, trips, loans and the wishlist.'),
+              $t('At first, what is ahead: income, bills, planned one-offs, loans and trips.'),
               groupButtons,
             ),
           ]
@@ -221,22 +201,15 @@ export function calendarSettingsCards() {
       'div',
       { class: 'rows' },
       option(
-        $t('Layout'),
-        $t('Auto picks full page, tablet or mobile by the space the calendar gets.'),
-        choice('plannerLayout', $t('Layout'), layouts(), prefs.plannerLayout, (value, focusKey) =>
-          set('plannerLayout', value, focusKey),
-        ),
-      ),
-      option(
         $t('Number on each day'),
         null,
         choice(
           'plannerFigure',
           $t('Number on each day'),
           [
-            ['balance', $t('Balance')],
-            ['spent', $t('What went out')],
-            ['none', $t('None')],
+            ['balance', $t('End-of-day balance')],
+            ['net', $t('Net of the day')],
+            ['spent', $t('Spent that day')],
           ],
           prefs.plannerFigure,
           (value, focusKey) => set('plannerFigure', value, focusKey),
@@ -261,11 +234,7 @@ export function calendarSettingsCards() {
       { class: 'rows' },
       option(
         $t('Use context menus'),
-        prefs.menus
-          ? null
-          : prefs.add.expense
-            ? $t('Off: “+” adds an expense, and a right click shows the browser’s own menu.')
-            : $t('Off: a right click shows the browser’s own menu.'),
+        menusHint(prefs),
         toggle('menus', $t('Use context menus'), prefs.menus, value => set('menus', value)),
       ),
     ),

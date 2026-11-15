@@ -1,4 +1,5 @@
-/* Calendar (components/calendar.js). One grid for every layout; data-mode on .cal picks full, tablet, mobile or compact. */
+/* Calendar (components/calendar.js). One grid for every density; data-mode on .cal is the renderer: full, tablet and
+   mobile (the compact density by width) or mini. */
 /* ============================================================
    CALENDAR
    ============================================================ */
@@ -468,7 +469,7 @@
 }
 /* mobile: days big enough to tap, a dot per group */
 .cal[data-mode='mobile'] .cal-wdn,
-.cal[data-mode='compact'] .cal-wdn {
+.cal[data-mode='mini'] .cal-wdn {
   padding: 4px 0;
   text-align: center;
 }
@@ -487,45 +488,45 @@
   padding: 0;
 }
 /* compact: a mini month without lines, for a card or a side column */
-.cal[data-mode='compact'] {
+.cal[data-mode='mini'] {
   gap: 6px;
 }
-.cal[data-mode='compact'] .cal-title b {
+.cal[data-mode='mini'] .cal-title b {
   font-size: 0.95rem;
 }
-.cal[data-mode='compact'] .cal-grid {
+.cal[data-mode='mini'] .cal-grid {
   gap: 2px;
   border: 0;
   background: none;
 }
-.cal[data-mode='compact'] .cal-row {
+.cal[data-mode='mini'] .cal-row {
   gap: 2px;
 }
-.cal[data-mode='compact'] .cal-wdn {
+.cal[data-mode='mini'] .cal-wdn {
   background: none;
 }
-.cal[data-mode='compact'] .cal-d {
+.cal[data-mode='mini'] .cal-d {
   align-items: center;
   gap: 2px;
   min-height: 34px;
   padding: 3px 1px;
   border-radius: 6px;
 }
-.cal[data-mode='compact'] .cal-d.out {
+.cal[data-mode='mini'] .cal-d.out {
   background: none;
   opacity: 0.5;
 }
-.cal[data-mode='compact'] .cal-n {
+.cal[data-mode='mini'] .cal-n {
   min-width: 22px;
   font-size: 0.76rem;
   font-weight: 500;
   line-height: 18px;
   text-align: center;
 }
-.cal[data-mode='compact'] .cal-d.today .cal-n {
+.cal[data-mode='mini'] .cal-d.today .cal-n {
   padding: 0;
 }
-.cal[data-mode='compact'] .cal-sum {
+.cal[data-mode='mini'] .cal-sum {
   font-size: 0.8rem;
 }
 /* month planner in Calendar mode: the month card takes the whole width, the side cards sit underneath side by side */
@@ -555,4 +556,44 @@
   .cal-add {
     display: none !important;
   }
+}
+
+/* day markers (audit 6.0b): payday, the lowest day of the period, a payment whose day has passed unpaid */
+.cal-mark {
+  font-size: 0.66rem;
+  font-weight: 650;
+  line-height: 1;
+  border-radius: 999px;
+  padding: 2px 5px;
+  white-space: nowrap;
+}
+.cal-mark:empty {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+}
+.cal-mark.payday {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.cal-mark.payday:empty {
+  background: var(--good);
+}
+.cal-mark.lowest {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.cal-mark.lowest:empty {
+  background: var(--warn);
+}
+.cal-mark.overdue {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.cal-mark.overdue:empty {
+  background: var(--bad);
+}
+/* the compact density on a phone: day cells big enough to tap (6.4) */
+.cal[data-mode='mobile'] .cal-d {
+  min-height: 44px;
 }

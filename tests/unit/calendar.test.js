@@ -200,3 +200,25 @@ test('the running balance of the last day is where the month ends', () => {
   assert.equal(balances.get(month.start), 100 + 1000 - (300 - 12));
   assert.equal(balances.get(D.parse('2026-11-03')), balances.get(month.start) - 400);
 });
+
+test('the next 7 days: payments still due, their total, and the lowest end-of-day balance', async () => {
+  const { normPlan } = await import('../../src/models/plan.js');
+  const { project } = await import('../../src/logic/projection.js');
+  const { nextDays, dayBalances } = await import('../../src/logic/calendar.js');
+  const { D: Days } = await import('../../src/core/dates.js');
+  const plan = normPlan({
+    settings: { startMonth: '2026-11', opening: 500 },
+    incomes: [{ id: 'salary01', name: 'Salary', amount: 1000, day: 25 }],
+    bills: [
+      { id: 'rent0001', name: 'Rent', amount: 400, day: 16 },
+      { id: 'phone001', name: 'Phone', amount: 30, day: 18 },
+      { id: 'gym00001', name: 'Gym', amount: 20, day: 28 },
+    ],
+  });
+  const today = Days.parse('2026-11-15');
+  const months = project(plan, { today }).months;
+  const next = nextDays(months, today);
+  assert.equal(next.payments, 2, 'rent on the 16th and phone on the 18th; the gym on the 28th is later');
+  assert.equal(next.out, 430);
+  assert.equal(next.lowest.balance, dayBalances(months[0]).get(Days.parse('2026-11-21')));
+});

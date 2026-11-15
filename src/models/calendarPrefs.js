@@ -5,10 +5,12 @@
  */
 import { isObj } from '../core/util.js';
 
-/** The layouts a calendar can have (components/calendar.js); 'auto' follows the width it gets. */
-export const CAL_LAYOUTS = ['auto', 'full', 'tablet', 'mobile', 'compact'];
-/** The number on each day: the end-of-day balance, what went out that day, or nothing. */
-export const CAL_FIGURES = ['balance', 'spent', 'none'];
+/**
+ * The number on each day of the Month planner calendar (audit 6.7 "cell value"): the end-of-day balance, the net of
+ * the day (in minus out), or what went out that day. The layout is not a setting: each page chooses its density
+ * (components/calendar.js CAL_MODES), so the Overview is always the mini month and the planner full or compact.
+ */
+export const CAL_FIGURES = ['balance', 'net', 'spent'];
 /** Event groups of the plan (logic/calendar.js entryGroup). */
 export const CAL_GROUPS = ['inc', 'bill', 'budget', 'spend', 'trip', 'loan', 'goal', 'wish', 'transfer', 'adjust'];
 /** What the day menu can add, in menu order (components/calendarData.js). */
@@ -28,9 +30,13 @@ export const CAL_ADD = [
 /** What the menu of a line can do besides Edit, which is always there. */
 export const CAL_LINE = ['paid', 'skip', 'copy', 'delete'];
 
-/** Money spent: bills, purchases and spends, trips, loan payments, wishes. What the Overview calendar shows at first.
- *  In CAL_GROUPS order, so that cleaning the defaults leaves them exactly as they are. */
+/** Money spent: bills, purchases and spends, trips, loan payments, wishes. In CAL_GROUPS order. */
 export const SPENDING = ['bill', 'spend', 'trip', 'loan', 'wish'];
+/**
+ * What the Overview calendar shows at first (audit 6.6): what is ahead, income, bills, planned one-offs, loans and
+ * trips. Past spends are left out there (the Overview passes `ahead`). In CAL_GROUPS order.
+ */
+export const AHEAD = ['inc', 'bill', 'spend', 'trip', 'loan'];
 
 const flags = keys => Object.fromEntries(keys.map(key => [key, true]));
 
@@ -42,10 +48,7 @@ export const calendarDefaults = () => ({
   trips: true,
   legend: true,
   overview: true,
-  overviewLayout: 'auto',
-  overviewFigure: 'spent',
-  overviewGroups: [...SPENDING],
-  plannerLayout: 'auto',
+  overviewGroups: [...AHEAD],
   plannerFigure: 'balance',
   menus: true,
   add: flags(CAL_ADD),
@@ -75,10 +78,7 @@ export function normCalendar(raw) {
     trips: bool(r.trips, d.trips),
     legend: bool(r.legend, d.legend),
     overview: bool(r.overview, d.overview),
-    overviewLayout: pick(r.overviewLayout, CAL_LAYOUTS, d.overviewLayout),
-    overviewFigure: pick(r.overviewFigure, CAL_FIGURES, d.overviewFigure),
     overviewGroups: groups.length ? groups : d.overviewGroups,
-    plannerLayout: pick(r.plannerLayout, CAL_LAYOUTS, d.plannerLayout),
     plannerFigure: pick(r.plannerFigure, CAL_FIGURES, d.plannerFigure),
     menus: bool(r.menus, d.menus),
     add: switches(r.add, CAL_ADD, d.add),

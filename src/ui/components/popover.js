@@ -25,20 +25,18 @@ export function closePop() {
 export function ctxMenu(e, items) {
   e.preventDefault();
   closePop();
-  const pop = h(
-    'div',
-    { class: 'mpop menu', role: 'menu' },
-    items
-      .filter(Boolean)
-      .map(item =>
-        typeof item === 'string'
-          ? item === '-'
-            ? h('hr', { class: 'menu-sep', role: 'separator' })
-            : h('div', { class: 'menu-h', role: 'presentation', text: item })
-          : menuItem(item),
-      ),
-  );
+  const pop = h('div', { class: 'mpop menu', role: 'menu' }, items.filter(Boolean).map(menuEntry));
   finishMenu(e, pop);
+}
+/** One entry of a menu: a dividing line ('-'), a section title (a string), or an item ([label, action, class]). */
+function menuEntry(item) {
+  if (item === '-') {
+    return h('hr', { class: 'menu-sep', role: 'separator' });
+  }
+  if (typeof item === 'string') {
+    return h('div', { class: 'menu-h', role: 'presentation', text: item });
+  }
+  return menuItem(item);
 }
 function menuItem([l, fn, className]) {
   return h('button', {

@@ -15,9 +15,9 @@
  * "Delete" always asks first, saying what goes (this line, every month, a whole loan…); Undo works afterwards too.
  */
 import { D, M, Period } from '../../core/dates.js';
-import { compact, money } from '../../core/format.js';
+import { compact, money, signed } from '../../core/format.js';
 import { $t } from '../../core/i18n.js';
-import { dayBalances, entryEvents, tripEvents } from '../../logic/calendar.js';
+import { dayBalances, entryEvents, lastDay, totals, tripEvents } from '../../logic/calendar.js';
 import { SPENDING } from '../../models/calendarPrefs.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
@@ -242,6 +242,30 @@ function recordIndex(plan) {
  * What can be done with one line: the context menu (and the ⋯ button) of an event. Mirrors the month planner.
  * `allowed` are the line switches of Settings › Calendar (CAL_LINE); Edit is always there.
  */
+/** The tick entry of a line's menu: received / paid, or the way back. */
+function tickLabel(e) {
+  if (e.amount > 0) {
+    return e.paid ? $t('Mark as not received') : $t('Mark as received');
+  }
+  return e.paid ? $t('Mark as not paid') : $t('Mark as paid');
+}
+/** What "Delete" says it removes: the spend, the one-off, the whole budget or bill, the trip or event, … */
+function deleteText(e, m, list, record, budgetLine, recurring, find) {
+  if (list === 'items') {
+    const budget = e.of ? find('bills', e.of) : null;
+    return budget ? DELETE_TEXT.spend(record.name, budget.name) : DELETE_TEXT.items(record.name);
+  }
+  if (budgetLine) {
+    return DELETE_TEXT.budget(record.name);
+  }
+  if (recurring) {
+    return DELETE_TEXT.bills(record.name, M.label(m.k, true));
+  }
+  if (list === 'trips') {
+    return (record.kind === 'event' ? DELETE_TEXT.event : DELETE_TEXT.trip)(record.name);
+  }
+  return DELETE_TEXT[list](record.name);
+}
 function lineMenu(ev, allowed, find) {
   if (ev.data.trip) {
     const trip = find('trips', ev.data.trip.id);
@@ -265,26 +289,10 @@ function lineMenu(ev, allowed, find) {
   const b = e.budget;
   const recurring = (list === 'bills' || list === 'incomes') && !b;
   const toggle = () => Actions.setPaid(m.key, tickOf(e), !e.paid);
-  const tick =
-    !allowed.paid || b || e.of // a budget closes instead; a logged spend is always paid
-      ? null
-      : e.amount > 0
-        ? [e.paid ? $t('Mark as not received') : $t('Mark as received'), toggle]
-        : [e.paid ? $t('Mark as not paid') : $t('Mark as paid'), toggle];
-  const text = () => {
-    const budget = e.of ? find('bills', e.of) : null;
-    return list === 'items'
-      ? budget
-        ? DELETE_TEXT.spend(record.name, budget.name)
-        : DELETE_TEXT.items(record.name)
-      : b
-        ? DELETE_TEXT.budget(record.name)
-        : recurring
-          ? DELETE_TEXT.bills(record.name, M.label(m.k, true))
-          : list === 'trips'
-            ? (record.kind === 'event' ? DELETE_TEXT.event : DELETE_TEXT.trip)(record.name)
-            : DELETE_TEXT[list](record.name);
-  };
+  // a budget closes instead of being ticked; a logged spend is always paid
+  const canTick = allowed.paid && !b && !e.of;
+  const tick = canTick ? [tickLabel(e), toggle] : null;
+  const text = () => deleteText(e, m, list, record, b, recurring, find);
   return [
     [$t('Edit'), () => entryModal(e, m)],
     tick,
@@ -312,7 +320,67 @@ function lineMenu(ev, allowed, find) {
  * @param {boolean} [choice.edit] a click on a line opens its window; context menus add, tick off, skip and delete
  * @param {boolean} [choice.openPlanner] the day menu also offers to open that month in the month planner
  */
-export function planCalendar({ only = null, figure = 'balance', trips, edit = true, openPlanner = false } = {}) {
+/**
+ * The number and markers of one day (audit 6.0b and 6.7). Balances come from the projection (dayBalances), never
+ * from the lines shown, so a filter never changes them:
+ * - balance: the end-of-day balance, only on days where something happens, today and the last day of the period
+ *   (the same number on twenty quiet days is noise); its colour is the day's status (below zero / under the cushion);
+ * - net: money in minus money out of the lines shown (it follows the filters, and says so in its title);
+ * - spent: money out of the lines shown, likewise.
+ * Markers: payday (first day of a budget month with a payday), the lowest day of the month, and an unpaid payment
+ * whose day has passed.
+ */
+function dayFigure(figure, day, mode, events, settings, balanceOn, lowestOn) {
+  const k = Period.of(settings, day);
+  const balance = balanceOn(day);
+  const marks = [];
+  if (settings.payDay && day === Period.start(settings, k)) {
+    marks.push({ kind: 'payday', short: $t('payday'), title: $t('Payday.') });
+  }
+  const low = lowestOn(day);
+  if (low && low.day === day) {
+    marks.push({ kind: 'lowest', short: $t('lowest'), title: $t('Lowest day of the month: {0}.', money(low.value)) });
+  }
+  if (day < Store.day && events.some(ev => !ev.done && ev.amount < 0 && ev.group === 'bill')) {
+    marks.push({ kind: 'overdue', short: '!', title: $t('A payment of this day is not ticked as paid yet.') });
+  }
+  const tone = balance === null || balance === undefined ? null : statusTone(balance, settings.cushion);
+  const info = { marks, tone, text: '', title: '', panel: false };
+  if (figure === 'balance') {
+    const active = events.length > 0 || day === Store.day || day === Period.end(settings, k);
+    if (active && balance !== null && balance !== undefined) {
+      info.text = mode === 'full' ? money(balance) : compact(balance);
+      info.title = $t('End-of-day balance: {0}.', money(balance));
+      info.panel = true;
+    }
+    return info;
+  }
+  const flow = totals(events);
+  if (figure === 'net' && (flow.in || flow.out)) {
+    info.text = mode === 'full' ? signed(flow.net) : compact(flow.net);
+    info.title = $t('Net of the lines shown: {0}.', signed(flow.net));
+  }
+  if (figure === 'spent' && flow.out) {
+    info.text = mode === 'full' ? money(flow.out) : compact(flow.out);
+    info.title = $t('Spent on the lines shown: {0}.', money(flow.out));
+  }
+  return info;
+}
+/** A day's status colour: below zero, under the cushion, or none. */
+function statusTone(balance, cushion) {
+  if (balance < 0) {
+    return 'bad';
+  }
+  return balance < cushion ? 'warn' : null;
+}
+export function planCalendar({
+  only = null,
+  figure = 'balance',
+  trips,
+  edit = true,
+  openPlanner = false,
+  ahead = false,
+} = {}) {
   // Settings › Calendar (models/calendarPrefs.js); an option passed here wins
   const prefs = Store.db.calendar;
   const showTrips = trips ?? prefs.trips;
@@ -333,6 +401,24 @@ export function planCalendar({ only = null, figure = 'balance', trips, edit = tr
       balances.set(k, dayBalances(month));
     }
     return balances.get(k).get(day);
+  };
+  // the lowest end-of-day balance of each budget month, for its marker
+  const lowest = new Map();
+  const lowestOn = day => {
+    const k = Period.of(settings, day);
+    if (!lowest.has(k)) {
+      const start = Period.start(settings, k);
+      const end = Period.end(settings, k);
+      let low = null;
+      for (let n = start; n <= end; n++) {
+        const value = balanceOn(n);
+        if (value !== null && value !== undefined && (low === null || value < low.value)) {
+          low = { day: n, value };
+        }
+      }
+      lowest.set(k, low);
+    }
+    return lowest.get(k);
   };
   const addsOn = menus ? addMenu(wanted, prefs.add) : null;
   return {
@@ -363,34 +449,11 @@ export function planCalendar({ only = null, figure = 'balance', trips, edit = tr
           })),
         );
       }
-      return wanted ? list.filter(ev => wanted.has(ev.group)) : list;
+      const shown = wanted ? list.filter(ev => wanted.has(ev.group)) : list;
+      // the Overview is about what is ahead: lines of days already past are left out (6.6), undated ones stay
+      return ahead ? shown.filter(ev => ev.date === null || lastDay(ev) >= Store.day) : shown;
     },
-    dayInfo:
-      figure === 'balance'
-        ? (day, mode) => {
-            const value = balanceOn(day);
-            if (value === null || value === undefined) {
-              return null;
-            }
-            return {
-              text: mode === 'full' ? money(value) : compact(value),
-              tone: value < 0 ? 'bad' : value < settings.cushion ? 'warn' : null,
-              title: $t('End-of-day balance: {0}', money(value)),
-            };
-          }
-        : figure === 'spent'
-          ? (day, mode, events) => {
-              // the lines still shown after the legend filters, so the number follows what you see
-              const spent = -events.reduce((sum, ev) => sum + (ev.amount < 0 ? ev.amount : 0), 0);
-              return spent
-                ? {
-                    text: mode === 'full' ? money(spent) : compact(spent),
-                    title: $t('Spent on this day: {0}', money(spent)),
-                    panel: false, // the day panel already ends with the same total
-                  }
-                : null;
-            }
-          : null,
+    dayInfo: (day, mode, events) => dayFigure(figure, day, mode, events, settings, balanceOn, lowestOn),
     onEvent: edit
       ? ev => {
           if (ev.data.trip) {
