@@ -17,6 +17,10 @@ export const UI = {
   rview: 'month',
   payExtra: 50,
   series: { save: true, debt: true },
+  /** Cash chart: '6' or '12' months from now, or 'all' (the whole plan). */
+  chartRange: '12',
+  /** Last measured width of each chart (px), so a redraw does not draw it twice. */
+  chartWidth: {},
   open: new Set(),
   itemFilter: 'upcoming',
   /** Transactions page: search text, filters and order, for this visit. */

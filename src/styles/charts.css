@@ -138,3 +138,19 @@ details.more > summary {
   color: var(--muted);
   margin-right: 14px;
 }
+
+/* chart text keeps its real size: the svg is drawn at the width of its box (charts.js, sized) */
+.chart svg[width] {
+  width: 100%;
+  max-width: 100%;
+}
+.chart-mark {
+  font-weight: 650;
+}
+.chart-legend {
+  align-items: center;
+}
+.chart-range button {
+  padding: 3px 10px;
+  font-size: 0.8rem;
+}

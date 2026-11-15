@@ -3,7 +3,7 @@
  */
 import { M } from '../../core/dates.js';
 import { compact, money, signed } from '../../core/format.js';
-import { $t } from '../../core/i18n.js';
+import { $t, plural } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
@@ -30,20 +30,126 @@ function niceScale(lo, hi, minRange = 100) {
   }
   return [a, b, t];
 }
-/** Cash, savings and debt over the plan. One axis (all three are money), crosshair tooltip, click to open a month. */
+/**
+ * Draws `build(width)` at the real width of its box, and again when the box changes size, so chart text keeps its
+ * real size (11 px) on a phone and on a wide screen instead of being scaled with the picture. The last width of each
+ * chart is remembered for the visit, so a redraw of the page does not draw the chart twice.
+ * @param {string} id which chart (for the remembered width)
+ * @param {(width: number) => Node[]} build the chart at a given width
+ */
+function sized(id, build) {
+  const box = h('div', { class: 'chart' });
+  let width = UI.chartWidth[id] || 640;
+  box.replaceChildren(...build(width));
+  const observer = new ResizeObserver(entries => {
+    // the page was drawn again and this chart is gone: stop watching it
+    if (!box.isConnected) {
+      observer.disconnect();
+      return;
+    }
+    const next = Math.round(entries[0].contentRect.width);
+    if (next > 0 && Math.abs(next - width) > 2) {
+      width = next;
+      UI.chartWidth[id] = next;
+      box.replaceChildren(...build(next));
+    }
+  });
+  observer.observe(box);
+  return box;
+}
+
+/** How many months the cash chart shows: the next 6 or 12 from this month, or the whole plan. */
+const CHART_RANGES = ['6', '12', 'all'];
+function chartMonths(projection) {
+  const all = projection.months;
+  if (UI.chartRange === 'all') {
+    return all;
+  }
+  const from = Math.max(
+    0,
+    all.findIndex(m => m.k >= curK()),
+  );
+  return all.slice(from, from + Number(UI.chartRange));
+}
+
+/** A month label every so many months, so labels never crowd: about one per 80 px. */
+function labelStep(count, plotWidth) {
+  return Math.max(1, Math.ceil(count / Math.max(2, Math.floor(plotWidth / 80))));
+}
+
+/** The 6M / 12M / All switch of the cash chart. */
+function rangeSwitch() {
+  const label = value => (value === 'all' ? $t('All') : $t('{0}M', value));
+  const title = value => (value === 'all' ? $t('The whole plan') : $t('The next {0}', plural(Number(value), 'month')));
+  return h(
+    'div',
+    { class: 'seg chart-range', role: 'group', 'aria-label': $t('Months shown') },
+    CHART_RANGES.map(value =>
+      h('button', {
+        type: 'button',
+        'aria-pressed': String(UI.chartRange === value),
+        text: label(value),
+        title: title(value),
+        onclick: () => {
+          UI.chartRange = value;
+          App.render();
+        },
+      }),
+    ),
+  );
+}
+
+/**
+ * Cash, savings and debt over the plan. One axis (all three are money), crosshair tooltip, click to open a month.
+ * The lowest point and the first month below zero are marked, the cushion line is labelled, and the range can be
+ * the next 6 or 12 months or the whole plan.
+ */
 export function cashChart() {
   const projection = Store.proj;
-  const months = projection.months;
-  const n = months.length;
+  const months = chartMonths(projection);
   const settings = Store.plan.settings;
-  const W = 760;
+  const has2 = { save: months.some(m => m.savings > 0), debt: months.some(m => m.debt > 0) };
+  const show = { save: has2.save && UI.series.save, debt: has2.debt && UI.series.debt };
+  const lg = (k, c, l) =>
+    has2[k] === false
+      ? null
+      : h(
+          'button',
+          {
+            type: 'button',
+            'aria-pressed': String(k === 'cash' || UI.series[k]),
+            disabled: k === 'cash',
+            style: k === 'cash' ? 'opacity:1;cursor:default' : '',
+            onclick: () => {
+              UI.series[k] = !UI.series[k];
+              App.render();
+            },
+          },
+          h('i', { style: `background:var(${c})` }),
+          l,
+        );
+  return [
+    sized('cash', W => drawCash(months, settings, show, W)),
+    h(
+      'div',
+      { class: 'legend chart-legend', style: 'margin-top:8px' },
+      lg('cash', '--s-cash', $t('Cash')),
+      lg('save', '--s-save', $t('Savings')),
+      lg('debt', '--s-debt', $t('Debt')),
+      h('span', { class: 'grow' }),
+      rangeSwitch(),
+    ),
+  ];
+}
+
+/** The cash chart drawn at width W (px): axis, cushion, lines, markers, and the hover tooltip. */
+function drawCash(months, settings, show, W) {
+  const n = months.length;
   const H = 250;
   const pl = 56;
   const pr = 14;
-  const pt = 12;
+  const pt = 14;
   const pb = 26;
-  const has2 = { save: months.some(m => m.savings > 0), debt: months.some(m => m.debt > 0) };
-  const show = { save: has2.save && UI.series.save, debt: has2.debt && UI.series.debt };
   const vals = [0];
   months.forEach(m => {
     vals.push(m.close);
@@ -69,6 +175,8 @@ export function cashChart() {
     });
   const svg = sv('svg', {
     viewBox: `0 0 ${W} ${H}`,
+    width: W,
+    height: H,
     role: 'img',
     'aria-label': $t('Cash, savings and debt by month. The Forecast page has the same numbers as a table.'),
   });
@@ -103,16 +211,16 @@ export function cashChart() {
       ),
     );
   }
-  const step = Math.ceil(n / 7);
+  const step = labelStep(n, W - pl - pr);
+  const anchorAt = i => {
+    if (i === 0) {
+      return 'start';
+    }
+    return i === n - 1 ? 'end' : 'middle';
+  };
   months.forEach((m, i) => {
     if ((i % step === 0 && i <= n - 1 - step * 0.8) || i === n - 1) {
-      svg.append(
-        sv(
-          'text',
-          { x: x(i), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle' },
-          M.label(m.k),
-        ),
-      );
+      svg.append(sv('text', { x: x(i), y: H - 6, 'text-anchor': anchorAt(i) }, M.label(m.k)));
     }
   });
   svg.append(
@@ -129,13 +237,13 @@ export function cashChart() {
     svg.append(line(m => m.savings, '--s-save'));
   }
   svg.append(line(m => m.close, '--s-cash'));
+  svg.append(...cashMarkers(months, x, y, W - pr));
   const guide = sv('line', { y1: pt, y2: H - pb, stroke: 'var(--faint)', 'stroke-width': 1, visibility: 'hidden' });
   const dot = c =>
     sv('circle', { r: 4.5, fill: `var(${c})`, stroke: 'var(--surface)', 'stroke-width': 2, visibility: 'hidden' });
   const dots = { cash: dot('--s-cash'), save: dot('--s-save'), debt: dot('--s-debt') };
   svg.append(guide, dots.debt, dots.save, dots.cash);
   const tip = h('div', { class: 'tip', hidden: true });
-  const wrap = h('div', { class: 'chart' }, svg, tip);
   const key = (c, l, v) =>
     h(
       'div',
@@ -180,40 +288,56 @@ export function cashChart() {
   });
   svg.addEventListener('click', e => App.go('months', { month: months[at(e)].k }));
   svg.style.cursor = 'pointer';
-  const lg = (k, c, l) =>
-    has2[k] === false
-      ? null
-      : h(
-          'button',
-          {
-            type: 'button',
-            'aria-pressed': String(k === 'cash' || UI.series[k]),
-            disabled: k === 'cash',
-            style: k === 'cash' ? 'opacity:1;cursor:default' : '',
-            onclick: () => {
-              UI.series[k] = !UI.series[k];
-              App.render();
-            },
-          },
-          h('i', { style: `background:var(${c})` }),
-          l,
-        );
-  return [
-    wrap,
-    h(
-      'div',
-      { class: 'legend', style: 'margin-top:8px' },
-      lg('cash', '--s-cash', $t('Cash')),
-      lg('save', '--s-save', $t('Savings')),
-      lg('debt', '--s-debt', $t('Debt')),
-    ),
-  ];
+  return [svg, tip];
 }
+
+/** Dots with a short label on the lowest month and on the first month that ends below zero. */
+function cashMarkers(months, x, y, right) {
+  if (!months.length) {
+    return [];
+  }
+  let lowest = 0;
+  months.forEach((m, i) => {
+    if (m.close < months[lowest].close) {
+      lowest = i;
+    }
+  });
+  const firstNegative = months.findIndex(m => m.close < 0);
+  const marker = (i, text, colour, above) => {
+    const cx = x(i);
+    const cy = y(months[i].close);
+    const atEnd = cx > right - 90;
+    return [
+      sv('circle', { cx, cy, r: 4, fill: `var(${colour})`, stroke: 'var(--surface)', 'stroke-width': 2 }),
+      sv(
+        'text',
+        {
+          x: atEnd ? cx - 6 : cx + 6,
+          y: above ? cy - 8 : cy + 16,
+          'text-anchor': atEnd ? 'end' : 'start',
+          class: 'chart-mark',
+        },
+        text,
+      ),
+    ];
+  };
+  const out = [];
+  if (firstNegative >= 0 && firstNegative !== lowest) {
+    out.push(...marker(firstNegative, $t('Below zero'), '--bad', true));
+  }
+  const lowColour = months[lowest].close < 0 ? '--bad' : '--warn';
+  out.push(...marker(lowest, $t('Lowest {0}', compact(months[lowest].close)), lowColour, false));
+  return out;
+}
+
 /** What is left over each month (money in minus money out). Bars below zero are months you spend more than comes in. */
 export function netBars() {
   const ms = Store.proj.months.filter(m => m.k >= curK()).slice(0, 12);
+  return sized('net', W => drawBars(ms, W));
+}
+/** The surplus bars drawn at width W (px). */
+function drawBars(ms, W) {
   const n = ms.length;
-  const W = 470;
   const H = 220;
   const pl = 56;
   const pr = 8;
@@ -225,6 +349,8 @@ export function netBars() {
   const bw = Math.min(28, slot - 4);
   const svg = sv('svg', {
     viewBox: `0 0 ${W} ${H}`,
+    width: W,
+    height: H,
     class: 'bars',
     role: 'img',
     'aria-label': $t('Money left over each month'),
@@ -236,7 +362,7 @@ export function netBars() {
       sv('text', { x: pl - 8, y: y(t) + 4, 'text-anchor': 'end' }, compact(t)),
     );
   }
-  const step = Math.ceil(n / 5);
+  const step = labelStep(n, W - pl - pr);
   ms.forEach((m, i) => {
     const cx = pl + slot * (i + 0.5);
     const top = Math.min(y(m.net), y(0));
@@ -271,7 +397,7 @@ export function netBars() {
       svg.append(sv('text', { x: cx, y: H - 6, 'text-anchor': 'middle' }, M.label(m.k)));
     }
   });
-  return h('div', { class: 'chart' }, svg, tip);
+  return [svg, tip];
 }
 export function sparkline(series, target) {
   const n = series.length;
