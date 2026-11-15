@@ -12,14 +12,16 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { linkify } from '../components/info.js';
-import { amt, bar, card, cardDel, chip, empty, keep, page, row, segc, tile } from '../components/layout.js';
+import { amt, bar, card, cardDel, chip, designPage, empty, keep, row, segc, tile } from '../components/layout.js';
 import { dataTable } from '../components/dataTable.js';
 import { h } from '../dom.js';
 import { tripModal } from '../modals/trip.js';
 import { curK, monthAt } from '../state.js';
 import { memo } from '../memo.js';
 import { listState, listToolbar } from '../components/listToolbar.js';
-import { applyQuery } from '../../logic/listQuery.js';
+import { applyQuery, isFiltered } from '../../logic/listQuery.js';
+import { designable } from '../components/designPages.js';
+import { isDesigning } from '../components/designGrid.js';
 import { V } from './registry.js';
 
 /**
@@ -164,6 +166,8 @@ function tripInfo(t) {
   }
   return { tk: tripMonth, total, by, tone, label, text, act, inPlan };
 }
+/** This page offers Design mode (see components/designPages.js). */
+const DESIGN = designable('trips', $t('Trips and events'));
 V.trips = () => {
   const plan = Store.plan;
   const list = Store.db.tripView === 'list';
@@ -190,7 +194,9 @@ V.trips = () => {
   ];
   const query = listState('trips');
   const result = applyQuery(planned, query, fields);
-  const sorted = result.rows;
+  // Design mode arranges every trip, so it ignores the search and filters (the toolbar is hidden meanwhile)
+  const designing = isDesigning(DESIGN);
+  const sorted = designing ? planned : result.rows;
   const toolbarEl =
     planned.length > 1
       ? listToolbar({
@@ -343,7 +349,48 @@ V.trips = () => {
         },
       ],
     });
-  return page(
+  /** The grid cards below the head: an empty state, "nothing matches", the table, or one card per trip. */
+  const tripItems = () => {
+    if (!planned.length) {
+      const hint = $t(
+        'Add a trip or an event, list what you will pay for, and pick the month each cost leaves your account.',
+      );
+      return [
+        {
+          id: 'empty',
+          title: $t('Trips and events'),
+          w: 12,
+          el: card(
+            null,
+            null,
+            null,
+            empty($t('Nothing planned yet'), hint, $t('Plan a trip'), () => tripModal()),
+          ),
+        },
+      ];
+    }
+    if (!sorted.length) {
+      const text = $t('Nothing matches. Clear the search or filters.');
+      return [
+        {
+          id: 'nomatch',
+          title: $t('Nothing matches'),
+          w: 12,
+          item: true,
+          el: card(null, null, null, h('p', { class: 'muted', text })),
+        },
+      ];
+    }
+    if (list) {
+      return [{ id: 'table', title: $t('Trips and events'), el: card(null, null, null, table()), w: 12, minW: 6 }];
+    }
+    return sorted.map((t, i) => ({ id: 'trip-' + t.id, title: t.name, el: cards[i], w: 4, minW: 3, item: true }));
+  };
+  const items = tripItems();
+  // The cards of the page, in their usual order. Design mode lets the person move them and change their size;
+  // the Cards and List views each keep their own layout. A search, filter or sort shows the trips in its order.
+  return designPage(
+    DESIGN,
     $t('Trips and events'),
     $t('Trips and events, and whether they fit your plan.'),
     [
@@ -358,23 +405,12 @@ V.trips = () => {
       btn($t('Someday idea'), () => tripModal(null, { kind: 'idea', on: false }), '', 'plus'),
       btn($t('Plan a trip'), () => tripModal(), 'primary', 'plus'),
     ],
-    toolbarEl,
-    !planned.length
-      ? card(
-          null,
-          null,
-          null,
-          empty(
-            $t('Nothing planned yet'),
-            $t('Add a trip or an event, list what you will pay for, and pick the month each cost leaves your account.'),
-            $t('Plan a trip'),
-            () => tripModal(),
-          ),
-        )
-      : !sorted.length
-        ? card(null, null, null, h('p', { class: 'muted', text: $t('Nothing matches. Clear the search or filters.') }))
-        : list
-          ? card(null, null, null, table())
-          : h('div', { class: 'tgrid' }, cards),
+    items,
+    {
+      layoutKey: list ? 'trips-list' : 'trips',
+      before: designing ? null : toolbarEl,
+      ordered: isFiltered(query) || !!query.sort,
+      note: toolbarEl ? $t('Search, filters and sorting are off while you arrange the cards.') : '',
+    },
   );
 };

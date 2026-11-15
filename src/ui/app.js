@@ -280,6 +280,9 @@ export const App = {
     App.render();
   },
   go(view, o) {
+    if (view !== UI.view) {
+      UI.design = null;
+    }
     Object.assign(UI, o || {});
     UI.view = view;
     UI.subClosed = false;

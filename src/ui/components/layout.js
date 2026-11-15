@@ -5,6 +5,7 @@ import { money, signed } from '../../core/format.js';
 import { $t } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
 import { btn, ibtn } from './button.js';
+import { designGrid, designToggle } from './designGrid.js';
 import { ctxMenu } from './popover.js';
 import { h } from '../dom.js';
 import { remove } from '../helpers.js';
@@ -21,6 +22,14 @@ export const page = (title, sub, acts, ...body) => [
   ),
   ...body,
 ];
+/**
+ * A page whose cards can be arranged: the usual head with a "Design mode" checkbox beside `acts`, and the cards on a
+ * grid of 12 columns. `key` names the page for its saved layout; `cards` are GridCard objects (see designGrid.js):
+ * { id, title, el, w, h }, in their default order. `options` go to designGrid (layoutKey, ordered, note), and
+ * `options.before` (a search bar, say) is shown between the head and the cards.
+ */
+export const designPage = (key, title, sub, acts, cards, options = {}) =>
+  page(title, sub, [acts, designToggle(key)], options.before, designGrid(key, cards, options));
 export const card = (title, sub, right, ...body) =>
   h(
     'section',

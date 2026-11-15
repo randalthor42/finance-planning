@@ -10,7 +10,7 @@ import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { info } from '../components/info.js';
 import { dataTable } from '../components/dataTable.js';
-import { bar, card, cardDel, empty, page, segc } from '../components/layout.js';
+import { bar, card, cardDel, designPage, empty, segc } from '../components/layout.js';
 import { fixNote } from '../components/monthNotes.js';
 import { monthEquation } from '../components/monthEquation.js';
 import { monthPosition as positionOf } from '../../logic/position.js';
@@ -19,6 +19,7 @@ import { ACC_TYPES, accountModal, spendable } from '../modals/account.js';
 import { balanceChip, balancesModal } from '../modals/balances.js';
 import { recModal } from '../modals/recurring.js';
 import { UI, curK, monthAt } from '../state.js';
+import { designable } from '../components/designPages.js';
 import { V } from './registry.js';
 
 /**
@@ -174,6 +175,8 @@ function accountTable(accounts, projection, monthPosition) {
   });
 }
 
+/** This page offers Design mode (see components/designPages.js). */
+const DESIGN = designable('accounts', $t('Accounts'));
 V.accounts = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -233,7 +236,58 @@ V.accounts = () => {
         ),
       )
     : null;
-  return page(
+  const kpi = (label, value, sub) => h('div', { class: 'kpi' }, label, value, sub);
+  const listView = UI.accountView === 'list';
+  /** The grid cards for the accounts: the table, one card per account, or the empty state. */
+  const accountItems = () => {
+    if (a.length && listView) {
+      return [
+        {
+          id: 'table',
+          title: $t('Your accounts'),
+          el: card(null, null, null, accountTable(a, projection, monthPosition)),
+          w: 12,
+          minW: 6,
+        },
+      ];
+    }
+    if (a.length) {
+      return a.map(x => ({
+        id: 'acc-' + x.id,
+        title: x.name,
+        el: accountCard(x, plan, projection, monthPosition, a),
+        w: 4,
+        minW: 3,
+        item: true,
+      }));
+    }
+    return emptyAccounts;
+  };
+  const emptyAccounts = [
+    {
+      id: 'empty',
+      title: $t('Your accounts'),
+      el: card(
+        $t('Your accounts'),
+        null,
+        null,
+        empty(
+          $t('No accounts yet'),
+          $t(
+            'Add your bank account, your cash and your credit card. You can also skip this and enter one total with “Update balances”.',
+          ),
+          $t('Add an account'),
+          () => accountModal(),
+        ),
+      ),
+      w: 12,
+    },
+  ];
+  const accountCards = accountItems();
+  // The cards of the page, in their usual order. Design mode lets the person move them and change their size;
+  // the Cards and List views each keep their own layout.
+  return designPage(
+    DESIGN,
     $t('Accounts'),
     $t('Your balances. Update them and the month recalculates.'),
     [
@@ -251,67 +305,60 @@ V.accounts = () => {
       btn($t('Add an account'), () => accountModal(), '', 'plus'),
       btn($t('Update balances'), balancesModal, 'primary', 'edit'),
     ],
-    h(
-      'div',
-      { class: 'kpis' },
-      h(
-        'div',
-        { class: 'kpi' },
-        h(
-          'div',
-          { class: 'l' },
-          $t('To spend now'),
-          info(
-            $t(
-              'Bank accounts plus cash. Ticking something as paid after your last update takes it out of the account it was paid from.',
-            ),
-          ),
-        ),
-        h('div', { class: 'v ' + (spend < 0 ? 'bad' : ''), text: money(spend) }),
-        h('div', {
-          class: 's',
-          text: m.fix && m.fix.d !== null ? $t('checked on {0}', D.label(m.fix.d)) : $t('not checked this month yet'),
-        }),
-      ),
-      h(
-        'div',
-        { class: 'kpi' },
-        h('div', { class: 'l' }, $t('Available if needed'), info($t('Savings + unused credit after this month.'))),
-        h('div', { class: 'v', text: money(emergency) }),
-        h('div', {
-          class: 's',
-          text: owed ? $t('{0} owed on cards', money(owed)) : $t('savings and available credit'),
-        }),
-      ),
-      h(
-        'div',
-        { class: 'kpi' },
-        h('div', { class: 'l', text: $t('{0} ends at', M.label(m.k)) }),
-        h('div', { class: 'v ' + (m.close < 0 ? 'bad' : ''), text: money(m.close) }),
-        h('div', { class: 's', text: m.fix ? $t('after your balance check') : $t('from the plan only') }),
-      ),
-    ),
-    a.length
-      ? UI.accountView === 'list'
-        ? card(null, null, null, accountTable(a, projection, monthPosition))
-        : h(
+    [
+      {
+        id: 'kpi-spend',
+        title: $t('To spend now'),
+        w: 4,
+        minW: 2,
+        el: kpi(
+          h(
             'div',
-            { class: 'acards' + (a.length >= 3 ? ' fill' : '') },
-            a.map(x => accountCard(x, plan, projection, monthPosition, a)),
-          )
-      : card(
-          $t('Your accounts'),
-          null,
-          null,
-          empty(
-            $t('No accounts yet'),
-            $t(
-              'Add your bank account, your cash and your credit card. You can also skip this and enter one total with “Update balances”.',
+            { class: 'l' },
+            $t('To spend now'),
+            info(
+              $t(
+                'Bank accounts plus cash. Ticking something as paid after your last update takes it out of the account it was paid from.',
+              ),
             ),
-            $t('Add an account'),
-            () => accountModal(),
           ),
+          h('div', { class: 'v ' + (spend < 0 ? 'bad' : ''), text: money(spend) }),
+          h('div', {
+            class: 's',
+            text: m.fix && m.fix.d !== null ? $t('checked on {0}', D.label(m.fix.d)) : $t('not checked this month yet'),
+          }),
         ),
-    h('div', { class: 'rgrid' }, checkCard, payCard),
+      },
+      {
+        id: 'kpi-available',
+        title: $t('Available if needed'),
+        w: 4,
+        minW: 2,
+        el: kpi(
+          h('div', { class: 'l' }, $t('Available if needed'), info($t('Savings + unused credit after this month.'))),
+          h('div', { class: 'v', text: money(emergency) }),
+          h('div', {
+            class: 's',
+            text: owed ? $t('{0} owed on cards', money(owed)) : $t('savings and available credit'),
+          }),
+        ),
+      },
+      {
+        id: 'kpi-end',
+        title: $t('{0} ends at', M.label(m.k)),
+        w: 4,
+        minW: 2,
+        el: kpi(
+          h('div', { class: 'l', text: $t('{0} ends at', M.label(m.k)) }),
+          h('div', { class: 'v ' + (m.close < 0 ? 'bad' : ''), text: money(m.close) }),
+          h('div', { class: 's', text: m.fix ? $t('after your balance check') : $t('from the plan only') }),
+        ),
+      },
+      ...accountCards,
+      // side by side with the card-payment note; on its own, across the page
+      { id: 'check', title: $t('Balance check'), el: checkCard, w: payCard ? 6 : 12, minW: 4 },
+      { id: 'payoff', title: $t('Paying off a credit card'), el: payCard, w: 6, minW: 3 },
+    ],
+    { layoutKey: listView ? 'accounts-list' : 'accounts' },
   );
 };

@@ -65,6 +65,7 @@ tests/
 |---|---|
 | `src/core/dates.js` | `M`, `D`, `Period` |
 | `src/core/format.js` | `FMT`, `setFmt`, `money`, `signed`, `compact`, `fmtNum`, `parseMoney` |
+| `src/core/grid.js` | `GRID_COLS`, `GRID_MAX_H`, `arrange`, `arrangeOrdered`, `place`, `resize`, `nudge`, `snapDrop`, `findSpot`, `removeEmptyRows`, `fitSize`, `rowCount`, `byReading`, `toSaved`, `sameLayout` |
 | `src/core/i18n.js` | `I18N`, `$t`, `plural`, `ordinal` |
 | `src/core/util.js` | `isObj`, `has`, `r2`, `clamp`, `uid`, `pmt` |
 
@@ -73,7 +74,7 @@ tests/
 | Module | Exports |
 |---|---|
 | `src/models/categories.js` | `CATS`, `INCATS`, `CAT_NAME`, `EVERY`, `SHIFTS`, `KEY_RE` |
-| `src/models/db.js` | `normDB` |
+| `src/models/db.js` | `normDB`, `normLayouts` |
 | `src/models/plan.js` | `normPlan` |
 | `src/models/samplePlan.js` | `samplePlan` |
 
@@ -108,9 +109,11 @@ tests/
 | `src/ui/app.js` | `App` |
 | `src/ui/components/button.js` | `btn`, `ibtn` |
 | `src/ui/components/charts.js` | `cashChart`, `netBars`, `sparkline` |
+| `src/ui/components/designGrid.js` | `designGrid`, `designToggle`, `isDesigning` |
+| `src/ui/components/designPages.js` | `designable`, `isDesignable`, `designPages` |
 | `src/ui/components/form.js` | `NOTE`, `formModal` |
 | `src/ui/components/info.js` | `info`, `linkify` |
-| `src/ui/components/layout.js` | `page`, `card`, `empty`, `amt`, `chip`, `tile`, `bar`, `prow`, `segc`, `row`, `mono`, `cardDel`, `keep`, `budgetText` |
+| `src/ui/components/layout.js` | `page`, `designPage`, `card`, `empty`, `amt`, `chip`, `tile`, `bar`, `prow`, `segc`, `row`, `mono`, `cardDel`, `keep`, `budgetText` |
 | `src/ui/components/modal.js` | `modal`, `autosaver`, `confirmModal` |
 | `src/ui/components/moneyInput.js` | `moneyInp` |
 | `src/ui/components/monthNotes.js` | `coverNote`, `fixNote` |
@@ -151,6 +154,53 @@ tests/
 | `src/ui/views/trips.js` | `budgetTone` |
 | `src/ui/views/welcome.js` | (registers its view) |
 | `src/ui/views/wishes.js` | (registers its view) |
+
+## Design mode (arranging the cards of a page)
+
+Pages whose cards can be arranged have a **Design mode** checkbox, shown once it is turned on in Settings › Appearance
+(off by default, `db.designMode`; saved layouts apply either way). Which pages offer it is tracked in
+`ui/components/designPages.js`: today the Overview, Accounts, Income and bills, Wishlist, Trips and events and Loans. With it ticked,
+every card can be dragged anywhere on a grid of 12 columns (the free cells are outlined), and its size chosen in
+columns and rows (the size button, or drag its corner). Cards in the way make room like widgets on a phone, and a card only leaves its row when the row has no space for it:
+
+- dropped on a card of its own row, the two swap;
+- a card that is pushed uses free space in its row first (the cards after it shift along, in order);
+- only when the row is full does it go to the next row, and the rows after it flow on. With two 6-column cards side by
+  side, dropping a 2-column card between them pushes the right one to the next row.
+
+Keyboard: focus a card's grip, then arrow keys move it and Shift + arrow keys resize it. On touch screens, press and
+hold a card to lift it. Below 600 px of width the cards are stacked and cannot be arranged.
+
+The layout is a browser preference (`db.layouts`, checked by `normLayouts`), like the theme: it is not plan data, is
+not in backups and is not undone with Ctrl+Z. "Reset layout" brings the usual one back. Pages with a Cards and a List
+view keep one layout for each (`accounts` and `accounts-list`, for example).
+
+Every account, wish, trip and loan is a card of its own. A new one takes the first free place that fits; a deleted
+one leaves a free place. While a search, filter or sort is active (Wishlist, Trips and events), those cards flow in its
+order from where the list starts, keeping the sizes chosen, so nothing leaves holes; the other cards stay where they
+are. Design mode always shows every card, with the search bar hidden, so the whole list is arranged at once.
+
+Any page can use it. Declare the page (this adds it to the list of pages that offer Design mode; a page that uses
+the grid without declaring itself gets a warning in the console), then give each card a stable `id` and a `title`,
+with its default size:
+
+```js
+const DESIGN = designable('accounts', $t('Accounts'));
+// …
+return designPage(DESIGN, $t('Accounts'), subtitle, actions, [
+  { id: 'total', title: $t('Total'), el: card(...), w: 4 },
+  { id: 'list', title: $t('All accounts'), el: card(...), w: 8, minW: 6 },
+  { id: 'tips', title: $t('Tips'), el: hasTips ? card(...) : null }, // null: hidden, its place is kept
+]);
+```
+
+For a list of things, give each card `item: true` and an id made from the thing's id (`'trip-' + trip.id`). Options
+(last argument): `layoutKey` (a separate saved layout, e.g. per Cards/List view), `ordered` (the list is searched,
+filtered or sorted), `note` (one more sentence for the Design mode bar) and `before` (shown above the cards, e.g. a
+search bar). See `views/trips.js` for all of them together.
+
+The rules for placing and making room are pure functions in `core/grid.js` (unit tested); the pointer, keyboard and
+drawing code is in `ui/components/designGrid.js`.
 
 ## Translations
 

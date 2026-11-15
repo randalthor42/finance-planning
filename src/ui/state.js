@@ -52,6 +52,8 @@ export const UI = {
   subClosed: false,
   /** Accounts page: 'cards' or 'list'. */
   accountView: 'cards',
+  /** The page whose cards are being arranged (Design mode, components/designGrid.js), or null. Ends on leaving it. */
+  design: null,
 };
 export const nowK = () => (Store.plan ? Period.now(Store.plan.settings) : M.now());
 export const curK = () => {

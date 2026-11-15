@@ -2,8 +2,44 @@
  * @file The stored database: all plans plus the browser preferences.
  */
 import { APP } from '../config.js';
-import { isObj, uid } from '../core/util.js';
+import { GRID_COLS, GRID_MAX_H } from '../core/grid.js';
+import { clamp, isObj, uid } from '../core/util.js';
 import { normPlan } from './plan.js';
+
+/** Names of pages and cards in a saved layout: short, plain identifiers. */
+const LAYOUT_ID = /^[a-z][\w-]{0,39}$/i;
+/** Limits of the saved Design mode layouts, so a damaged or hostile value cannot grow the storage. */
+const MAX_LAYOUTS = 30;
+const MAX_LAYOUT_CARDS = 200;
+const MAX_LAYOUT_ROWS = 200;
+
+/**
+ * Design mode layouts, by page: { overview: { cardId: { x, y, w, h } } }. A browser preference, not plan data.
+ * Only the shape is checked here; overlaps are settled when the page is drawn (core/grid.js arrange).
+ */
+export function normLayouts(raw) {
+  const out = {};
+  if (!isObj(raw)) {
+    return out;
+  }
+  const int = (v, lo, hi) => clamp(Math.round(Number(v)) || 0, lo, hi);
+  for (const [key, cards] of Object.entries(raw).slice(0, MAX_LAYOUTS)) {
+    if (!LAYOUT_ID.test(key) || !isObj(cards)) {
+      continue;
+    }
+    const clean = {};
+    for (const [id, c] of Object.entries(cards).slice(0, MAX_LAYOUT_CARDS)) {
+      if (LAYOUT_ID.test(id) && isObj(c)) {
+        const w = int(c.w, 1, GRID_COLS);
+        clean[id] = { x: int(c.x, 0, GRID_COLS - w), y: int(c.y, 0, MAX_LAYOUT_ROWS), w, h: int(c.h, 1, GRID_MAX_H) };
+      }
+    }
+    if (Object.keys(clean).length) {
+      out[key] = clean;
+    }
+  }
+  return out;
+}
 
 export function normDB(raw) {
   raw = isObj(raw) ? raw : {};
@@ -28,6 +64,9 @@ export function normDB(raw) {
     toastPos: ['tr', 'br', 'tl', 'bl'].includes(raw.toastPos) ? raw.toastPos : 'tr',
     tripView: raw.tripView === 'list' ? 'list' : 'grid',
     wishView: raw.wishView === 'list' ? 'list' : 'grid',
+    /** Show the "Design mode" switch on the pages whose cards can be arranged. Off until the person turns it on. */
+    designMode: raw.designMode === true,
+    layouts: normLayouts(raw.layouts),
     log: Array.isArray(raw.log)
       ? raw.log
           .filter(isObj)

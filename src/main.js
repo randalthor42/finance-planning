@@ -72,6 +72,10 @@ addEventListener('storage', e => {
     Store.undoChars = 0;
     Store.redoS = [];
     Store.init();
+    // Design mode may have been turned off in the other tab: then no page stays half in it here
+    if (!Store.db.designMode) {
+      UI.design = null;
+    }
     App.render();
   }
 }); // another tab changed the data

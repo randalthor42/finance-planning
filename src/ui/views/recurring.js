@@ -12,7 +12,8 @@ import { btn } from '../components/button.js';
 import { info } from '../components/info.js';
 import { listState, listToolbar } from '../components/listToolbar.js';
 import { applyQuery, isFiltered } from '../../logic/listQuery.js';
-import { card, chip, empty, page, row } from '../components/layout.js';
+import { card, chip, designPage, empty, row } from '../components/layout.js';
+import { designable } from '../components/designPages.js';
 import { grip, sortable } from '../components/sortable.js';
 import { h } from '../dom.js';
 import { find, remove } from '../helpers.js';
@@ -97,6 +98,8 @@ function recurringFields(records, inc) {
   }
   return fields;
 }
+/** This page offers Design mode (see components/designPages.js). */
+const DESIGN = designable('recurring', $t('Income and bills'));
 V.recurring = () => {
   const plan = Store.plan;
   const currentMonth = curK();
@@ -225,36 +228,45 @@ V.recurring = () => {
     $t('Add a bill'),
   );
   const left = totals.incomes - totals.bills;
-  return page(
-    $t('Income and bills'),
-    $t('Regular money in and out.'),
-    null,
-    h(
+  /** One summary figure as its own small card, so Design mode can place it anywhere. */
+  const kpi = (id, label, value, valueClass, sub) => ({
+    id,
+    title: label,
+    w: 4,
+    minW: 2,
+    el: h(
       'div',
-      { class: 'kpis' },
-      h(
-        'div',
-        { class: 'kpi' },
-        h('div', { class: 'l', text: $t('Regular income per month') }),
-        h('div', { class: 'v', text: money(totals.incomes) }),
-        h('div', { class: 's', text: $t('as of {0}', M.label(currentMonth)) }),
-      ),
-      h(
-        'div',
-        { class: 'kpi' },
-        h('div', { class: 'l', text: $t('Regular bills per month') }),
-        h('div', { class: 'v', text: money(totals.bills) }),
-        h('div', { class: 's', text: $t('yearly bills are spread over 12 months') }),
-      ),
-      h(
-        'div',
-        { class: 'kpi' },
-        h('div', { class: 'l', text: $t('Left after regular bills') }),
-        h('div', { class: 'v ' + (left < 0 ? 'bad' : 'good'), text: signed(left) }),
-        h('div', { class: 's', text: $t('before one-offs, trips, loans and savings') }),
-      ),
+      { class: 'kpi' },
+      h('div', { class: 'l', text: label }),
+      h('div', { class: 'v ' + valueClass, text: value }),
+      h('div', { class: 's', text: sub }),
     ),
-    // one column: income is short and bills are long, so side by side they never lined up
-    h('div', { class: 'stack' }, a, b),
-  );
+  });
+  // The cards of the page, in their usual order: the three totals, then income above bills, each across the page
+  // (income is short and bills are long, so side by side they never lined up). Design mode can move and resize them.
+  return designPage(DESIGN, $t('Income and bills'), $t('Regular money in and out.'), null, [
+    kpi(
+      'kpi-income',
+      $t('Regular income per month'),
+      money(totals.incomes),
+      '',
+      $t('as of {0}', M.label(currentMonth)),
+    ),
+    kpi(
+      'kpi-bills',
+      $t('Regular bills per month'),
+      money(totals.bills),
+      '',
+      $t('yearly bills are spread over 12 months'),
+    ),
+    kpi(
+      'kpi-left',
+      $t('Left after regular bills'),
+      signed(left),
+      left < 0 ? 'bad' : 'good',
+      $t('before one-offs, trips, loans and savings'),
+    ),
+    { id: 'incomes', title: $t('Income'), el: a, w: 12, minW: 4 },
+    { id: 'bills', title: $t('Bills and living costs'), el: b, w: 12, minW: 4 },
+  ]);
 };

@@ -11,6 +11,7 @@ import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { info } from '../components/info.js';
 import { bar, card, chip, page, row, segc } from '../components/layout.js';
+import { designPages } from '../components/designPages.js';
 import { confirmModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
@@ -100,6 +101,18 @@ V.settings = () => {
     'aria-label': $t('Autosave'),
     onchange: () => Store.setPref('autosave', auto.checked),
   });
+  const design = h('input', {
+    type: 'checkbox',
+    checked: db.designMode,
+    'aria-label': $t('Design mode'),
+    onchange: () => {
+      // turning it off also ends Design mode, so no page is left half-arranged
+      if (!design.checked) {
+        UI.design = null;
+      }
+      Store.setPref('designMode', design.checked);
+    },
+  });
   const pages = {
     general: () => [
       card(
@@ -180,6 +193,17 @@ V.settings = () => {
             $t('Save changes in pop-ups as you type, with no Save button.'),
             h('label', { class: 'switch' }, auto),
           ),
+          // only when some page offers it (components/designPages.js); which ones is not spelled out, so new pages
+          // can offer it without this text going out of date
+          designPages().length
+            ? opt(
+                $t('Design mode'),
+                $t(
+                  'Show the Design mode switch on pages whose cards can be arranged, to move the cards and change their size. Layouts you made stay as they are when it is off.',
+                ),
+                h('label', { class: 'switch' }, design),
+              )
+            : null,
         ),
       ),
       card(

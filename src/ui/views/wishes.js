@@ -14,15 +14,19 @@ import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { linkify } from '../components/info.js';
 import { dataTable } from '../components/dataTable.js';
-import { card, cardDel, chip, empty, page, row, segc } from '../components/layout.js';
+import { card, cardDel, chip, designPage, empty, row, segc } from '../components/layout.js';
 import { h } from '../dom.js';
 import { wishModal } from '../modals/wish.js';
 import { curK } from '../state.js';
 import { memo } from '../memo.js';
 import { listState, listToolbar } from '../components/listToolbar.js';
-import { applyQuery } from '../../logic/listQuery.js';
+import { applyQuery, isFiltered } from '../../logic/listQuery.js';
+import { designable } from '../components/designPages.js';
+import { isDesigning } from '../components/designGrid.js';
 import { V } from './registry.js';
 
+/** This page offers Design mode (see components/designPages.js). */
+const DESIGN = designable('wishes', $t('Wishlist'));
 V.wishes = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -67,7 +71,10 @@ V.wishes = () => {
           customSort: $t('As added'),
         })
       : null;
-  const cards = result.rows.map(Wd => {
+  // Design mode arranges every wish, so it ignores the search and filters (the toolbar is hidden meanwhile)
+  const designing = isDesigning(DESIGN);
+  const rows = designing ? plan.wishes : result.rows;
+  const cards = rows.map(Wd => {
     const others = plan.wishes.filter(x => x.id !== Wd.id);
     const base = memo('wish-base:' + Wd.id, [], () => project({ ...plan, wishes: others }, { today: Store.day }));
     const at = (R, k) => R.months[clamp(k - summary.s0, 0, summary.n - 1)];
@@ -233,7 +240,7 @@ V.wishes = () => {
   const table = () =>
     dataTable({
       id: 'wishes',
-      rows: result.rows,
+      rows,
       rowProps: Wd => ({ class: Wd.on || Wd.flex ? '' : 'dim' }),
       columns: [
         { label: $t('Name'), value: Wd => Wd.name, cell: Wd => h('b', { text: Wd.name }) },
@@ -269,7 +276,43 @@ V.wishes = () => {
         },
       ],
     });
-  return page(
+  const kpi = (id, label, value, sub) => ({
+    id,
+    title: label,
+    w: 4,
+    minW: 2,
+    el: h(
+      'div',
+      { class: 'kpi' },
+      h('div', { class: 'l', text: label }),
+      h('div', { class: 'v', text: value }),
+      h('div', { class: 's', text: sub }),
+    ),
+  });
+  /** The grid cards for the wishes: "nothing matches", the table, or one card per wish. */
+  const wishItems = () => {
+    if (!rows.length) {
+      const text = $t('Nothing matches. Clear the search or filters.');
+      return [
+        {
+          id: 'nomatch',
+          title: $t('Nothing matches'),
+          el: card(null, null, null, h('p', { class: 'muted', text })),
+          w: 12,
+          item: true,
+        },
+      ];
+    }
+    if (list) {
+      return [{ id: 'table', title: $t('Wishlist'), el: card(null, null, null, table()), w: 12, minW: 6 }];
+    }
+    return rows.map((Wd, i) => ({ id: 'wish-' + Wd.id, title: Wd.name, el: cards[i], w: 6, minW: 3, item: true }));
+  };
+  const items = wishItems();
+  // The cards of the page, in their usual order. Design mode lets the person move them and change their size;
+  // the Cards and List views each keep their own layout. A search, filter or sort shows the wishes in its order.
+  return designPage(
+    DESIGN,
     $t('Wishlist'),
     $t('Things you want, and the best month to buy them. Nothing counts until you switch it on.'),
     [
@@ -285,58 +328,51 @@ V.wishes = () => {
     ],
     plan.wishes.length
       ? [
-          h(
-            'div',
-            { class: 'kpis' },
-            h(
-              'div',
-              { class: 'kpi' },
-              h('div', { class: 'l', text: $t('Everything on the list') }),
-              h('div', { class: 'v', text: money(plan.wishes.reduce((a, w) => a + w.price, 0)) }),
-              h('div', { class: 's', text: plural(plan.wishes.length, 'wish') }),
-            ),
-            h(
-              'div',
-              { class: 'kpi' },
-              h('div', { class: 'l', text: $t('Counted in your plan') }),
-              h('div', { class: 'v', text: money(on.reduce((a, w) => a + projection.wishes[w.id].total, 0)) }),
-              h('div', { class: 's', text: $t('{0} of {1} switched on', on.length, plan.wishes.length) }),
-            ),
-            h(
-              'div',
-              { class: 'kpi' },
-              h('div', { class: 'l', text: $t('Safe to spend now') }),
-              h('div', {
-                class: 'v',
-                text: money(Math.max(0, roomSeries(projection, cush)[currentMonth - summary.s0])),
-              }),
-              h('div', { class: 's', text: $t('without any later month going under your cushion') }),
-            ),
+          kpi(
+            'kpi-total',
+            $t('Everything on the list'),
+            money(plan.wishes.reduce((a, w) => a + w.price, 0)),
+            plural(plan.wishes.length, 'wish'),
           ),
-          toolbarEl,
-          !cards.length
-            ? card(
-                null,
-                null,
-                null,
-                h('p', { class: 'muted', text: $t('Nothing matches. Clear the search or filters.') }),
-              )
-            : list
-              ? card(null, null, null, table())
-              : h('div', { class: 'cols' }, cards),
+          kpi(
+            'kpi-counted',
+            $t('Counted in your plan'),
+            money(on.reduce((a, w) => a + projection.wishes[w.id].total, 0)),
+            $t('{0} of {1} switched on', on.length, plan.wishes.length),
+          ),
+          kpi(
+            'kpi-safe',
+            $t('Safe to spend now'),
+            money(Math.max(0, roomSeries(projection, cush)[currentMonth - summary.s0])),
+            $t('without any later month going under your cushion'),
+          ),
+          ...items,
         ]
-      : card(
-          null,
-          null,
-          null,
-          empty(
-            $t('Nothing on your wishlist'),
-            $t(
-              'Add a camera, a laptop, a watch. A rough price is enough: you will see when you can afford it and whether to save or finance.',
+      : [
+          {
+            id: 'empty',
+            title: $t('Wishlist'),
+            w: 12,
+            el: card(
+              null,
+              null,
+              null,
+              empty(
+                $t('Nothing on your wishlist'),
+                $t(
+                  'Add a camera, a laptop, a watch. A rough price is enough: you will see when you can afford it and whether to save or finance.',
+                ),
+                $t('Add a wish'),
+                () => wishModal(),
+              ),
             ),
-            $t('Add a wish'),
-            () => wishModal(),
-          ),
-        ),
+          },
+        ],
+    {
+      layoutKey: list ? 'wishes-list' : 'wishes',
+      before: designing ? null : toolbarEl,
+      ordered: isFiltered(query) || !!query.sort,
+      note: toolbarEl ? $t('Search, filters and sorting are off while you arrange the cards.') : '',
+    },
   );
 };

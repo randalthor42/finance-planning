@@ -318,11 +318,6 @@ dialog.modal.narrow {
   font-weight: 700;
   flex: none;
 }
-.tgrid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-}
 .tcard {
   display: flex;
   flex-direction: column;
@@ -541,9 +536,6 @@ tr.dim td {
   .kpi .v {
     font-size: 1.2rem;
   }
-  .tgrid {
-    grid-template-columns: 1fr;
-  }
   .subnav {
     overflow-x: auto;
     flex-wrap: nowrap;
@@ -742,15 +734,6 @@ tr.dim td {
 }
 
 /* accounts: one card per account */
-.acards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 14px;
-  align-content: start;
-}
-.acards.fill {
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
 .acard .abig {
   font-size: 1.5rem;
   font-weight: 700;
@@ -816,55 +799,20 @@ tr.dim td {
   }
 }
 
-/* Overview (v0.9 S6): the month sum beside the insights, the chart across, the rest in flowing columns */
-.ov-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  margin-bottom: 16px;
+/* Overview: its cards are on a design grid (design.css). A narrow insights card puts each button under its sentence. */
+.ov-side {
+  container: ov-side / inline-size;
 }
-.ov-grid > div {
-  grid-column: span 12;
-  min-width: 0;
-}
-.ov-grid > div > .card {
-  height: 100%;
-}
-@media (min-width: 1280px) {
-  .ov-grid > .ov-hero {
-    grid-column: span 8;
+@container ov-side (max-width: 420px) {
+  .ov-side .note {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 8px;
   }
-  .ov-grid > .ov-side {
-    grid-column: span 4;
+  .ov-side .note > .btn {
+    grid-column: 2;
+    justify-self: start;
   }
-}
-.ov-flow {
-  columns: 3 340px;
-  column-gap: 16px;
-}
-.ov-flow > .card {
-  break-inside: avoid;
-  margin-bottom: 16px;
-}
-@media (max-width: 860px) {
-  /* KPIs as one swipeable row instead of 2 + 1 + 1 */
-  .ov-kpis {
-    display: flex;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-  }
-  .ov-kpis .kpi {
-    flex: 0 0 72%;
-    scroll-snap-align: start;
-  }
-}
-/* in the narrow insights column the button goes under its sentence */
-.ov-side .note {
-  flex-wrap: wrap;
-}
-.ov-side .note > .btn {
-  margin-left: 26px;
 }
 /* Transactions: search, filters and the count of what is shown */
 .logbar {

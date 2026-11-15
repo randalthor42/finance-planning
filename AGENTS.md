@@ -68,6 +68,10 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | Search, filters and sort above a list | `src/logic/listQuery.js` + `src/ui/components/listToolbar.js` |
 | A table that sorts by clicking its column titles | `src/ui/components/dataTable.js` (`align: 'left'` for text columns) |
 | Caching expensive derived data per plan revision | `src/ui/memo.js` |
+| Design mode: which pages offer it | `designable(key, name)` next to each view; the list is `src/ui/components/designPages.js` |
+| Design mode: dragging, keyboard, the size pop-up, saving a layout | `src/ui/components/designGrid.js` (`isDesigning(key)` is the one test for "this page is being arranged") |
+| Design mode: where cards go and how others make room (pure, unit-tested) | `src/core/grid.js` |
+| Saved layouts and the Design mode switch (browser preferences, not plan data) | `normLayouts` and `designMode` in `src/models/db.js` |
 | Bills or incomes entered twice | `duplicateLines` in `src/logic/audit.js` |
 | What a plan may contain, defaults, migrations | `src/models/plan.js` |
 | What happens when the user changes something | `src/state/actions.js` |
@@ -135,6 +139,16 @@ Describe the columns once as `fields` (`{ key, label, type, value(row), options?
 `listState(id)`, get the rows with `applyQuery(rows, query, fields)` (`src/logic/listQuery.js`, pure and unit-tested)
 and draw `listToolbar({ id, query, fields, result, filters, sorts })` (`src/ui/components/listToolbar.js`) above them.
 Totals that describe the whole list (like "Total bills per month") stay computed over all rows.
+
+### Let the cards of a page be arranged (Design mode)
+
+1. Next to the view, declare the page: `const DESIGN = designable('myPage', $t('My page'));`.
+2. Return `designPage(DESIGN, title, subtitle, actions, cards, options)` instead of `page(...)`. Each card is
+   `{ id, title, el, w, h, minW, … }` with a stable `id`; `el: null` hides a card and keeps its place.
+3. A list of things gives each card `item: true` and an id made from the thing's id (`'trip-' + trip.id`). A page that
+   changes what it shows while it is arranged (Trips and Wishlist drop their search) tests that with `isDesigning(DESIGN)`.
+
+The full option list (`layoutKey`, `ordered`, `note`, `before`) is in the README, section "Design mode".
 
 ### Make a new kind of record searchable
 

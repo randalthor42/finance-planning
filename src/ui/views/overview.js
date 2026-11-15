@@ -16,7 +16,7 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { cashChart, netBars } from '../components/charts.js';
-import { amt, bar, budgetText, card, page, prow, row } from '../components/layout.js';
+import { amt, bar, budgetText, card, designPage, prow, row } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { monthField } from '../components/pickers.js';
 import { h } from '../dom.js';
@@ -30,6 +30,7 @@ import { recModal } from '../modals/recurring.js';
 import { rollModal, settingsModal } from '../modals/settings.js';
 import { tripModal } from '../modals/trip.js';
 import { UI, curK, monthAt, nowK, rangeLabel } from '../state.js';
+import { designable } from '../components/designPages.js';
 import { V } from './registry.js';
 import { reviewPeriod } from '../../logic/review.js';
 import { forecastScenario } from '../../logic/forecast.js';
@@ -549,6 +550,8 @@ function safeToSpend(projection, fromK, cushion) {
       : $t('{0} already goes below zero', M.label(lowest.k, true)),
   };
 }
+/** This page offers Design mode (see components/designPages.js). */
+const DESIGN = designable('overview', $t('Overview'));
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -567,22 +570,30 @@ V.overview = () => {
     );
   const debtFreeK = debtFreeFrom(projection, currentMonth);
   const lowCls = summary.min < 0 ? 'bad' : summary.min < plan.settings.cushion ? 'warn' : '';
-  // four numbers, the most useful first: what you can spend safely, where this month ends, the low point, debt
   const safe = safeToSpend(projection, currentMonth, plan.settings.cushion);
-  const kpis = h(
-    'div',
-    { class: 'kpis ov-kpis' },
-    kpi($t('Safe to spend now'), money(safe.amount), safe.text, safe.amount > 0 ? 'good' : 'bad'),
-    kpi(monthEndLabel(plan.settings), money(m.close), $t('{0} this month', signed(m.net)), m.close < 0 ? 'bad' : ''),
-    kpi($t('Lowest point'), money(summary.min), M.label(summary.minK, true), lowCls),
+  /** One card of the page grid (Design mode can move and resize it). Most cards are a third of the width. */
+  const titled = (id, title, el, size) => ({ id, title, el, w: 4, minW: 3, ...size });
+  // four numbers, the most useful first: what you can spend safely, where this month ends, the low point, debt.
+  // Each is its own small card, so it can be placed anywhere.
+  const kpis = [
+    ['kpi-safe', $t('Safe to spend now'), money(safe.amount), safe.text, safe.amount > 0 ? 'good' : 'bad'],
+    [
+      'kpi-end',
+      monthEndLabel(plan.settings),
+      money(m.close),
+      $t('{0} this month', signed(m.net)),
+      m.close < 0 ? 'bad' : '',
+    ],
+    ['kpi-low', $t('Lowest point'), money(summary.min), M.label(summary.minK, true), lowCls],
     m.debt > 0 || summary.debtFree !== null
-      ? kpi($t('Debt'), money(m.debt), debtText(m.debt, debtFreeK))
-      : kpi(
+      ? ['kpi-debt', $t('Debt'), money(m.debt), debtText(m.debt, debtFreeK)]
+      : [
+          'kpi-debt',
           $t('Net worth, {0}', M.label(last.k)),
           money(last.worth),
           $t('{0} at end of {1}', money(m.worth), M.label(currentMonth)),
-        ),
-  );
+        ],
+  ].map(([id, label, ...rest]) => titled(id, label, kpi(label, ...rest), { w: 3, minW: 2 }));
   const noData = !plan.bills.length && !plan.items.length && !plan.trips.length;
   const starter = noData
     ? card(
@@ -683,7 +694,11 @@ V.overview = () => {
         );
       }),
   ];
-  return page(
+  const chartTitle = $t('Where your money is heading');
+  // The cards of the page, in their usual order. Design mode lets the person move them and change their size.
+  // A card that is null has nothing to show right now: its place stays free.
+  return designPage(
+    DESIGN,
     $t('Overview'),
     $t(
       '{0} · {1} to {2} · updated for {3}',
@@ -693,115 +708,133 @@ V.overview = () => {
       D.label(today, { weekday: 'long', year: 'numeric' }),
     ),
     null,
-    kpis,
-    starter,
-    h(
-      'div',
-      { class: 'ov-grid' },
-      h('div', { class: 'ov-hero' }, nowCard()),
-      h('div', { class: 'ov-side' }, insightsCard()),
-      h('div', { class: 'ov-wide' }, card($t('Where your money is heading'), null, null, cashChart())),
-    ),
-    // the rest flows into as many columns as fit, most used first
-    h(
-      'div',
-      { class: 'ov-flow' },
-      card(
+    [
+      ...kpis,
+      titled('starter', $t('Build your plan'), starter, { w: 12 }),
+      titled('now', M.label(currentMonth, true), nowCard(), { w: 8, minW: 4 }),
+      titled('insights', $t('Insights'), insightsCard(), { cls: 'ov-side' }),
+      titled('chart', chartTitle, card(chartTitle, null, null, cashChart()), { w: 12, minW: 4 }),
+      titled(
+        'due',
         $t('Next to pay'),
-        $t('Unpaid costs, soonest first.'),
-        null,
-        due.length
-          ? h(
-              'div',
-              { class: 'rows' },
-              due.slice(0, 7).map(([k, e]) =>
-                row({
-                  title: e.label,
-                  desc:
-                    (e.date === null ? $t('No fixed day · {0}', M.label(k)) : D.label(e.date, { weekday: 'short' })) +
-                    (e.sub ? ' · ' + e.sub : ''),
-                  right: amt(e.amount),
-                  onclick: () => App.go('months', { month: k }),
-                }),
-              ),
-              due.length > 7
-                ? h('div', {
-                    class: 'muted small',
-                    style: 'padding:8px 6px 0',
-                    text: $t('and {0} more', due.length - 7),
-                  })
-                : null,
-            )
-          : h('p', { class: 'muted', text: $t('Nothing left to pay right now.') }),
-      ),
-      budgets.length
-        ? card(
-            $t('Budgets this month'),
-            $t('What you have spent from each budget so far.'),
-            btn($t('Log a spend'), () => logSpend(lastBudget(budgets).id, m), 'sm', 'plus'),
-            budgets.map(e =>
-              prow(
-                e.label,
-                budgetText(e.budget),
-                e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
-                e.budget.left < 0 ? 'over' : 'good',
-                () => logSpend(e.id, m),
-              ),
-            ),
-          )
-        : null,
-      card(
-        $t('Monthly surplus'),
-        $t('In minus out.'),
-        null,
-        netBars(),
-        h(
-          'div',
-          { class: 'legend static' },
-          h('span', null, h('i', { style: 'background:var(--s-cash)' }), $t('Surplus')),
-          h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Spent more than came in')),
+        card(
+          $t('Next to pay'),
+          $t('Unpaid costs, soonest first.'),
+          null,
+          due.length
+            ? h(
+                'div',
+                { class: 'rows' },
+                due.slice(0, 7).map(([k, e]) =>
+                  row({
+                    title: e.label,
+                    desc:
+                      (e.date === null ? $t('No fixed day · {0}', M.label(k)) : D.label(e.date, { weekday: 'short' })) +
+                      (e.sub ? ' · ' + e.sub : ''),
+                    right: amt(e.amount),
+                    onclick: () => App.go('months', { month: k }),
+                  }),
+                ),
+                due.length > 7
+                  ? h('div', {
+                      class: 'muted small',
+                      style: 'padding:8px 6px 0',
+                      text: $t('and {0} more', due.length - 7),
+                    })
+                  : null,
+              )
+            : h('p', { class: 'muted', text: $t('Nothing left to pay right now.') }),
         ),
       ),
-      monthReviewCard(),
-      affordCard(),
-      soon.length
-        ? card(
-            $t('Coming up later'),
-            $t('One-offs and trip costs in the following months.'),
-            null,
-            h(
-              'div',
-              { class: 'rows' },
-              soon.slice(0, 6).map(([k, e]) =>
-                row({
-                  title: e.label,
-                  desc: M.label(k) + (e.sub ? ' · ' + e.sub : ''),
-                  right: amt(e.amount),
-                  onclick: () => App.go('months', { month: k }),
-                }),
+      titled(
+        'budgets',
+        $t('Budgets this month'),
+        budgets.length
+          ? card(
+              $t('Budgets this month'),
+              $t('What you have spent from each budget so far.'),
+              btn($t('Log a spend'), () => logSpend(lastBudget(budgets).id, m), 'sm', 'plus'),
+              budgets.map(e =>
+                prow(
+                  e.label,
+                  budgetText(e.budget),
+                  e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
+                  e.budget.left < 0 ? 'over' : 'good',
+                  () => logSpend(e.id, m),
+                ),
               ),
-            ),
-          )
-        : null,
-      goalsLoans.length ? card($t('Savings and debt'), $t('Progress as of this month.'), null, goalsLoans) : null,
-      catRows.length
-        ? card(
-            $t('Where it goes'),
-            $t('Next 12 months, by category.'),
-            null,
-            catRows
-              .slice(0, 8)
-              .map(([c, v]) =>
+            )
+          : null,
+      ),
+      titled(
+        'surplus',
+        $t('Monthly surplus'),
+        card(
+          $t('Monthly surplus'),
+          $t('In minus out.'),
+          null,
+          netBars(),
+          h(
+            'div',
+            { class: 'legend static' },
+            h('span', null, h('i', { style: 'background:var(--s-cash)' }), $t('Surplus')),
+            h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Spent more than came in')),
+          ),
+        ),
+      ),
+      titled('review', $t('How {0} is going', M.label(currentMonth, true)), monthReviewCard()),
+      titled('afford', $t('Can I afford this?'), affordCard()),
+      titled(
+        'soon',
+        $t('Coming up later'),
+        soon.length
+          ? card(
+              $t('Coming up later'),
+              $t('One-offs and trip costs in the following months.'),
+              null,
+              h(
+                'div',
+                { class: 'rows' },
+                soon.slice(0, 6).map(([k, e]) =>
+                  row({
+                    title: e.label,
+                    desc: M.label(k) + (e.sub ? ' · ' + e.sub : ''),
+                    right: amt(e.amount),
+                    onclick: () => App.go('months', { month: k }),
+                  }),
+                ),
+              ),
+            )
+          : null,
+      ),
+      titled(
+        'goals',
+        $t('Savings and debt'),
+        goalsLoans.length ? card($t('Savings and debt'), $t('Progress as of this month.'), null, goalsLoans) : null,
+      ),
+      titled(
+        'cats',
+        $t('Where it goes'),
+        catRows.length
+          ? card(
+              $t('Where it goes'),
+              $t('Next 12 months, by category.'),
+              null,
+              catRows.slice(0, 8).map(([c, v]) =>
                 h(
                   'div',
                   { class: 'catrow' },
                   h('span', { text: CAT_NAME[c] || $t('Other') }),
                   h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(2, (v / catMax) * 100)}%` })),
-                  h('span', { class: 'num muted', text: $t('{0} · {1}%', money(v), Math.round((v / catTotal) * 100)) }),
+                  h('span', {
+                    class: 'num muted',
+                    text: $t('{0} · {1}%', money(v), Math.round((v / catTotal) * 100)),
+                  }),
                 ),
               ),
-          )
-        : null,
-    ),
+            )
+          : null,
+      ),
+    ],
   );
 };

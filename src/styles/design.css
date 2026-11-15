@@ -1,0 +1,242 @@
+/* Design mode: the cards of a page on a grid of 12 columns, and the tools to arrange them (components/designGrid.js). */
+/* a named container, so cards that are containers themselves do not catch the narrow rules below */
+.dg-wrap {
+  container: dg-wrap / inline-size;
+}
+.dg {
+  /* the shortest a row can be; a row grows with its tallest card */
+  --dg-row: 96px;
+  display: grid;
+  grid-template-columns: repeat(var(--dg-cols, 12), minmax(0, 1fr));
+  gap: 16px;
+}
+.dg-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* a card fills its cell, so the cards of a row end on the same line */
+.dg-item > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* --- arranging --- */
+.dg-toggle {
+  font-size: 0.9rem;
+}
+.dg-bar {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.dg-bar .ico {
+  margin-top: 0;
+}
+.dg-narrow {
+  display: none;
+  margin-bottom: 14px;
+}
+.dg.designing {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+/* the grid lines: one dashed box per cell, under the cards */
+.dg-cell {
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
+.dg.dragging .dg-cell {
+  border-color: var(--accent);
+  opacity: 0.45;
+}
+.designing .dg-item {
+  border-radius: var(--r);
+}
+.designing .dg-item > .card {
+  content-visibility: visible;
+}
+.designing .dg-item:hover > :first-child,
+.designing .dg-item:focus-within > :first-child {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow);
+}
+/* a card with nothing to show right now keeps its place */
+.dg-standin {
+  border-style: dashed;
+  box-shadow: none;
+  background: var(--surface-2);
+  opacity: 0.8;
+}
+/* the whole card is the handle: press anywhere on it to drag */
+.dg-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: var(--r);
+  cursor: grab;
+  touch-action: pan-y;
+}
+/* the tools sit on the card's top edge, over its padding, so they hide none of its content */
+.dg-tools {
+  position: absolute;
+  top: -12px;
+  right: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.dg-grip,
+.dg-size {
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  line-height: 1;
+}
+.dg-grip {
+  padding: 3px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+.dg-size {
+  padding: 4px 7px;
+  font-size: 0.78rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dg-grip:hover,
+.dg-size:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+/* drag the corner to resize */
+.dg-resize {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border-right: 3px solid var(--accent);
+  border-bottom: 3px solid var(--accent);
+  border-bottom-right-radius: 9px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: 0.55;
+}
+.dg-item:hover .dg-resize,
+.dg-sizing .dg-resize {
+  opacity: 1;
+}
+/* while dragging: the card follows the pointer, the dashed spot shows where it will land */
+/* its own layer, so following the pointer moves it without painting the page again */
+.dg-lift {
+  z-index: 10;
+  scale: 1.02;
+  will-change: transform;
+}
+.dg-lift > :first-child {
+  box-shadow: var(--shadow-lg);
+}
+.dg-lift .dg-shield,
+.dg.dragging {
+  cursor: grabbing;
+}
+.dg-sizing > :first-child {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-lg);
+}
+.dg-ph {
+  border: 2px dashed var(--accent);
+  border-radius: var(--r);
+  background: var(--accent-soft);
+}
+/* the size pop-up: width in columns, height in rows */
+.mpop.dg-pop {
+  width: auto;
+  max-width: calc(100vw - 16px);
+}
+/* the size picker: a grid of cells, the chosen block filled (like a word processor's table picker) */
+.dg-sizer {
+  display: grid;
+  gap: 3px;
+  width: max-content;
+  padding: 2px;
+}
+.dg-sizer-c {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.dg-sizer-c.out {
+  background: var(--surface-2);
+  border-style: dashed;
+}
+.dg-sizer-c.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.dg-sizer-c[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.dg-sizer-c:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.dg-sizer-l {
+  margin: 8px 0 2px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* narrow (keep in step with NARROW in designGrid.js): cards stack in reading order, number tiles two by two */
+@container dg-wrap (max-width: 599px) {
+  .dg {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none !important;
+    gap: 12px;
+  }
+  .dg-item {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+  .dg-item:has(> .kpi) {
+    grid-column: auto / span 1 !important;
+  }
+  .dg-cell,
+  .dg-tools,
+  .dg-resize,
+  .dg-shield,
+  .dg-bar {
+    display: none;
+  }
+  .dg-narrow {
+    display: flex;
+  }
+}
+@media print {
+  .dg-toggle,
+  .dg-bar,
+  .dg-narrow,
+  .dg-cell,
+  .dg-tools,
+  .dg-resize {
+    display: none !important;
+  }
+}

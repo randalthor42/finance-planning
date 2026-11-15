@@ -11,12 +11,13 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { dataTable } from '../components/dataTable.js';
-import { bar, card, cardDel, chip, empty, keep, page, tile } from '../components/layout.js';
+import { bar, card, cardDel, chip, designPage, empty, keep, tile } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { loanModal } from '../modals/loan.js';
 import { UI, curK } from '../state.js';
+import { designable } from '../components/designPages.js';
 import { V } from './registry.js';
 
 function payoffCard() {
@@ -113,6 +114,8 @@ function payoffCard() {
     }),
   );
 }
+/** This page offers Design mode (see components/designPages.js). */
+const DESIGN = designable('loans', $t('Loans'));
 V.loans = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -287,22 +290,36 @@ V.loans = () => {
       ),
     );
   });
-  return page(
+  const loanCards = plan.loans
+    .map((L, i) => ({ id: 'loan-' + L.id, title: L.name, el: cards[i], w: 12, minW: 4, item: true }))
+    .filter(loan => loan.el);
+  // The cards of the page, in their usual order. Design mode lets the person move them and change their size.
+  return designPage(
+    DESIGN,
     $t('Loans'),
     $t('Loans you have or are considering. Switch one off to compare.'),
     [btn($t('Add a loan'), () => loanModal(), 'primary', 'plus')],
-    cards.filter(Boolean).length
-      ? h('div', { class: 'stack' }, cards, payoffCard())
-      : card(
-          null,
-          null,
-          null,
-          empty(
-            $t('No loans'),
-            $t('Add a loan to see the monthly payment, the interest, and what it does to every month of your plan.'),
-            $t('Add a loan'),
-            () => loanModal(),
-          ),
-        ),
+    loanCards.length
+      ? [...loanCards, { id: 'payoff', title: $t('Debt payoff planner'), el: payoffCard(), w: 12, minW: 4 }]
+      : [
+          {
+            id: 'empty',
+            title: $t('Loans'),
+            w: 12,
+            el: card(
+              null,
+              null,
+              null,
+              empty(
+                $t('No loans'),
+                $t(
+                  'Add a loan to see the monthly payment, the interest, and what it does to every month of your plan.',
+                ),
+                $t('Add a loan'),
+                () => loanModal(),
+              ),
+            ),
+          },
+        ],
   );
 };
