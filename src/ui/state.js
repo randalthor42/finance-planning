@@ -25,6 +25,8 @@ export const UI = {
   itemFilter: 'upcoming',
   /** Transactions page: search text, filters and order, for this visit. */
   logFilter: { text: '', kind: 'all', budget: '', order: 'new' },
+  /** Transactions page: how many lines are drawn (grows by 200 with "Show more"). */
+  logLimit: 200,
   afford: { amount: 0, month: null },
   /** The budget the last spend was logged against, for "Log a spend" (this visit only). */
   lastBudget: null,

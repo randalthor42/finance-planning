@@ -5,7 +5,7 @@ import { M } from '../../core/dates.js';
 import { money } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
-import { firstFit, roomSeries } from '../../logic/advice.js';
+import { firstFit, roomSeries, screenExtraCost } from '../../logic/advice.js';
 import { project } from '../../logic/projection.js';
 import { wishCalc } from '../../logic/wishes.js';
 import { Actions } from '../../state/actions.js';
@@ -77,7 +77,11 @@ V.wishes = () => {
   const rows = designing ? plan.wishes : result.rows;
   const cards = rows.map(Wd => {
     const others = plan.wishes.filter(x => x.id !== Wd.id);
-    const base = memo('wish-base:' + Wd.id, [], () => project({ ...plan, wishes: others }, { today: Store.day }));
+    // the plan without this wish: a wish that is switched off is not in the plan (only wishes "in my plan" touch the
+    // ledger), so that is the projection we already have
+    const base = Wd.on
+      ? memo('wish-base:' + Wd.id, [], () => project({ ...plan, wishes: others }, { today: Store.day }))
+      : projection;
     const at = (R, k) => R.months[clamp(k - summary.s0, 0, summary.n - 1)];
     const sw = h('input', {
       type: 'checkbox',
@@ -89,13 +93,29 @@ V.wishes = () => {
     if (Wd.flex) {
       // No date yet: find the earliest month each way of paying works without breaking the plan.
       // one projection per candidate month: only the answer is cached, not every candidate
+      // The first month this way of paying fits. Each month is screened from the plan without the wish, with no new
+      // projection (logic/advice.js screenExtraCost, unit-tested to agree with a full projection); the month found is
+      // confirmed with one full projection, and if that ever disagrees every month is projected in full as before.
+      const fitsFully = (how, k) => {
+        const candidate = { ...Wd, how, month: M.key(k), flex: false, on: true };
+        const projectionWith = project({ ...plan, wishes: [...others, candidate] }, { today: Store.day });
+        return verdict(projectionWith, base)[0] === 'good';
+      };
+      const firstMonth = how => (how === 'save' ? currentMonth + 2 : currentMonth);
+      const earliestInFull = how => {
+        for (let k = firstMonth(how); k <= summary.endK; k++) {
+          if (fitsFully(how, k)) {
+            return k;
+          }
+        }
+        return null;
+      };
       const earliest = how =>
         memo(`wish-earliest:${Wd.id}:${how}`, [currentMonth], () => {
-          for (let k = how === 'save' ? currentMonth + 2 : currentMonth; k <= summary.endK; k++) {
-            const candidate = { ...Wd, how, month: M.key(k), flex: false, on: true };
-            const projectionWith = project({ ...plan, wishes: [...others, candidate] }, { today: Store.day });
-            if (verdict(projectionWith, base)[0] === 'good') {
-              return k;
+          for (let k = firstMonth(how); k <= summary.endK; k++) {
+            const rows = wishCalc({ ...Wd, month: M.key(k) }, summary.s0, how).rows;
+            if (screenExtraCost(base, rows, cush) === 'good') {
+              return fitsFully(how, k) ? k : earliestInFull(how);
             }
           }
           return null;

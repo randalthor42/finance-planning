@@ -52,3 +52,34 @@ export function budgetTrend(plan, nowK) {
   }
   return out;
 }
+
+/**
+ * Does a set of extra cash lines (a wish paid one way, say) break any month, worked out from the plan without it?
+ * A month's status depends only on its closing balance against zero and the cushion, and extra cash lines lower every
+ * later close by their running total, so this needs no new projection: one pass over the months.
+ * Same answer as projecting the plan with the lines and comparing statuses (unit-tested); the caller still confirms
+ * the month it picks with one full projection.
+ * @param {{months: {k: number, close: number, status: string}[]}} base the projection without the lines
+ * @param {{k: number, amount: number}[]} rows cash out by month (positive amounts)
+ * @param {number} cushion
+ * @returns {'good'|'warn'|'bad'} bad: a month newly below zero; warn: a month newly under the cushion; good: neither
+ */
+export function screenExtraCost(base, rows, cushion) {
+  const byMonth = new Map();
+  for (const row of rows) {
+    byMonth.set(row.k, (byMonth.get(row.k) || 0) + row.amount);
+  }
+  let spent = 0;
+  let tone = 'good';
+  for (const month of base.months) {
+    spent = r2(spent + (byMonth.get(month.k) || 0));
+    const close = r2(month.close - spent);
+    if (close < 0 && month.status !== 'neg') {
+      return 'bad';
+    }
+    if (close >= 0 && close < cushion && month.status === 'ok') {
+      tone = 'warn';
+    }
+  }
+  return tone;
+}

@@ -204,7 +204,8 @@ Add a method to `Actions` (`src/state/actions.js`) that calls `Store.commit(plan
 
 **Performance**
 
-- The app re-renders the current view after each change. Measured in the v0.9 audit (Chromium, real plan): `project()` about 2 ms, Overview about 27 ms, Month planner about 53 ms, one tick about 26 ms; with the CPU slowed 4x (a mid-range phone) the tick and the planner are 120-140 ms. Budget: under 50 ms on 4x. Measure before adding partial-update machinery.
+- The app re-renders the current view after each change. Measured after the v0.9 performance pass (Chromium, real plan, CPU 1x): `project()` 1.4 ms, a tick 15 ms (commit 3 ms, redraw 11 ms), every page redraws in 3-11 ms, the Wishlist's first draw after a change 35 ms. Budget: under 50 ms with the CPU slowed 4x (a mid-range phone). Event delegation and a lighter commit were measured and left out: not needed at these numbers. Measure (`npm run perf`) before adding partial-update machinery.
+- Wishlist "earliest month" searches screen each candidate month with `screenExtraCost` (`logic/advice.js`) and confirm the month found with one projection; keep that test (`tests/unit/advice.test.js`) green if the engine changes how a wish's lines are counted.
 - Expensive derived data (what-if projections, forecasts) goes through `memo(key, inputs, fn)` in `ui/memo.js`: it is reused until `Store.rev` changes (every recalculation) or its inputs change. Never cache anything that reads the DOM or the date outside `Store`.
 - `Store.save()` is coalesced: it writes once at the end of the current task. `Store.flush()` writes at once; `main.js` calls it on `visibilitychange` and `pagehide`. Code that needs the data on disk immediately (before a reload) must call `Store.flush()`.
 - The undo stack keeps at most 60 steps and about 1M characters of snapshots. The purchase log keeps at most 5,000 entries per plan: `Store.commit` warns at 4,500 and refuses a change that would go past the limit.

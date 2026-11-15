@@ -20,6 +20,8 @@ import { itemModal, logPurchase } from '../modals/item.js';
 import { UI, curK, monthAt } from '../state.js';
 import { V } from './registry.js';
 
+/** Lines drawn per "page" of the log. */
+const LOG_PAGE = 200;
 /** Signed amount of one entry: money out is negative. */
 const signedAmount = item => (item.kind === 'in' ? item.amount : -item.amount);
 /** Sort key inside the log: by budget month, then by day (undated last within a month). */
@@ -136,10 +138,18 @@ V.items = () => {
     by.get(i.month).push(i);
   }
   const cards = [];
+  // at most UI.logLimit lines are drawn (200 at first, "Show more" adds 200): a long log stays quick on a phone
+  let linesLeft = UI.logLimit;
+  let linesHidden = 0;
   for (const [monthKey, items] of by) {
     // past months start folded and a hand choice is remembered; a search or filter opens every month with a match
     const folded = monthKey in UI.itemMonths ? UI.itemMonths[monthKey] : M.parse(monthKey) < currentMonth;
     const isClosed = !searching && folded;
+    const drawn = isClosed ? [] : items.slice(0, Math.max(0, linesLeft));
+    if (!isClosed) {
+      linesLeft -= drawn.length;
+      linesHidden += items.length - drawn.length;
+    }
     cards.push(
       card(
         null,
@@ -163,12 +173,12 @@ V.items = () => {
           h('span', { class: 'grow' }),
           h('span', { class: 'num', text: signed(items.reduce((s, i) => s + signedAmount(i), 0)) }),
         ),
-        isClosed
+        isClosed || !drawn.length
           ? null
           : h(
               'div',
               { class: 'rows' },
-              items.map(i =>
+              drawn.map(i =>
                 row({
                   title: i.name,
                   chips: [
@@ -186,6 +196,24 @@ V.items = () => {
                 }),
               ),
             ),
+      ),
+    );
+  }
+  if (linesHidden > 0) {
+    cards.push(
+      h(
+        'div',
+        { class: 'tblmore' },
+        h('button', {
+          type: 'button',
+          class: 'btn sm ghost',
+          text: $t('Show {0} more', Math.min(linesHidden, LOG_PAGE)),
+          onclick: () => {
+            UI.logLimit += LOG_PAGE;
+            App.render();
+          },
+        }),
+        h('span', { class: 'muted small', text: $t('{0} lines not shown', linesHidden) }),
       ),
     );
   }
