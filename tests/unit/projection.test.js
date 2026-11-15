@@ -144,7 +144,7 @@ test('the one month choice survives validation and drops anything that is not a 
   assert.deepEqual(plan.reserveOver, { '2026-11': { 'bill:food0001': true } });
 });
 
-test('a tracked budget counts nothing this month but its whole limit in a month that has not started', () => {
+test('a tracked budget counts only logged spends, also in a month that has not started', () => {
   const plan = normPlan({
     settings: { startMonth: '2026-11', opening: 100, horizon: 3 },
     incomes: [{ id: 'salary01', name: 'Salary', amount: 1000 }],
@@ -153,8 +153,7 @@ test('a tracked budget counts nothing this month but its whole limit in a month 
   const withLimit = project(plan, { today: TODAY }).months;
   const without = project(normPlan({ ...plan, bills: [] }), { today: TODAY }).months;
   assert.equal(withLimit[0].close, without[0].close, 'current month: nothing set aside');
-  assert.equal(withLimit[1].net, without[1].net - 100, 'next month: the limit is counted');
-  assert.equal(withLimit[1].entries.find(entry => entry.budget).budget.countsLimit, true);
+  assert.equal(withLimit[1].net, without[1].net, 'next month: nothing logged, nothing counted');
 });
 
 test('a refund lowers money out and is not income; the month end does not change', () => {

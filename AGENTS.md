@@ -100,7 +100,7 @@ The UI never edits `Store.plan` directly and never calculates money itself.
   - `todo` = every line that is **not** paid (for a budget: what is left of it).
   - `close` = `now + todo`. Ticking a line moves its amount from `todo` to `now`; **a tick must never change `close`.**
 - A **budget** ("up to" bill) is spent bit by bit. Logged spends are real lines; the budget line itself is only what is still reserved.
-- A **limit** (budget with `reserve: false`) holds nothing back in the current or past months: only logged spends count. In a month that has **not started** (`month.start > today`) it counts its full amount (`budget.countsLimit`), so future months are not overstated.
+- A **limit** (budget with `reserve: false`) holds nothing back in any month: only logged spends count. This is a product decision (v0.9): future months therefore do not include limits, so a limit only lowers a month once spends are logged against it.
 - **Money in / money out** (`m.inc`, `m.out`, `m.net`) describe earning and spending. A line with category `refund` lowers money out instead of raising money in. Money drawn from a credit card or savings (`item.cover`) is group `transfer`: it is in `m.moved`, not in `m.inc`, and the month ends at `open + net + moved + correction`.
 - **One month, one sum**: every screen that shows where the current month stands uses `monthPosition()` (`logic/position.js`) and `monthEquation` (`ui/components/monthEquation.js`): `now + comingIn − toPay − budgetsLeft = close`.
 - A **correction** (`plan.fixes[month]`) is the difference between real money and the paid lines on the day the user checked. It is one more paid line.

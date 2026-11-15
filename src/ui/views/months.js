@@ -270,7 +270,7 @@ V.months = () => {
     });
   };
   // a tracked budget with nothing logged holds nothing back, so it stays out of the lines, the counts and "tick all"
-  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent && !e.budget.countsLimit;
+  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
   const shown = m.entries.filter(e => !quiet(e));
   const body = [];
   /**
@@ -468,9 +468,8 @@ V.months = () => {
   note.value = plan.notes[m.key] || '';
   note.addEventListener('change', () => Actions.setNote(m.key, note.value));
   // only reserved budgets hold money back; tracked ones just show what you spent against a limit
-  // in a month that has not started a limit counts in full, like a reserved budget
-  const reservedBudgets = budgets.filter(e => e.budget.reserve || e.budget.countsLimit);
-  const trackedBudgets = budgets.filter(e => !e.budget.reserve && !e.budget.countsLimit);
+  const reservedBudgets = budgets.filter(e => e.budget.reserve);
+  const trackedBudgets = budgets.filter(e => !e.budget.reserve);
   // the same "budgets left" as the sum above and the Overview (a closed budget holds nothing back)
   const budgetLeft = position.budgetsLeft;
   const trackedSpent = trackedBudgets.reduce((a, e) => a + e.budget.spent, 0);

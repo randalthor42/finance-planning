@@ -28,7 +28,7 @@ const KIND_HINT = {
   fixed: $t('Same amount every time (rent, internet).'),
   vary: $t('Changes each time (water, power). Enter the real amount when it arrives.'),
   budget: $t('Held back in full every month (groceries). Logging spends is optional.'),
-  limit: $t('Nothing held back this month; logged spends count. Future months count the limit.'),
+  limit: $t('Nothing held back; only logged spends count.'),
 };
 /** The same two budget behaviours for a single month ("Adjust this month"). */
 export const RESERVE_MODES = [
