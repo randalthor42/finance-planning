@@ -890,8 +890,15 @@ tr.dim td {
     break-inside: avoid;
     margin-bottom: 16px;
   }
+  /* one card per row, all as wide as the widest of them (up to a readable width), not the whole page */
   .settings-cols.one {
-    columns: 1;
+    display: grid;
+    columns: auto;
+    grid-template-columns: fit-content(760px);
+    justify-content: start;
+  }
+  .settings-cols.one > * {
+    margin-bottom: 0;
   }
 }
 /* Tools: one sub-navigation at a time, the menu's sub-items on wide screens and the tab bar on phones (where the menu
