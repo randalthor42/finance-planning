@@ -3,11 +3,14 @@
  */
 import { M, Period } from '../../core/dates.js';
 import { $t } from '../../core/i18n.js';
+import { formatsForLanguage } from '../../core/locale.js';
 import { CATS, INCATS, SHIFTS } from '../../models/categories.js';
 import { normPlan } from '../../models/plan.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
+import { btn } from '../components/button.js';
 import { formModal } from '../components/form.js';
+import { h } from '../dom.js';
 import { need } from '../helpers.js';
 import { UI, monthAt, nowK } from '../state.js';
 import { toast } from '../components/toast.js';
@@ -150,10 +153,63 @@ export function rollModal() {
 }
 
 /** A new plan: ask for everything a plan needs up front, starting from the open plan's looks and payday. */
+/** The three steps of a new plan: what comes in and when, what you have, what goes out. */
+const NEW_PLAN_STEPS = () => [$t('Payday and income'), $t('Balances'), $t('Bills')];
+/** Bills most people have, offered with no amount: fill in the ones you pay, the rest are left out. */
+const BILL_PRESETS = () => [
+  { name: $t('Rent'), cat: 'housing', amount: 0 },
+  { name: $t('Phone'), cat: 'utilities', amount: 0 },
+  { name: $t('Internet'), cat: 'utilities', amount: 0 },
+  { name: $t('Groceries'), cat: 'food', amount: 0 },
+  { name: $t('Transport'), cat: 'transport', amount: 0 },
+];
+
+/** The step indicator at the top of "New plan": the current step is marked, any step can be opened. */
+function stepBar(v, apply) {
+  return h(
+    'div',
+    { class: 'wizard-steps', role: 'tablist', 'aria-label': $t('Steps') },
+    NEW_PLAN_STEPS().map((label, i) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          role: 'tab',
+          class: 'wizard-step' + (v.step === i + 1 ? ' on' : '') + (v.step > i + 1 ? ' done' : ''),
+          'aria-selected': String(v.step === i + 1),
+          onclick: () => apply({ step: i + 1 }),
+        },
+        h('b', { text: String(i + 1) }),
+        h('span', { text: label }),
+      ),
+    ),
+  );
+}
+/** Back / Next under the fields of a step. "Create plan" in the footer works from any step. */
+function stepNav(v, apply) {
+  const count = NEW_PLAN_STEPS().length;
+  return h(
+    'div',
+    { class: 'acts wizard-nav' },
+    v.step > 1 ? btn($t('Back'), () => apply({ step: v.step - 1 }), 'ghost') : null,
+    h('span', { class: 'grow' }),
+    v.step < count ? btn($t('Next'), () => apply({ step: v.step + 1 }), '') : null,
+  );
+}
+
+/**
+ * "New plan" in three steps (v0.9 audit, S7): 1. payday and income, 2. balances, 3. bills from a short list of
+ * presets. Dates and formats sit under "Advanced". The first plan takes its currency and formats from the browser's
+ * language; a later plan copies the open one's.
+ */
 export function newPlanModal() {
-  // the very first plan has nothing to copy the payday and formats from, so it starts from the defaults
   const first = !Store.plan;
-  const settings = first ? normPlan({}).settings : Store.plan.settings;
+  const settings = first
+    ? { ...normPlan({}).settings, ...formatsForLanguage(navigator.language) }
+    : Store.plan.settings;
+  const field = key => planFields().find(f => f.k === key);
+  const onStep = (n, f) => ({ ...f, show: v => v.step === n && (!f.show || f.show(v)) });
+  const advanced = f => ({ ...f, show: v => v.advanced });
   formModal({
     title: $t('New plan'),
     wide: true,
@@ -166,12 +222,25 @@ export function newPlanModal() {
       cushion: 0,
       payDay: settings.payDay || null,
       incomeLines: [{ name: $t('Salary'), cat: 'salary', amount: 0 }],
-      billLines: [{ name: $t('Rent'), cat: 'housing', amount: 0 }],
+      billLines: BILL_PRESETS(),
+      step: 1,
+      advanced: false,
     },
     fields: [
-      ...planFields(),
-      { type: 'sec', label: $t('Money coming in each month (optional)') },
-      {
+      { k: 'steps', type: 'custom', render: stepBar },
+      // 1. payday and income
+      onStep(1, field('name')),
+      onStep(1, field('payDay')),
+      onStep(1, { ...field('payShift'), show: v => !!v.payDay }),
+      onStep(1, {
+        ...field('payFor'),
+        show: v => !!v.payDay,
+        hint: v =>
+          v.payFor === 'next'
+            ? $t('Paid on the 26th of October? That salary is November’s money.')
+            : $t('Paid on the 26th of October? That salary is October’s money.'),
+      }),
+      onStep(1, {
         k: 'incomeLines',
         type: 'lines',
         label: $t('Income'),
@@ -179,9 +248,43 @@ export function newPlanModal() {
         cats: INCATS,
         add: $t('Add income'),
         hint: $t('Lines with no amount are left out. You can add and change everything later.'),
+      }),
+      // 2. balances
+      onStep(2, {
+        ...field('opening'),
+        half: false,
+        label: $t('Money you have now'),
+        info: $t('Bank accounts plus cash, the day before the first month starts. Accounts can be added later.'),
+      }),
+      onStep(2, field('cushion')),
+      // 3. bills
+      onStep(3, {
+        k: 'billLines',
+        type: 'lines',
+        label: $t('Bills and living costs'),
+        ph: $t('Rent'),
+        cats: CATS,
+        add: $t('Add a bill'),
+        hint: $t('Fill in what you pay each month; lines left at zero are skipped.'),
+      }),
+      { k: 'stepNav', type: 'custom', render: stepNav },
+      // dates and formats, for anyone who needs to change them
+      {
+        k: 'advancedToggle',
+        type: 'custom',
+        render: (v, apply) =>
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'btn ghost sm wizard-adv',
+              'aria-expanded': String(!!v.advanced),
+              onclick: () => apply({ advanced: !v.advanced }),
+            },
+            v.advanced ? $t('Hide dates and formats') : $t('Advanced: dates and formats'),
+          ),
       },
-      { type: 'sec', label: $t('Bills and living costs each month (optional)') },
-      { k: 'billLines', type: 'lines', label: $t('Bills'), ph: $t('Rent'), cats: CATS, add: $t('Add a bill') },
+      ...['startMonth', 'horizon', 'currency', 'cents', 'numFmt', 'dateFmt'].map(field).filter(Boolean).map(advanced),
     ],
     onSave: v => {
       const message = need(v);
@@ -189,6 +292,9 @@ export function newPlanModal() {
         return message;
       }
       const { name, incomeLines, billLines, ...rest } = v;
+      // the window's own state is not a plan setting
+      delete rest.step;
+      delete rest.advanced;
       const named = (rows, fallback) =>
         rows.filter(row => row.amount > 0).map(row => ({ ...row, name: row.name.trim() || fallback }));
       UI.month = null;

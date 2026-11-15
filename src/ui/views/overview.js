@@ -16,7 +16,7 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { cashChart, netBars } from '../components/charts.js';
-import { amt, bar, budgetText, card, designPage, prow, row } from '../components/layout.js';
+import { amt, bar, budgetText, card, chip, designPage, prow, row } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { monthField } from '../components/pickers.js';
 import { h } from '../dom.js';
@@ -552,6 +552,48 @@ function safeToSpend(projection, fromK, cushion) {
 }
 /** This page offers Design mode (see components/designPages.js). */
 const DESIGN = designable('overview', $t('Overview'));
+/** "Build your plan": the three setup steps, each ticked once it is done. */
+function setupCard(plan) {
+  const steps = [
+    {
+      done: plan.incomes.length > 0,
+      title: $t('1. Add your income'),
+      desc: $t('Salary and anything else that comes in regularly.'),
+      view: 'recurring',
+    },
+    {
+      done: plan.accounts.length > 0 || plan.settings.opening !== 0,
+      title: $t('2. Add your balances'),
+      desc: $t('What is in your accounts and wallet today.'),
+      view: 'accounts',
+    },
+    {
+      done: plan.bills.length > 0,
+      title: $t('3. Add your bills and living costs'),
+      desc: $t('Rent, groceries, phone, subscriptions.'),
+      view: 'recurring',
+    },
+  ];
+  return card(
+    $t('Build your plan'),
+    $t('Three quick steps. Every number on this page updates as you go.'),
+    null,
+    h(
+      'div',
+      { class: 'rows' },
+      steps.map(step =>
+        row({
+          title: step.title,
+          desc: step.desc,
+          cls: step.done ? 'done' : '',
+          chips: step.done ? chip($t('done'), 'good') : null,
+          right: icon('right'),
+          onclick: () => App.go(step.view),
+        }),
+      ),
+    ),
+  );
+}
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -595,35 +637,14 @@ V.overview = () => {
         ],
   ].map(([id, label, ...rest]) => titled(id, label, kpi(label, ...rest), { w: 3, minW: 2 }));
   const noData = !plan.bills.length && !plan.items.length && !plan.trips.length;
-  const starter = noData
-    ? card(
-        $t('Build your plan'),
-        $t('Three quick steps. Every number on this page updates as you go.'),
-        null,
-        h(
-          'div',
-          { class: 'rows' },
-          row({
-            title: $t('1. Add your income'),
-            desc: $t('Salary and anything else that comes in regularly.'),
-            right: icon('right'),
-            onclick: () => App.go('recurring'),
-          }),
-          row({
-            title: $t('2. Add your balances'),
-            desc: $t('What is in your accounts and wallet today.'),
-            right: icon('right'),
-            onclick: () => App.go('accounts'),
-          }),
-          row({
-            title: $t('3. Add your bills and living costs'),
-            desc: $t('Rent, groceries, phone, subscriptions.'),
-            right: icon('right'),
-            onclick: () => App.go('recurring'),
-          }),
-        ),
-      )
-    : null;
+  // until income exists every number here is empty or misleading, so the page is only the checklist
+  const noIncome = !plan.incomes.length;
+  const starter = noData || noIncome ? setupCard(plan) : null;
+  if (noIncome) {
+    return designPage(DESIGN, $t('Overview'), plan.name, null, [
+      { id: 'starter', title: $t('Build your plan'), el: starter, w: 12 },
+    ]);
+  }
   // next things to pay: dated first (by day), then the ones without a fixed day
   const due = [];
   for (let k = currentMonth; k < Math.min(currentMonth + 2, summary.s0 + summary.n); k++) {

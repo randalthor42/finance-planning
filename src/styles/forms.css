@@ -141,3 +141,47 @@ textarea.inp {
 .qpick:focus-visible {
   border-color: var(--accent);
 }
+/* "New plan" in steps: the step bar, Back / Next, and the Advanced fold */
+.wizard-steps {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.wizard-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.wizard-step b {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 0.78rem;
+}
+.wizard-step.on {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.wizard-step.on b,
+.wizard-step.done b {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.wizard-nav {
+  margin-top: 4px;
+}
+.wizard-adv {
+  justify-self: start;
+}

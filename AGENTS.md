@@ -80,6 +80,8 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | Export, import, encryption, CSV | `src/services/backup.js` |
 | Dates, pay periods | `src/core/dates.js` |
 | Money formatting and parsing | `src/core/format.js` |
+| The currency and formats a first plan starts with (from the browser language) | `src/core/locale.js` |
+| "New plan" in three steps, and the plan settings fields | `newPlanModal` and `planFields` in `src/ui/modals/settings.js` |
 | Translation machinery | `src/core/i18n.js` |
 | Colours, spacing, themes | `src/styles/tokens.css` |
 | Styles of a component | `src/styles/` (see `main.css` for the list and order) |

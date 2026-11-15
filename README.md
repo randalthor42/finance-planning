@@ -67,6 +67,7 @@ tests/
 | `src/core/format.js` | `FMT`, `setFmt`, `money`, `signed`, `compact`, `fmtNum`, `parseMoney` |
 | `src/core/grid.js` | `GRID_COLS`, `GRID_MAX_H`, `arrange`, `arrangeOrdered`, `place`, `resize`, `nudge`, `snapDrop`, `findSpot`, `removeEmptyRows`, `fitSize`, `rowCount`, `byReading`, `toSaved`, `sameLayout` |
 | `src/core/i18n.js` | `I18N`, `$t`, `plural`, `ordinal` |
+| `src/core/locale.js` | `formatsForLanguage` |
 | `src/core/util.js` | `isObj`, `has`, `r2`, `clamp`, `uid`, `pmt` |
 
 ### Layer 2 · Models: the shape of the data and its validation
