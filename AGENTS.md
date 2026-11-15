@@ -1,0 +1,216 @@
+# AGENTS.md
+
+Guide for anyone (human or AI agent) working in this repository. Read this first; it should be enough to find a bug or add a feature without reading the whole codebase.
+
+## What this is
+
+Runway is an offline personal finance planner. It is plain JavaScript (ES modules) and plain CSS, bundled by Vite into **one self-contained HTML file** that runs from disk with no network access. Data lives in the browser's `localStorage` and can be exported as a JSON backup, optionally encrypted with a password.
+
+## Non-negotiable constraints
+
+1. **Zero runtime dependencies.** `package.json` has `devDependencies` only. Never add a runtime library.
+2. **One offline file.** `npm run build` must produce `dist/runway-money-planner.html` that works from `file://` under the strict Content-Security-Policy in `vite.config.js`. No fetch, no external fonts, no CDN.
+3. **Money maths and stored data stay compatible.** Every plan ever saved must still load through `normPlan` and give the same numbers. Backups are AES-GCM with PBKDF2; do not change the format without a migration.
+4. **All user text goes through `textContent`** (the `h()` helper does this). Never use `innerHTML` with user data. Links are only created for `http(s)` URLs.
+5. **Every user-facing string is wrapped in `$t('English text {0}', value)`.** The build collects these for translators.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm install` | Install dev tools (once). |
+| `npm run dev` | Dev server with hot reload. |
+| `npm run build` | Build the single HTML file into `dist/`. Tests are never part of the build. |
+| `npm test` | Unit tests for the core mechanics (plain Node, about a second). |
+| `npm run lint` | ESLint over `src` and the unit tests. |
+| `npm run format` | Prettier over `src` and the unit tests. |
+| `npm run check` | Lint, unit tests and build. Run this before every commit. |
+| `npm run test:regression` | Larger engine regression suite. Needs the private fixtures (see Tests). |
+| `npm run test:ui` | Browser regression suite (Playwright; first run `npx playwright install chromium`). |
+
+## Architecture in one picture
+
+```
+ui  ──►  state  ──►  services
+ │         │    └─►  logic  ──►  models  ──►  core
+ └─────────┴──────────────────────────────────►
+```
+
+Imports only point **down**. Nothing outside `src/ui/` touches the page (two documented exceptions: `services/backup.js` creates a download link, `core/i18n.js` reloads the page on a language change).
+
+| Layer | Folder | Responsibility | May import |
+|---|---|---|---|
+| 1 Core | `src/core/` | Pure helpers: rounding, ids, dates, formatting, translations. | core |
+| 2 Models | `src/models/` | Shape of the data. `normPlan` validates and migrates every plan. | core, logic (only for migration) |
+| 3 Logic | `src/logic/` | Pure calculations: `project(plan)` and the loan, wishlist, trip and advice maths. | core |
+| 4 Services | `src/services/` | Storage adapter and backup files. | core, models |
+| 5 State | `src/state/` | `Store` (active plan, projection, undo, log) and `Actions` (every mutation). | core, models, logic, services |
+| 6 UI | `src/ui/` | Everything on screen. | all of the above |
+
+## Where is…?
+
+| I want to change… | Open |
+|---|---|
+| A page (Overview, Month planner, Trips, …) | `src/ui/views/<name>.js` |
+| An editing window (goal, loan, trip, bill, account, …) | `src/ui/modals/<name>.js` |
+| The menu, routing, rendering | `src/ui/app.js` |
+| A shared widget (button, modal, form, picker, chart, toast) | `src/ui/components/<name>.js` |
+| How a month is calculated | `src/logic/projection.js` |
+| Loan schedule, payoff planner | `src/logic/loans.js` |
+| Trip costs across a payday | `src/logic/trips.js` |
+| "When can I afford it", budget trends | `src/logic/advice.js` |
+| What a plan may contain, defaults, migrations | `src/models/plan.js` |
+| What happens when the user changes something | `src/state/actions.js` |
+| Undo, redo, saving, the activity log | `src/state/store.js` |
+| Where data is stored | `src/services/storage.js` |
+| Export, import, encryption, CSV | `src/services/backup.js` |
+| Dates, pay periods | `src/core/dates.js` |
+| Money formatting and parsing | `src/core/format.js` |
+| Translation machinery | `src/core/i18n.js` |
+| Colours, spacing, themes | `src/styles/tokens.css` |
+| Styles of a component | `src/styles/` (see `main.css` for the list and order) |
+| Data shapes for editor hints | `src/types.js` |
+
+Every file starts with a `@file` comment that states its one responsibility.
+
+## How the data flows
+
+1. The user does something in a view or modal.
+2. The UI calls one function of `Actions` (for example `Actions.save('goals', goal)`).
+3. The action calls `Store.commit(mutator, label)`, which: copies the plan for undo, applies the change, passes the plan through `normPlan`, re-runs `project(plan)`, saves through the storage adapter, and notifies the UI.
+4. `App.render()` redraws the current view from `Store.plan` (the data) and `Store.proj` (the projection).
+
+The UI never edits `Store.plan` directly and never calculates money itself.
+
+## The money model (read before touching `logic/projection.js`)
+
+- Time is counted in **budget months**. With a payday set, a month runs from one salary to the day before the next (`Period` in `core/dates.js`). `payFor: 'next'` means the salary that arrives on 26 October pays for "November".
+- `project(plan, { today })` builds, for every month, a **ledger** of entries (income, bills, purchases, trip costs, loan payments, wishlist, savings) and rolls it into balances.
+- For each month:
+  - `now` = what the month started with + every **paid** line (ticked lines and logged spends).
+  - `todo` = every line that is **not** paid (for a budget: what is left of it).
+  - `close` = `now + todo`. Ticking a line moves its amount from `todo` to `now`; **a tick must never change `close`.**
+- A **budget** ("up to" bill) is spent bit by bit. Logged spends are real lines; the budget line itself is only what is still reserved.
+- A **correction** (`plan.fixes[month]`) is the difference between real money and the paid lines on the day the user checked. It is one more paid line.
+- **Credit cards**: a purchase planned on a card costs no cash; it adds to what the card owes in that month. A bill with `payTo` pays the card down.
+- **Trips** that cross a payday share each cost between the salary months by trip days (`logic/trips.js`), unless the cost has its own pay month.
+
+## Recipes
+
+### Add a new page
+
+1. Create `src/ui/views/myPage.js`. Start with a `@file` comment, import `V` from `./registry.js`, and assign the render function:
+   ```js
+   V.myPage = () => page($t('My page'), $t('What this page is for.'), null, card($t('Title'), null, null, content));
+   ```
+2. Import it in `src/ui/views/index.js`.
+3. Add one line to `NAV` in `src/ui/app.js`: `['myPage', $t('My page'), 'iconName']`.
+
+Nothing else changes. Read data from `Store.plan` and `Store.proj`; change data only through `Actions`.
+
+### Add a new editing window
+
+Create `src/ui/modals/myThing.js` and use `formModal({ title, values, fields, onSave })` from `ui/components/form.js`. Copy `modals/goal.js` as a starting point. Save with `upsert('listName', record)` from `ui/helpers.js`.
+
+### Add a tool (calculator)
+
+Add an entry to `TOOLS` and a render function in `src/ui/views/tools.js`. Pure maths belongs in `src/logic/`, with a unit test.
+
+### Add a field to the data
+
+1. Add it to the matching record in `normPlan` (`src/models/plan.js`) with validation and a default. Old plans then get the default automatically.
+2. Use it in `logic/` or the UI.
+3. Add it to `src/types.js`.
+4. Add a unit test in `tests/unit/plan.test.js`.
+
+### Add a calculation
+
+Write a pure function in `src/logic/` (plan in, result out; no `Store`, no DOM, no `Date.now()`; take `today` as a parameter). Add a unit test. Call it from the view.
+
+### Add a change the user can make
+
+Add a method to `Actions` (`src/state/actions.js`) that calls `Store.commit(plan => { … }, $t('Label for the activity log'))`. One action is one undo step.
+
+## Coding standards
+
+**Readability**
+
+- Write for the next developer, not for the fewest characters. Prefer several plain statements over one clever expression.
+- Names say what the value is: `monthKey`, `currentGoal`, `daysLeft`. Single letters only for loop counters and for the documented conventions below.
+- One declaration per statement, braces on every block (both enforced by ESLint).
+- No nested ternaries in new code. Use `if` / `else` or a small named function.
+- Functions do one thing. If a function needs a comment to separate its "parts", split it.
+
+**Documentation**
+
+- Every file starts with a `@file` comment.
+- Every exported function has a JSDoc comment that says what it returns and, for money maths, **why** the rule is what it is.
+- Use the types in `src/types.js` in `@param` and `@returns`.
+
+**Structure**
+
+- Respect the layer table. If a `logic/` or `models/` file needs something from `ui/` or `state/`, the design is wrong.
+- `logic/` functions are pure. Same input, same output.
+- No module may run code that calls into another UI module while it is loading (UI modules import each other in cycles; top-level code must only define things).
+
+**Defensive coding**
+
+- Validate at the boundaries: `normPlan` for all plan data, `normDB` for the stored database, `IO.read` for imported files. Inside those boundaries, trust the data.
+- Errors shown to the user are sentences in `$t(...)`. `App.render` catches a failing view and `main.js` reports uncaught errors as a notification; do not rely on them, handle expected failures where they happen.
+
+**Performance**
+
+- The app re-renders the current view after each change. On a real plan this takes about 7 ms and `project()` about 0.5 ms, so do not add partial-update machinery unless a measurement shows a problem.
+- Any listener added to `document` or `window` inside a function must be removed when the thing closes (see `popover.js`, `sortable.js`). Timers must be cleared (see `autosaver` in `modal.js`).
+- Do not keep references to DOM nodes of a previous render.
+
+**Styles**
+
+- Use the tokens in `styles/tokens.css`; no hard-coded colours.
+- Class names are specific (`.tipbtn`, `.nowgrid`). Generic names such as `.info`, `.now` or `.empty` have caused collisions before.
+
+## Naming conventions you will meet
+
+Some short names are part of stored data or of APIs used everywhere. They are stable; do not rename them without a migration.
+
+| Name | Meaning |
+|---|---|
+| `M` | Month helpers. A month is an integer `year * 12 + month`; `M.key(index)` gives `"YYYY-MM"`. |
+| `D` | Day helpers. A day is an integer (days since 1970, UTC); `D.key(day)` gives `"YYYY-MM-DD"`. |
+| `Period` | Budget months that follow a payday. |
+| `h(tag, props, ...children)` | Creates a DOM element. `text:` sets `textContent`. |
+| `$t(text, ...values)` | Translates. `plural(n, 'month')` for counted words. |
+| `V` | The view registry: `V.<name>()` renders a page. |
+| `Store.plan`, `Store.proj` | The active plan and its projection. |
+| month fields `k`, `key`, `open`, `inc`, `out`, `net`, `now`, `todo`, `close` | See `Month` in `src/types.js`. |
+| entry fields `key`, `group`, `amount`, `paid`, `still`, `of`, `onCard` | See `Entry` in `src/types.js`. |
+| loan result `P`, `pay`, `f0`, `sch`, `int`, `balAt` | Documented at the top of `loanCalc`. |
+
+## Tests
+
+```
+tests/
+  unit/          simple, fast, no private data. Run on every change (npm test).
+  regression/    large suites kept from the single-file version.
+  fixtures/      test data. real*.json are real backups: ignored by git, never publish them.
+```
+
+- **Unit tests** cover the core mechanics only: dates and pay periods, money parsing, loans, the month sum (ticks, budgets, corrections), trips across a payday, `normPlan`, and backup round trips. Keep them simple: one behaviour per test, made-up data, plain assertions. When a mechanic changes on purpose, change its test in the same commit.
+- **Regression suites** compare against real backups and drive the built file in a browser. Run them before a release. They need `tests/fixtures/real*.json`.
+- Tests live outside `src/` and are never bundled. The only test hook inside `src/` is `debug.js`, which the normal build removes.
+
+## Definition of done
+
+- `npm run check` passes.
+- New behaviour has a unit test when it is logic; a manual check in `npm run dev` when it is UI.
+- New text is in `$t()`.
+- No new runtime dependency, no network access.
+- This file and `src/types.js` are updated when the structure or the data changes.
+
+## Known debt (be honest about it)
+
+- **Dense code inherited from the single-file version.** The code is formatted and the most cryptic locals are renamed, but many callbacks still use one-letter parameters (`e` for an entry or an event, `m` for a month, `x`), and several views are long functions with nested ternaries. Clean these up **when you touch them**, with the tests green before and after; do not rewrite untouched code in bulk.
+- **`src/styles/features.css`** groups later additions by when they were added, not by component.
+- **Views re-render fully.** Fine at today's sizes (see Performance).
+- **`logic/projection.js` is one long function.** It is the best-tested file; split it only with the regression suite at hand.
+- **Deleting a "from savings" cover line** does not put the money back in the savings account (undo does).

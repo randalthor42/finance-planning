@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-test/
+tests/shots/
+tests/regression/shots/
+# real backups used as test data: personal finances, never publish them
+tests/fixtures/real*.json
+tests/fixtures/alpha-*
+.idea/

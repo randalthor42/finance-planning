@@ -1,0 +1,4 @@
+dist/
+dist-test/
+tests/regression/
+tests/fixtures/

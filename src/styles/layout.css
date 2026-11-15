@@ -1,0 +1,144 @@
+/* App shell: top bar, sidebar, main area. */
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+#app {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  min-height: 100vh;
+}
+#app.bare {
+  grid-template-columns: minmax(0, 1fr);
+}
+#app.bare .side {
+  display: none;
+}
+.side {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 12px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 8px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+.brand svg {
+  width: 26px;
+  height: 26px;
+}
+.plan-pick {
+  margin: 0 4px;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  overflow: auto;
+}
+.nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  font-weight: 500;
+}
+.nav button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.nav button[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.nav .sep {
+  height: 1px;
+  background: var(--line);
+  margin: 8px 6px;
+}
+.side-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+.save-state {
+  flex: 1;
+  font-size: 0.78rem;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.save-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+}
+.save-state.err i {
+  background: var(--bad);
+}
+main {
+  padding: 26px 28px 80px;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+}
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.head p {
+  color: var(--muted);
+  margin-top: 3px;
+}
+.acts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.cols {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.cols.lead {
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+}
+.btn.hide {
+  visibility: hidden;
+}
+.card.off {
+  opacity: 0.6;
+}
