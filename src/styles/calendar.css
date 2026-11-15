@@ -215,12 +215,15 @@
 .cal-d.we .cal-n {
   color: var(--muted);
 }
-/* the day's colour from dayInfo (for the plan: under zero, under the cushion) */
+/* the day's colour from dayInfo (for the plan: under zero, under the cushion). A soft tint and an edge of the same
+   colour: the grid's hairlines are the line colour, which disappears against a full-strength amber or red */
 .cal-d.t-bad {
-  background: var(--bad-soft);
+  background: var(--bad-tint);
+  box-shadow: inset 0 0 0 1px var(--bad-edge);
 }
 .cal-d.t-warn {
-  background: var(--warn-soft);
+  background: var(--warn-tint);
+  box-shadow: inset 0 0 0 1px var(--warn-edge);
 }
 .cal-d.t-good {
   background: var(--good-soft);
@@ -538,18 +541,57 @@
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   align-items: start;
 }
-/* Settings › Calendar: the groups of the Overview (legend buttons) and the sections of the day menu */
-.cal-lg:disabled {
+/* Settings › Calendar: the groups of the Overview (on/off buttons) and the day menu (tick boxes), as a grid of tiles */
+.cal-picks {
+  flex: 1 1 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+}
+.cal-pick {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+.cal-pick span {
+  min-width: 0;
+  line-height: 1.25;
+}
+.cal-pick:hover {
+  background: var(--surface-2);
+}
+.cal-pick[aria-pressed='true'],
+.cal-pick:has(input:checked) {
+  border-color: var(--line-2);
+}
+.cal-pick[aria-pressed='false'],
+.cal-pick:has(input:not(:checked)) {
+  color: var(--muted);
+}
+.cal-pick[aria-pressed='false'] .cal-dot {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--cal-c);
+}
+.cal-pick:disabled {
   cursor: default;
 }
+.cal-set {
+  padding: 4px 6px 8px;
+}
 .cal-set-h {
-  padding: 10px 6px 2px;
+  padding: 6px 0;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--muted);
-}
-.cal-set .cal-set-h + .row {
-  border-top: 0;
 }
 @media print {
   .cal-tools,

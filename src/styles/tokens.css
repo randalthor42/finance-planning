@@ -21,6 +21,10 @@
   --bad-soft: #fbe9e7;
   --warn: #a15c00;
   --warn-soft: #fdf1dc;
+  --warn-tint: #fdf6ea; /* a calendar day under the cushion, and its edge */
+  --warn-edge: #efd6a8;
+  --bad-tint: #fdf1ef; /* a calendar day below zero, and its edge */
+  --bad-edge: #f0c7c1;
   --s-cash: #2a78d6;
   --s-save: #1baf7a;
   --s-debt: #eb6834;
@@ -51,6 +55,10 @@
   --bad-soft: #3d1c19;
   --warn: #f0b354;
   --warn-soft: #3a2c12;
+  --warn-tint: #272219;
+  --warn-edge: #5e4b2b;
+  --bad-tint: #2a1c20;
+  --bad-edge: #5e3b3d;
   --s-cash: #3987e5;
   --s-save: #199e70;
   --s-debt: #d95926;

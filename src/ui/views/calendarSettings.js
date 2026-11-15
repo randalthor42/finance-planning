@@ -51,6 +51,21 @@ const toggle = (focusKey, label, checked, onChange) =>
     }),
   );
 
+/** A tick box with its name, one tile of a grid of choices (the day menu). */
+const pick = (focusKey, label, checked, onChange) =>
+  h(
+    'label',
+    { class: 'cal-pick' },
+    h('input', {
+      type: 'checkbox',
+      class: 'check',
+      checked,
+      'data-focus': focusKey,
+      onchange: event => onChange(event.target.checked),
+    }),
+    h('span', { text: label }),
+  );
+
 /** One choice out of a few (a segmented control), named for screen readers. */
 function choice(focusKey, label, options, current, onPick) {
   const control = segc(options, current, value => onPick(value, focusKey + ':' + value));
@@ -144,7 +159,7 @@ export function calendarSettingsCards() {
   // the groups the Overview shows: at least one stays on
   const groupButtons = h(
     'div',
-    { class: 'cal-legend', role: 'group', 'aria-label': $t('What it shows') },
+    { class: 'cal-picks', role: 'group', 'aria-label': $t('What it shows') },
     PLAN_GROUPS.map(group => {
       const on = prefs.overviewGroups.includes(group.key);
       const last = on && prefs.overviewGroups.length === 1;
@@ -152,7 +167,7 @@ export function calendarSettingsCards() {
         'button',
         {
           type: 'button',
-          class: 'cal-lg cal-c-' + group.tone,
+          class: 'cal-pick cal-c-' + group.tone,
           'aria-pressed': String(on),
           'data-focus': 'group:' + group.key,
           disabled: last,
@@ -219,12 +234,8 @@ export function calendarSettingsCards() {
   );
 
   // the context menus: a switch for the menus, then one per thing they can add or do, in menu order
-  const addSwitch = (key, label) =>
-    option(
-      label,
-      null,
-      toggle('add:' + key, label, prefs.add[key], value => save({ add: { ...prefs.add, [key]: value } }, 'add:' + key)),
-    );
+  const addPick = (key, label) =>
+    pick('add:' + key, label, prefs.add[key], value => save({ add: { ...prefs.add, [key]: value } }, 'add:' + key));
   const menus = card(
     $t('Context menus'),
     $t('Right-click a day or a line in a calendar. On touch screens, use “+”, Add and the “⋯” button of a line.'),
@@ -241,12 +252,17 @@ export function calendarSettingsCards() {
     prefs.menus
       ? [
           h('div', { class: 'grp-h', text: $t('Add on a day') }),
+          // a grid of tick boxes per section: eleven switches one under the other made the longest card of Settings
           addChoices().map(([title, choices]) =>
             h(
               'div',
-              { class: 'rows cal-set' },
+              { class: 'cal-set', role: 'group', 'aria-label': title },
               h('div', { class: 'cal-set-h', text: title }),
-              choices.map(([key, , label]) => addSwitch(key, label)),
+              h(
+                'div',
+                { class: 'cal-picks' },
+                choices.map(([key, , label]) => addPick(key, label)),
+              ),
             ),
           ),
           h('div', { class: 'grp-h', text: $t('Actions on a line') }),

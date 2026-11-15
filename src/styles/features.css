@@ -324,6 +324,10 @@ dialog.modal.narrow {
 .row.opt {
   flex-wrap: wrap;
 }
+/* a setting's name keeps room to be read: a wide control moves under it instead of cutting it short */
+.row.opt > .grow {
+  flex: 1 1 200px;
+}
 .mono {
   width: 30px;
   height: 30px;
@@ -875,9 +879,16 @@ tr.dim td {
   align-items: start;
   grid-template-columns: minmax(0, 1fr);
 }
+/* two columns that each fill from the top (newspaper columns), so a short card never leaves a hole next to a tall one */
 @media (min-width: 1200px) {
   .settings-cols {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: block;
+    columns: 2;
+    column-gap: 16px;
+  }
+  .settings-cols > * {
+    break-inside: avoid;
+    margin-bottom: 16px;
   }
 }
 /* one sub-navigation at a time: the menu's sub-items on wide screens, the tab bar on phones (where the menu is a drawer) */
