@@ -79,3 +79,13 @@ test('every month is the sum of its lines', () => {
     assert.ok(Math.abs(balance - month.close) < 0.011, 'month ' + month.key);
   }
 });
+
+test('a savings goal that is switched off keeps its pot but takes no money from the plan', () => {
+  const goal = { id: 'goal0001', name: 'Holiday', saved: 300, monthly: 100 };
+  const counted = firstMonthOf({ goals: [goal] });
+  const switchedOff = firstMonthOf({ goals: [{ ...goal, on: false }] });
+  assert.equal(counted.month.close, 250);
+  assert.equal(switchedOff.month.close, 350);
+  assert.equal(switchedOff.month.savings, 300);
+  assert.equal(counted.plan.goals[0].on, true); // old plans without the field stay counted
+});

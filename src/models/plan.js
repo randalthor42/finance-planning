@@ -264,6 +264,7 @@ export function normPlan(p) {
       x => ({
         id: id(x.id),
         name: str(x.name) || $t('Goal'),
+        on: x.on !== false,
         target: num(x.target, 0, 1e9, 0),
         saved: num(x.saved, 0, 1e9, 0),
         monthly: num(x.monthly, 0, 1e9, 0),

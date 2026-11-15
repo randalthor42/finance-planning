@@ -26,6 +26,7 @@ import { loanModal } from '../modals/loan.js';
 import { recModal } from '../modals/recurring.js';
 import { tripModal } from '../modals/trip.js';
 import { UI, monthAt, nowK, rangeLabel, selK } from '../state.js';
+import { FTABS, forecastCloses } from './forecast.js';
 import { V } from './registry.js';
 
 V.months = () => {
@@ -38,6 +39,56 @@ V.months = () => {
   const now = nowK();
   const monthKey = M.key(k);
   const days = UI.mview === 'days';
+  // a forecast chosen on the Forecast page can be shown here; it changes what is displayed, never the plan
+  const overlay = forecastCloses(UI.overlay);
+  const shownClose = month => (overlay && overlay.closes.has(month.k) ? overlay.closes.get(month.k) : month.close);
+  const overlayBanner = overlay
+    ? h(
+        'div',
+        { class: 'note info', style: 'margin-bottom:10px' },
+        icon('info'),
+        h(
+          'div',
+          { class: 'grow' },
+          h('div', {
+            text: $t(
+              'Showing the forecast “{0}”. The amount under each month is where it would end: {1} at {2}, against {3} as planned. Your plan is not changed.',
+              overlay.name,
+              M.label(k),
+              money(shownClose(m)),
+              money(m.close),
+            ),
+          }),
+          h(
+            'div',
+            { class: 'acts', style: 'margin-top:8px' },
+            h(
+              'select',
+              {
+                class: 'inp sm',
+                style: 'width:auto',
+                'aria-label': $t('Forecast to show'),
+                onchange: event => {
+                  UI.overlay = event.target.value;
+                  App.render();
+                },
+              },
+              FTABS.filter(tab => tab[0] !== 'plan').map(tab =>
+                h('option', { value: tab[0], text: tab[1], selected: tab[0] === UI.overlay }),
+              ),
+            ),
+            btn(
+              $t('Back to the plan'),
+              () => {
+                UI.overlay = null;
+                App.render();
+              },
+              'sm primary',
+            ),
+          ),
+        ),
+      )
+    : null;
   const strip = h(
     'div',
     { class: 'strip', role: 'tablist', 'aria-label': $t('Months') },
@@ -48,11 +99,15 @@ V.months = () => {
           type: 'button',
           role: 'tab',
           'aria-selected': String(x.k === k),
-          class: [x.status, x.k === k ? 'sel' : '', x.k === now ? 'cur' : ''].join(' '),
+          class: [
+            overlay ? (shownClose(x) < 0 ? 'neg' : '') : x.status,
+            x.k === k ? 'sel' : '',
+            x.k === now ? 'cur' : '',
+          ].join(' '),
           onclick: () => App.go('months', { month: x.k }),
         },
         h('b', { text: M.label(x.k) }),
-        h('span', { text: compact(x.close) }),
+        h('span', { text: compact(shownClose(x)) }),
       ),
     ),
     summary.n < 120
@@ -373,6 +428,7 @@ V.months = () => {
         'right',
       ),
     ],
+    overlayBanner,
     strip,
     h(
       'div',

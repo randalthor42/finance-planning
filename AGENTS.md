@@ -59,7 +59,8 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | Loan schedule, payoff planner | `src/logic/loans.js` |
 | Trip costs across a payday | `src/logic/trips.js` |
 | "When can I afford it", budget trends | `src/logic/advice.js` |
-| Forecast scenarios (recent pace, costs run higher) | `src/logic/forecast.js` |
+| Forecast methods (measured overrun, recent pace, exponential smoothing, damped trend, stress tests, Monte Carlo range) | `src/logic/forecast.js` |
+| The list of forecasts in the menu, and showing one over the month planner | `FTABS` and `forecastCloses` in `src/ui/views/forecast.js` |
 | What the Review page counts as "went well" / "to watch" | `src/logic/review.js` (rules) and `src/ui/views/review.js` (wording) |
 | The consistency rules and the full ledger (Audit page) | `src/logic/audit.js` |
 | What the global search looks through | `src/logic/search.js` (add one entry to `SOURCES`) |

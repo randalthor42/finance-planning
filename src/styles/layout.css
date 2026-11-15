@@ -209,3 +209,33 @@ main {
   font-size: 0.8rem;
   color: var(--muted);
 }
+
+/* an even two-column grid of cards: same width, same gap, rows of equal height (Review, notes under Accounts) */
+.rgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  align-items: stretch;
+}
+.rgrid > .card {
+  margin: 0;
+  height: 100%;
+}
+.rgrid > :only-child {
+  grid-column: 1/-1;
+}
+@media (max-width: 860px) {
+  .rgrid {
+    grid-template-columns: 1fr;
+  }
+}
+/* search window: the field takes the full width and the results sit underneath it */
+.searchbox {
+  display: block;
+}
+.searchbox .inp {
+  width: 100%;
+  font-size: 1rem;
+  padding: 10px 12px;
+}

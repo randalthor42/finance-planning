@@ -29,7 +29,13 @@ export const UI = {
   /** Audit page: show the ledger of the current month or of the whole plan. */
   auditScope: 'month',
   /** Forecast page: which way of looking ahead, and its two inputs. */
-  forecast: { type: 'plan', sampleMonths: 4, percent: 10 },
+  forecast: { sampleMonths: 4, percent: 10, alphaPercent: 50, incomePercent: 20 },
+  /** Which forecast the Forecast page shows (a sub-section in the menu). */
+  ftab: 'plan',
+  /** A forecast shown on top of the month planner, or null. Display only: the plan is not changed. */
+  overlay: null,
+  /** Accounts page: 'cards' or 'list'. */
+  accountView: 'cards',
 };
 export const nowK = () => (Store.plan ? Period.now(Store.plan.settings) : M.now());
 export const curK = () => {

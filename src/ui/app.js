@@ -10,6 +10,7 @@ import { $, h, sv } from './dom.js';
 import { icon } from './icons.js';
 import { searchModal } from './modals/search.js';
 import { UI } from './state.js';
+import { FTABS } from './views/forecast.js';
 import { langPicker } from './views/language.js';
 import { V } from './views/registry.js';
 import { STABS } from './views/settings.js';
@@ -55,7 +56,7 @@ const NAV = [
   ],
 ];
 const NAV_ALL = NAV.flatMap(g => g[1]);
-const SUBS = { settings: () => [STABS, 'stab'], tools: () => [TOOLS, 'ttab'] };
+const SUBS = { settings: () => [STABS, 'stab'], tools: () => [TOOLS, 'ttab'], forecast: () => [FTABS, 'ftab'] };
 function renderSide() {
   const db = Store.db;
   const plans = Object.values(db.plans);
@@ -184,7 +185,6 @@ function renderSide() {
       { type: 'button', class: 'searchbtn', title: $t('Search your plan (Ctrl K)'), onclick: searchModal },
       icon('list'),
       h('span', { class: 'grow', text: $t('Search…') }),
-      h('kbd', { text: 'Ctrl K' }),
     ),
     h(
       'nav',

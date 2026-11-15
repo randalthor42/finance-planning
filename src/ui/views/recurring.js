@@ -169,6 +169,7 @@ V.recurring = () => {
         h('div', { class: 's', text: $t('before one-offs, trips, loans and savings') }),
       ),
     ),
-    h('div', { class: 'cols' }, a, b),
+    // one column: income is short and bills are long, so side by side they never lined up
+    h('div', { class: 'stack' }, a, b),
   );
 };

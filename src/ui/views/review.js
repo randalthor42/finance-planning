@@ -247,7 +247,7 @@ V.review = () => {
     ),
     h(
       'div',
-      { class: 'cols' },
+      { class: 'rgrid' },
       card(
         $t('What went well'),
         null,
@@ -260,71 +260,61 @@ V.review = () => {
         null,
         insightList(review.watch, watchText, 'warn', 'alert', $t('Nothing to worry about in this period.')),
       ),
-    ),
-    h(
-      'div',
-      { class: 'cols' },
       card(
         $t('Where it went'),
         $t('Planned and logged costs by category.'),
         null,
         categoryRows.length ? categoryRows : h('p', { class: 'muted', text: $t('No spending.') }),
       ),
-      h(
-        'div',
-        { class: 'stack' },
-        review.budgets.length
-          ? card(
-              $t('Budgets'),
-              $t('What each budget allowed against what you logged. Click a column to sort.'),
-              null,
-              budgetTable,
-            )
-          : null,
-        card(
-          $t('Biggest costs'),
-          null,
-          null,
-          biggestRows.length
-            ? h('div', { class: 'rows' }, biggestRows)
-            : h('p', { class: 'muted', text: $t('No costs in this period.') }),
+      card(
+        $t('Budgets'),
+        $t('What each budget allowed against what you logged. Click a column to sort.'),
+        null,
+        review.budgets.length ? budgetTable : h('p', { class: 'muted', text: $t('No budgets in this period.') }),
+      ),
+      card(
+        $t('Biggest costs'),
+        null,
+        null,
+        biggestRows.length
+          ? h('div', { class: 'rows' }, biggestRows)
+          : h('p', { class: 'muted', text: $t('No costs in this period.') }),
+      ),
+      card(
+        $t('Where this leads'),
+        $t(
+          'The end of your plan, as planned and if later months go like your next {0}.',
+          plural(UI.forecast.sampleMonths, 'month'),
         ),
-      ),
-    ),
-    card(
-      $t('Where this leads'),
-      $t(
-        'The end of your plan, as planned and if later months go like your next {0}.',
-        plural(UI.forecast.sampleMonths, 'month'),
-      ),
-      btn(
-        $t('Open the forecast'),
-        () => {
-          UI.forecast.type = 'pace';
-          App.go('forecast');
-        },
-        'sm',
-      ),
-      h(
-        'div',
-        { class: 'flow' },
-        h(
-          'div',
-          null,
-          h('div', { class: 'l', text: $t('As planned') }),
-          h('div', { class: 'v', text: money(paceEnd.planClose) }),
+        btn(
+          $t('Open the forecast'),
+          () => {
+            UI.ftab = 'pace';
+            App.go('forecast');
+          },
+          'sm',
         ),
         h(
           'div',
-          null,
-          h('div', { class: 'l', text: $t('At your recent pace') }),
-          h('div', { class: 'v ' + (paceEnd.close < 0 ? 'bad' : ''), text: money(paceEnd.close) }),
-        ),
-        h(
-          'div',
-          null,
-          h('div', { class: 'l', text: $t('Difference') }),
-          h('div', { class: 'v', text: signed(paceEnd.close - paceEnd.planClose) }),
+          { class: 'flow' },
+          h(
+            'div',
+            null,
+            h('div', { class: 'l', text: $t('As planned') }),
+            h('div', { class: 'v', text: money(paceEnd.planClose) }),
+          ),
+          h(
+            'div',
+            null,
+            h('div', { class: 'l', text: $t('At your recent pace') }),
+            h('div', { class: 'v ' + (paceEnd.close < 0 ? 'bad' : ''), text: money(paceEnd.close) }),
+          ),
+          h(
+            'div',
+            null,
+            h('div', { class: 'l', text: $t('Difference') }),
+            h('div', { class: 'v', text: signed(paceEnd.close - paceEnd.planClose) }),
+          ),
         ),
       ),
     ),

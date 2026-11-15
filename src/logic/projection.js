@@ -270,7 +270,8 @@ export function project(plan, opts) {
           interest += i;
         }
         if ((rel === null || m.k < rel) && (f === null || m.k >= f) && (t === null || m.k <= t)) {
-          let c = G.monthly;
+          // a goal that is switched off keeps what is already in the pot, but takes no new money from the plan
+          let c = G.on ? G.monthly : 0;
           if (G.target > 0) {
             c = Math.min(c, Math.max(0, G.target - bal));
           }

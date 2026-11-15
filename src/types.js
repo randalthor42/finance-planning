@@ -32,7 +32,7 @@
  * @property {object[]} items One-offs and logged spends: { id, name, amount, kind: 'out'|'in', month, date, cat, budget, account, cover }
  * @property {object[]} trips { id, name, kind: 'trip'|'event'|'idea', month, from, to, on, budget, reserve, items: [{ id, name, amount, pay }] }
  * @property {object[]} loans
- * @property {object[]} goals Savings goals.
+ * @property {object[]} goals Savings goals: { id, name, on, target, saved, monthly, from, to, by, rate, release }. `on: false` keeps the pot but adds nothing.
  * @property {object[]} wishes Wishlist.
  * @property {Object<string, Object<string, number>>} overrides One month only amounts: { "YYYY-MM": { entryKey: amount } }
  * @property {Object<string, Object<string, (true|{d: string, a: ?string, v: number, t: ?string})>>} paid Ticks: { "YYYY-MM": { entryKey: tick } }

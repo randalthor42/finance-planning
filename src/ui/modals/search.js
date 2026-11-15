@@ -105,6 +105,6 @@ export function searchModal() {
     }
   });
   draw();
-  dialog = modal({ title: $t('Search'), body: h('div', { class: 'form' }, input, list) });
+  dialog = modal({ title: $t('Search'), body: h('div', { class: 'searchbox' }, input, list) });
   input.focus();
 }

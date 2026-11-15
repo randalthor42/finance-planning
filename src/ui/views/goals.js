@@ -15,6 +15,17 @@ import { goalModal } from '../modals/goal.js';
 import { curK, monthAt } from '../state.js';
 import { V } from './registry.js';
 
+/** The same switch as on trips, loans and the wishlist: count this goal in the plan, or keep it as an idea. */
+function planSwitch(goal) {
+  const input = h('input', {
+    type: 'checkbox',
+    checked: goal.on,
+    'aria-label': $t('Count in my plan'),
+    onchange: () => Actions.toggle('goals', goal.id, input.checked),
+  });
+  return h('label', { class: 'switch', title: $t('Count in my plan') }, input);
+}
+
 V.goals = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -65,7 +76,7 @@ V.goals = () => {
       );
     return h(
       'section',
-      { class: 'card' },
+      { class: 'card' + (G.on ? '' : ' off') },
       h(
         'div',
         { class: 'card-h' },
@@ -77,13 +88,15 @@ V.goals = () => {
             null,
             G.name,
             ' ',
-            g.reached !== null && g.reached <= curK()
-              ? chip($t('reached'), 'good')
-              : late
-                ? chip($t('behind'), 'warn')
-                : by !== null
-                  ? chip($t('on track'), 'good')
-                  : null,
+            !G.on
+              ? chip($t('not counted in the plan'), 'warn')
+              : g.reached !== null && g.reached <= curK()
+                ? chip($t('reached'), 'good')
+                : late
+                  ? chip($t('behind'), 'warn')
+                  : by !== null
+                    ? chip($t('on track'), 'good')
+                    : null,
           ),
           h('p', {
             text: [
@@ -97,6 +110,7 @@ V.goals = () => {
         h(
           'div',
           { class: 'acts' },
+          planSwitch(G),
           btn($t('Edit'), () => goalModal(G.id), 'sm', 'edit'),
           cardDel('goals', G.id),
         ),
