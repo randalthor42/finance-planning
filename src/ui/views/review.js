@@ -27,7 +27,7 @@ const categoryName = cat => CAT_NAME[cat] || $t('Other');
 export function goodText(item) {
   switch (item.id) {
     case 'leftOver':
-      return $t('You kept {0}, which is {1} of what came in.', money(item.amount), percent(item.share));
+      return $t('Kept {0} ({1} of income).', money(item.amount), percent(item.share));
     case 'saved':
       return $t('You put {0} into savings ({1} of your income).', money(item.amount), percent(item.share));
     case 'debtDown':
@@ -306,7 +306,7 @@ V.review = () => {
           h(
             'div',
             null,
-            h('div', { class: 'l', text: $t('At your recent pace') }),
+            h('div', { class: 'l', text: $t('Like the next {0}', plural(UI.forecast.sampleMonths, 'month')) }),
             h('div', { class: 'v ' + (paceEnd.close < 0 ? 'bad' : ''), text: money(paceEnd.close) }),
           ),
           h(

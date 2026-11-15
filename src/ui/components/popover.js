@@ -40,8 +40,21 @@ export function ctxMenu(e, items) {
   );
   pop.anchor = pop;
   (e.target.closest('dialog') || document.body).append(pop);
-  pop.style.left = clamp(e.clientX, 8, Math.max(8, innerWidth - pop.offsetWidth - 8)) + 'px';
-  pop.style.top = clamp(e.clientY, 8, Math.max(8, innerHeight - pop.offsetHeight - 8)) + 'px';
+  // Opened with the keyboard (Enter, Space, the menu key) the event has no pointer position: place it under the control.
+  let x = e.clientX;
+  let y = e.clientY;
+  const owner = e.currentTarget instanceof Element ? e.currentTarget : e.target;
+  if (e.detail === 0 && owner instanceof Element && !x && !y) {
+    const rect = owner.getBoundingClientRect();
+    x = rect.left;
+    y = rect.bottom + 4;
+  }
+  pop.style.left = clamp(x, 8, Math.max(8, innerWidth - pop.offsetWidth - 8)) + 'px';
+  pop.style.top = clamp(y, 8, Math.max(8, innerHeight - pop.offsetHeight - 8)) + 'px';
+  const first = pop.querySelector('button');
+  if (e.detail === 0 && first) {
+    first.focus();
+  }
   POP = pop;
   document.addEventListener('mousedown', popOutside, true);
 }

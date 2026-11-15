@@ -2,12 +2,13 @@
  * @file Overview page: where you are this month, insights, charts, upcoming payments.
  */
 import { D, M } from '../../core/dates.js';
-import { money, signed } from '../../core/format.js';
+import { fmtNum, money, signed } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
 import { budgetTrend } from '../../logic/advice.js';
 import { loanCalc } from '../../logic/loans.js';
 import { project } from '../../logic/projection.js';
+import { ctxMenu } from '../components/popover.js';
 import { CAT_NAME } from '../../models/categories.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
@@ -54,10 +55,9 @@ function insights() {
     out.push({
       tone: 'bad',
       text: $t(
-        'Cash runs out in {0}. {1} end{2} below zero, and the lowest point is {3} in {4}.',
+        'Cash runs out in {0}. {1} below zero. Lowest: {2} in {3}.',
         M.label(summary.firstNeg, true),
         plural(summary.negN, 'month'),
-        summary.negN === 1 ? 's' : '',
         money(summary.min),
         M.label(summary.minK),
       ),
@@ -67,9 +67,8 @@ function insights() {
     out.push({
       tone: 'warn',
       text: $t(
-        '{0} dip{1} under your {2} cushion. The lowest point is {3} in {4}.',
+        '{0} under your {1} cushion. Lowest: {2} in {3}.',
         plural(summary.tightN, 'month'),
-        summary.tightN === 1 ? 's' : '',
         money(settings.cushion),
         money(summary.min),
         M.label(summary.minK),
@@ -79,12 +78,14 @@ function insights() {
   } else {
     out.push({
       tone: 'good',
-      text: $t(
-        'You stay above {0} in every month. Lowest point: {1} in {2}.',
-        settings.cushion ? $t('your ') + money(settings.cushion) + $t(' cushion') : $t('zero'),
-        money(summary.min),
-        M.label(summary.minK),
-      ),
+      text: settings.cushion
+        ? $t(
+            'You stay above your {0} cushion in every month. Lowest: {1} in {2}.',
+            money(settings.cushion),
+            money(summary.min),
+            M.label(summary.minK),
+          )
+        : $t('You stay above zero in every month. Lowest: {0} in {1}.', money(summary.min), M.label(summary.minK)),
       k: summary.minK,
     });
   }
@@ -94,10 +95,8 @@ function insights() {
     if (!cm.fix && inM && !UI.hideCheck) {
       out.push({
         tone: 'info',
-        text: $t(
-          'Compare the planner with what you really have. One number is enough: you do not need to log every purchase.',
-        ),
-        act: [$t('Check it'), balancesModal],
+        text: $t('Balances not updated this month.'),
+        act: [$t('Update balances'), balancesModal],
       });
     }
   }
@@ -129,7 +128,7 @@ function insights() {
     out.push({
       tone: 'info',
       text: $t(
-        'On paper you keep about {0} a month, {1}% of your income. If your account does not really grow like that, some spending is missing from the plan. Add an “Everything else” budget, or do a check-in with your real balance.',
+        'The plan keeps {0} a month ({1}% of income). If your account isn’t growing like that, spending is missing.',
         money(summary.avgNet),
         Math.round((summary.avgNet / summary.avgInc) * 100),
       ),
@@ -190,13 +189,10 @@ function insights() {
     .forEach(b =>
       out.push({
         tone: 'good',
-        text: $t(
-          '“{0}” ends after {1}. That frees {2}{3}.',
-          b.name,
-          M.label(M.parse(b.to)),
-          money(b.amount),
-          b.every === 1 ? $t(' a month') : '',
-        ),
+        text:
+          b.every === 1
+            ? $t('“{0}” ends after {1}, freeing {2} a month.', b.name, M.label(M.parse(b.to)), money(b.amount))
+            : $t('“{0}” ends after {1}, freeing {2}.', b.name, M.label(M.parse(b.to)), money(b.amount)),
         k: M.parse(b.to),
       }),
     );
@@ -225,11 +221,8 @@ function insights() {
   if (summary.avgOut > 0 && m.close + m.savings > 0) {
     const cover = (m.close + m.savings) / summary.avgOut;
     out.push({
-      tone: cover >= 3 ? 'good' : 'info',
-      text: $t(
-        'Your cash and savings cover about {0} months of spending. A common target is 3 to 6.',
-        cover.toFixed(1),
-      ),
+      tone: coverTone(cover),
+      text: $t('Safety net: {0} months of spending (aim for 3–6).', fmtNum(Math.round(cover * 10) / 10)),
     });
   }
   const big = projection.months.reduce((a, b) => (b.out > a.out ? b : a));
@@ -240,7 +233,85 @@ function insights() {
       k: big.k,
     });
   }
-  return out.slice(0, 8);
+  return out.sort((a, b) => TONE_RANK[a.tone] - TONE_RANK[b.tone]);
+}
+/** Most urgent first: problems, then warnings, then tips, then good news. */
+const TONE_RANK = { bad: 0, warn: 1, info: 2, good: 3 };
+/** How many insights the Overview shows before "Show more". */
+const INSIGHTS_SHOWN = 3;
+/** Under one month of spending in reserve is worth a warning; three or more is good. */
+function coverTone(months) {
+  if (months >= 3) {
+    return 'good';
+  }
+  if (months >= 1) {
+    return 'info';
+  }
+  return 'warn';
+}
+/** The button of one insight: its own action, or "Open {month}" when it points at a month. */
+function insightAction(insight) {
+  if (insight.act) {
+    return btn(insight.act[0], insight.act[1], 'sm');
+  }
+  if (insight.k != null) {
+    return btn($t('Open {0}', M.label(insight.k)), () => App.go('months', { month: insight.k }), 'sm');
+  }
+  return null;
+}
+/** The insights card: the three most urgent, the rest one click away. */
+function insightsCard() {
+  const all = insights();
+  const shown = UI.insightsAll ? all : all.slice(0, INSIGHTS_SHOWN);
+  const notes = shown.map(insight =>
+    h(
+      'div',
+      { class: 'note ' + insight.tone },
+      icon(insight.tone === 'good' ? 'check' : insight.tone === 'info' ? 'info' : 'alert'),
+      h('div', { class: 'grow', text: insight.text }),
+      insightAction(insight),
+    ),
+  );
+  let more = null;
+  if (all.length > INSIGHTS_SHOWN) {
+    const label = UI.insightsAll ? $t('Show fewer') : $t('Show {0} more', all.length - INSIGHTS_SHOWN);
+    more = btn(
+      label,
+      () => {
+        UI.insightsAll = !UI.insightsAll;
+        App.render();
+      },
+      'ghost sm',
+    );
+  }
+  return card($t('Insights'), null, more, h('div', { class: 'notes' }, notes));
+}
+/** Pending "Can I afford this?" recalculation: typing waits 120 ms so a 6-digit amount runs one projection, not six. */
+let affordTimer = 0;
+/** "Safe to spend" in a month: the room above the cushion that no later month goes below. */
+function roomText(room, k, lowestK, cushion) {
+  if (room > 0) {
+    if (cushion) {
+      return $t(
+        'Safe to spend in {0}: {1}, without any later month going under your cushion.',
+        M.label(k, true),
+        money(Math.floor(room)),
+      );
+    }
+    return $t(
+      'Safe to spend in {0}: {1}, without any later month going below zero.',
+      M.label(k, true),
+      money(Math.floor(room)),
+    );
+  }
+  if (cushion) {
+    return $t(
+      'Nothing safe to spend in {0}. {1} would go under your cushion.',
+      M.label(k, true),
+      M.label(lowestK, true),
+    );
+  }
+  return $t('Nothing safe to spend in {0}. {1} would go below zero.', M.label(k, true), M.label(lowestK, true));
 }
 function affordCard() {
   const projection = Store.proj;
@@ -249,29 +320,17 @@ function affordCard() {
   const res = h('div', { class: 'notes', style: 'margin-top:10px' });
   const upd = () => {
     const k = clamp(M.parse(a.month) === null ? curK() : M.parse(a.month), summary.s0, summary.s0 + summary.n - 1);
-    const base = project(Store.plan, { extra: [], today: Store.day });
+    // Store.proj is the plan as it is today (same options as a fresh projection without extras): reuse it.
+    const base = projection;
     const cush = Store.plan.settings.cushion;
-    const room = Math.min(...base.months.filter(m => m.k >= k).map(m => m.close)) - cush;
+    const later = base.months.filter(m => m.k >= k);
+    const lowest = later.reduce((low, m) => (m.close < low.close ? m : low), later[0]);
+    const room = lowest.close - cush;
     const safe = h(
       'div',
       { class: 'note info' },
       icon('info'),
-      h('div', {
-        class: 'grow',
-        text:
-          room > 0
-            ? $t(
-                'You could spend up to {0} in {1} and still stay above {2} in every later month.',
-                money(Math.floor(room)),
-                M.label(k, true),
-                cush ? $t('your cushion') : $t('zero'),
-              )
-            : $t(
-                'There is no spare room in {0}: a later month is already {1}.',
-                M.label(k, true),
-                cush ? $t('under your cushion') : $t('at or below zero'),
-              ),
-      }),
+      h('div', { class: 'grow', text: roomText(room, k, lowest.k, cush) }),
     );
     if (!(a.amount > 0)) {
       return res.replaceChildren(safe);
@@ -332,7 +391,12 @@ function affordCard() {
         label: $t('Cost'),
         onInput: n => {
           a.amount = n;
-          upd();
+          clearTimeout(affordTimer);
+          affordTimer = setTimeout(() => {
+            if (res.isConnected) {
+              upd();
+            }
+          }, 120);
         },
       }),
       monthField({
@@ -347,6 +411,8 @@ function affordCard() {
   );
 }
 
+/** The month-end figure's name: with a payday the month ends the day before the next salary. */
+const monthEndLabel = settings => (settings.payDay ? $t('Left by payday') : $t('Month-end balance'));
 /** "Right now": where you are in the current budget month. Recomputed from today's date every time the page is drawn. */
 function nowCard() {
   const settings = Store.plan.settings;
@@ -385,7 +451,7 @@ function nowCard() {
         $t('You have now'),
         money(m.now),
         m.now < 0 ? 'bad' : '',
-        m.fix && m.fix.d !== null ? $t('checked on ') + D.label(m.fix.d) : $t('from the lines you ticked'),
+        m.fix && m.fix.d !== null ? $t('Checked {0}', D.label(m.fix.d)) : $t('Not checked yet'),
       ),
       tile(
         $t('Still to pay'),
@@ -395,28 +461,41 @@ function nowCard() {
       ),
       budgets.length
         ? tile(
-            $t('Left in your budgets'),
+            $t('Budgets left'),
             money(budgetLeft),
             '',
-            $t('about {0} a day for {1}', money(budgetLeft / daysLeft), plural(daysLeft, 'day')),
+            $t('{0}/day for {1}', money(budgetLeft / daysLeft), plural(daysLeft, 'day')),
           )
         : null,
       tile(
-        $t('Left at the end'),
+        monthEndLabel(settings),
         money(m.close),
         m.close < 0 ? 'bad' : 'good',
-        $t('this month on its own: {0}', signed(m.net)),
+        $t('Month surplus: {0}', signed(m.net)),
       ),
     ),
     h(
       'div',
       { class: 'acts' },
-      budgets.length ? btn($t('Log a spend'), () => logSpend(budgets[0].id, m), 'primary sm', 'plus') : null,
-      btn($t('What I have today'), balancesModal, 'sm', 'edit'),
-      btn($t('Log a purchase'), () => logPurchase(m), budgets.length ? 'sm' : 'primary sm', 'plus'),
-      btn($t('Trip'), () => tripModal(null, { month: M.key(currentMonth) }), 'sm', 'plus'),
-      btn($t('Bill'), () => recModal('bills'), 'sm', 'plus'),
-      btn($t('Savings goal'), () => goalModal(), 'sm', 'plus'),
+      btn($t('Add transaction'), () => logPurchase(m), 'primary sm', 'plus'),
+      budgets.length ? btn($t('Log a spend'), () => logSpend(budgets[0].id, m), 'sm', 'plus') : null,
+      btn($t('Update balances'), balancesModal, 'sm', 'edit'),
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'btn sm',
+          'aria-haspopup': 'menu',
+          onclick: event =>
+            ctxMenu(event, [
+              [$t('Trip or event'), () => tripModal(null, { month: M.key(currentMonth) })],
+              [$t('Recurring bill'), () => recModal('bills')],
+              [$t('Savings goal'), () => goalModal()],
+            ]),
+        },
+        icon('plus'),
+        $t('More'),
+      ),
     ),
   );
 }
@@ -433,7 +512,7 @@ function monthReviewCard() {
     h('div', { class: 'note ' + tone }, icon(iconName), h('div', { class: 'grow', text }));
   return card(
     $t('How {0} is going', M.label(month.k, true)),
-    $t('{0} went well, {1} to watch.', review.good.length, review.watch.length),
+    null,
     btn($t('Full review'), () => App.go('review', { month: month.k }), 'sm'),
     h(
       'div',
@@ -454,6 +533,24 @@ function monthReviewCard() {
   );
 }
 
+/**
+ * First month, from `fromK` on, in which nothing is owed any more (loans and credit cards), or null.
+ * summary.debtFree only follows loans, so a card balance could read "All paid off" while money is still owed.
+ */
+function debtFreeFrom(projection, fromK) {
+  const first = projection.months.find(month => month.k >= fromK && month.debt <= 0.005);
+  return first ? first.k : null;
+}
+/** Under the Debt figure: when it is paid off, or that it is not paid off within the plan. */
+function debtText(debtNow, debtFreeK) {
+  if (debtNow <= 0.005) {
+    return $t('All paid off');
+  }
+  if (debtFreeK === null) {
+    return $t('Not paid off within this plan');
+  }
+  return $t('Debt-free in {0}', M.label(debtFreeK));
+}
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -470,33 +567,25 @@ V.overview = () => {
       h('div', { class: 'v ' + (className || ''), text: v }),
       h('div', { class: 's', text: sub }),
     );
+  const debtFreeK = debtFreeFrom(projection, currentMonth);
   const lowCls = summary.min < 0 ? 'bad' : summary.min < plan.settings.cushion ? 'warn' : '';
   const kpis = h(
     'div',
     { class: 'kpis' },
-    kpi(
-      $t('Cash at end of {0}', M.label(currentMonth)),
-      money(m.close),
-      $t('{0} this month', signed(m.net)),
-      m.close < 0 ? 'bad' : '',
-    ),
+    kpi(monthEndLabel(plan.settings), money(m.close), $t('{0} this month', signed(m.net)), m.close < 0 ? 'bad' : ''),
     kpi($t('Lowest point'), money(summary.min), M.label(summary.minK, true), lowCls),
     kpi(
-      $t('Free each month'),
+      $t('Surplus, monthly average'),
       signed(summary.avgNet),
-      $t('average over {0} months', summary.n),
+      $t('as planned, {0}', plural(summary.n, 'month')),
       summary.avgNet < 0 ? 'bad' : '',
     ),
-    m.debt > 0 || summary.debtFree !== null
-      ? kpi(
-          $t('Debt'),
-          money(m.debt),
-          summary.debtFree !== null && summary.debtFree >= currentMonth
-            ? $t('Debt-free ') + M.label(summary.debtFree)
-            : $t('All paid off'),
-        )
-      : null,
-    kpi($t('Net worth, {0}', M.label(last.k)), money(last.worth), $t('{0} today', money(m.worth))),
+    m.debt > 0 || summary.debtFree !== null ? kpi($t('Debt'), money(m.debt), debtText(m.debt, debtFreeK)) : null,
+    kpi(
+      $t('Net worth, {0}', M.label(last.k)),
+      money(last.worth),
+      $t('{0} at end of {1}', money(m.worth), M.label(currentMonth)),
+    ),
   );
   const noData = !plan.bills.length && !plan.items.length && !plan.trips.length;
   const starter = noData
@@ -508,39 +597,26 @@ V.overview = () => {
           'div',
           { class: 'rows' },
           row({
-            title: $t('1. Add your bills and living costs'),
-            desc: $t('Rent, groceries, phone, subscriptions.'),
+            title: $t('1. Add your income'),
+            desc: $t('Salary and anything else that comes in regularly.'),
             right: icon('right'),
             onclick: () => App.go('recurring'),
           }),
           row({
-            title: $t('2. Add the one-offs you know about'),
-            desc: $t('Gifts, a concert, something you plan to buy.'),
+            title: $t('2. Add your balances'),
+            desc: $t('What is in your accounts and wallet today.'),
             right: icon('right'),
-            onclick: () => App.go('items'),
+            onclick: () => App.go('accounts'),
           }),
           row({
-            title: $t('3. Add trips, loans and savings goals'),
-            desc: $t('Each one feeds straight into your months.'),
+            title: $t('3. Add your bills and living costs'),
+            desc: $t('Rent, groceries, phone, subscriptions.'),
             right: icon('right'),
-            onclick: () => App.go('trips'),
+            onclick: () => App.go('recurring'),
           }),
         ),
       )
     : null;
-  const ins = insights().map(i =>
-    h(
-      'div',
-      { class: 'note ' + i.tone },
-      icon(i.tone === 'good' ? 'check' : i.tone === 'info' ? 'info' : 'alert'),
-      h('div', { class: 'grow', text: i.text }),
-      i.act
-        ? btn(i.act[0], i.act[1], 'sm')
-        : i.k != null
-          ? btn($t('Open'), () => App.go('months', { month: i.k }), 'sm')
-          : null,
-    ),
-  );
   // next things to pay: dated first (by day), then the ones without a fixed day
   const due = [];
   for (let k = currentMonth; k < Math.min(currentMonth + 2, summary.s0 + summary.n); k++) {
@@ -584,7 +660,7 @@ V.overview = () => {
       const now = projection.goals[G.id].series[i0];
       return prow(
         G.name,
-        G.target ? `${money(now)} of ${money(G.target)}` : money(now),
+        G.target ? $t('{0} of {1}', money(now), money(G.target)) : money(now),
         G.target ? (now / G.target) * 100 : 100,
         'good',
         () => App.go('goals'),
@@ -624,24 +700,23 @@ V.overview = () => {
     kpis,
     starter,
     nowCard(),
-    h('div', { style: 'height:16px' }),
-    card($t('Where your money is heading'), $t('Hover for a month, click to open it.'), null, cashChart()),
+    card($t('Where your money is heading'), null, null, cashChart()),
     h(
       'div',
-      { class: 'cols', style: 'margin-top:16px' },
+      { class: 'cols' },
       h(
         'div',
         { class: 'stack' },
-        card($t('Worth knowing'), null, null, h('div', { class: 'notes' }, ins)),
+        insightsCard(),
         card(
-          $t('What is left each month'),
-          $t('Money in minus money out. Red months spend more than comes in.'),
+          $t('Monthly surplus'),
+          $t('In minus out.'),
           null,
           netBars(),
           h(
             'div',
             { class: 'legend static' },
-            h('span', null, h('i', { style: 'background:var(--good)' }), $t('Money left over')),
+            h('span', null, h('i', { style: 'background:var(--s-cash)' }), $t('Surplus')),
             h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Spent more than came in')),
           ),
         ),
@@ -679,7 +754,7 @@ V.overview = () => {
                   row({
                     title: e.label,
                     desc:
-                      (e.date === null ? $t('No fixed day · ') + M.label(k) : D.label(e.date, { weekday: 'short' })) +
+                      (e.date === null ? $t('No fixed day · {0}', M.label(k)) : D.label(e.date, { weekday: 'short' })) +
                       (e.sub ? ' · ' + e.sub : ''),
                     right: amt(e.amount),
                     onclick: () => App.go('months', { month: k }),

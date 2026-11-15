@@ -34,3 +34,17 @@ test('a file that is not a backup is refused with a readable message', async () 
   );
   await assert.rejects(() => IO.read('not json at all', ''));
 });
+
+test('CSV uses ";" and decimal commas with the European number format, and starts with a BOM', async () => {
+  const { setFmt } = await import('../../src/core/format.js');
+  setFmt({ currency: 'EUR', numFmt: 'eu', dateFmt: 'dmy', cents: true });
+  assert.equal(
+    IO.csvText([
+      ['Rent', '-250.50'],
+      ['a;b', '=1+1'],
+    ]),
+    '﻿Rent;-250,50\n"a;b";\'=1+1',
+  );
+  setFmt({ currency: 'USD', numFmt: 'us', dateFmt: 'mdy', cents: true });
+  assert.equal(IO.csvText([['Rent', '-250.50']]), '﻿Rent,-250.50');
+});

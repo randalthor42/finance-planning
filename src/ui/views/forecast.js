@@ -10,6 +10,7 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { dataTable } from '../components/dataTable.js';
+import { info } from '../components/info.js';
 import { card, page, segc } from '../components/layout.js';
 import { h } from '../dom.js';
 import { UI, nowK } from '../state.js';
@@ -218,9 +219,9 @@ function numberInput(label, value, min, max, onChange) {
 /** The ways of looking ahead. They are the sub-sections of Forecast in the menu (see SUBS in ui/app.js). */
 export const FTABS = [
   ['plan', $t('As planned')],
-  ['variance', $t('Plan against reality')],
-  ['pace', $t('Recent pace')],
-  ['smooth', $t('Latest months count more')],
+  ['variance', $t('Your real overspend')],
+  ['pace', $t('Like the next months')],
+  ['smooth', $t('Weighted pace')],
   ['trend', $t('Follow the trend')],
   ['cautious', $t('Costs run higher')],
   ['income', $t('Income drops')],
@@ -299,54 +300,66 @@ V.forecast = () => {
   const lastRange = range ? range.rows[range.rows.length - 1] : null;
   const sampleText = plural(settings.sampleMonths, 'month');
 
-  // each way of looking ahead, said in plain words, with the name of the method for people who want to look it up
-  let explanation = $t(
-    'Every month in one table, exactly as planned. Red rows end below zero, amber rows end under your cushion. Click a row to open that month, click a column title to sort.',
-  );
+  // each way of looking ahead in one plain sentence; the method and the maths sit behind the "i"
+  let explanation = null;
+  let method = null;
   if (type === 'pace') {
     explanation = $t(
-      'A plan only lists the costs you already know, so later months look better than they will be. Here the next {0} are taken as planned (they leave {1} a month on average), and no later month is allowed to leave more than that. Method: simple average.',
+      'No later month leaves more than the next {0} do on average ({1}).',
       sampleText,
       money(result.average),
+    );
+    method = $t(
+      'A plan only lists the costs you already know, so later months look better than they will be. Here the next {0} are taken as planned, and no later month is allowed to leave more than their average. Method: simple average.',
+      sampleText,
     );
   } else if (type === 'smooth') {
-    explanation = $t(
-      'Like “recent pace”, but the latest of the next {0} count more than the earlier ones, so a recent change shows up sooner. The weighted level is {1} a month. A higher weight follows the latest month more closely. Method: simple exponential smoothing.',
+    explanation = $t('Like the next months, but the latest count more. Level: {0} a month.', money(result.average));
+    method = $t(
+      'The latest of the next {0} count more than the earlier ones, so a recent change shows up sooner. A higher weight follows the latest month more closely. Method: simple exponential smoothing.',
       sampleText,
-      money(result.average),
     );
   } else if (type === 'trend') {
-    explanation = $t(
-      'Looks at where the next {0} are heading. If each leaves less than the one before, later months continue that slide, with the slope fading out so it does not run away. No month does better than the plan. Method: damped trend (Holt, Gardner and McKenzie), with fixed settings because a few months are too little to fit them.',
-      sampleText,
+    explanation = $t('Continues where the next {0} are heading, with the slope fading out.', sampleText);
+    method = $t(
+      'If each month leaves less than the one before, later months continue that slide, with the slope fading out so it does not run away. No month does better than the plan. Method: damped trend (Holt, Gardner and McKenzie), with fixed settings because a few months are too little to fit them.',
     );
   } else if (type === 'cautious') {
-    explanation = $t(
-      'What if everything costs {0}% more than planned from this month on? Method: stress test.',
-      settings.percent,
-    );
+    explanation = $t('What if everything costs {0}% more from this month on?', settings.percent);
+    method = $t('Method: stress test.');
   } else if (type === 'income') {
-    explanation = $t(
-      'What if {0}% less comes in from this month on: fewer hours, a pay cut, a gap between jobs? Method: stress test.',
-      settings.incomePercent,
-    );
+    explanation = $t('What if {0}% less comes in from this month on?', settings.incomePercent);
+    method = $t('Method: stress test.');
   } else if (type === 'variance') {
-    explanation =
-      result.overrun === null
-        ? $t(
-            'This forecast measures how much more you really spend than the plan says. It needs at least one check against your real money: open the month planner and use “I really have a different amount”. Until then it equals the plan.',
-          )
-        : $t(
-            'When you checked against your real money, you had spent {0}% more than the planned costs you had paid by then. This applies the same overrun to every cost still to come. It is the only forecast here that uses what really happened, not only the plan. Method: budget variance (cost performance index).',
-            Math.round(result.overrun * 100),
-          );
+    if (result.overrun === null) {
+      explanation = $t('Needs one balance update first. Until then it equals the plan.');
+    } else {
+      explanation = $t(
+        'You spent {0}% more than planned. The same overrun is applied to every cost still to come.',
+        Math.round(result.overrun * 100),
+      );
+    }
+    method = $t(
+      'Measured when you updated your balances: what you really spent against the planned costs paid by then. The only forecast here based on what really happened. Method: budget variance (cost performance index).',
+    );
   } else if (isRange) {
-    explanation = $t(
-      'Real months never land exactly on the average. This runs your plan 2,000 times; in each run every later month is pushed up or down by as much as one of your next {0} differs from their average ({1}). “Low” is the result that only 1 run in 10 falls below, “High” the one only 1 in 10 beats. Method: Monte Carlo simulation with bootstrapped shocks.',
+    explanation = $t('Your plan run 2,000 times with realistic ups and downs. Low and High are 1-in-10 outcomes.');
+    method = $t(
+      'In each run every later month is pushed up or down by as much as one of your next {0} differs from their average ({1}). “Low” is the result that only 1 run in 10 falls below, “High” the one only 1 in 10 beats. Method: Monte Carlo simulation with bootstrapped shocks.',
       sampleText,
       money(range.average),
     );
   }
+  // the plain table explains its colours with a legend instead of a sentence
+  const intro =
+    type === 'plan'
+      ? h(
+          'div',
+          { class: 'legend static', style: 'margin-bottom:10px' },
+          h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Below zero')),
+          h('span', null, h('i', { style: 'background:var(--warn)' }), $t('Under cushion')),
+        )
+      : h('p', { class: 'small muted', style: 'margin-bottom:10px' }, explanation, ' ', method ? info(method) : null);
 
   const download = () => {
     if (isRange) {
@@ -411,14 +424,14 @@ V.forecast = () => {
     $t('Where your money is heading. Pick another way of looking ahead in the menu.'),
     [
       type !== 'plan' ? btn($t('Show in the month planner'), showInPlanner, '', 'calendar') : null,
-      btn($t('Download for Excel (CSV)'), download, '', 'download'),
+      btn($t('Export CSV'), download, '', 'download'),
     ],
     card(
       null,
       null,
       null,
       controls.length ? h('div', { class: 'acts', style: 'margin-bottom:10px' }, controls) : null,
-      h('p', { class: 'small muted', style: 'margin-bottom:10px', text: explanation }),
+      intro,
       isScenario
         ? h(
             'div',

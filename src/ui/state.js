@@ -22,6 +22,8 @@ export const UI = {
   afford: { amount: 0, month: null },
   /** The "Check against reality" card was closed for this visit. Not saved: it is back after a reload. */
   hideCheck: false,
+  /** Overview: every insight is shown, not only the three most urgent. */
+  insightsAll: false,
   /** Groups of the month planner that are folded away (Income, Bills, …). */
   closedGroups: new Set(),
   /** Purchase log: months the person folded or opened by hand ({ 'YYYY-MM': true when folded }). Past months start folded. */

@@ -31,6 +31,16 @@ function tripFit(t) {
   const newTight = projection.months.filter((m, i) => m.status === 'tight' && base.months[i].status === 'ok');
   return { newNeg, newTight, tone: newNeg.length ? 'bad' : newTight.length ? 'warn' : 'good' };
 }
+/** Tone of the "Over / Unplanned" tile. Nothing left to plan is neutral, not a warning. */
+function budgetLeftTone(tone, leftToPlan) {
+  if (tone === 'over') {
+    return 'bad';
+  }
+  if (Math.abs(leftToPlan) < 0.005) {
+    return '';
+  }
+  return tone === 'warn' ? 'warn' : 'good';
+}
 export const budgetTone = (used, budget) => (used > budget ? 'over' : used >= budget * 0.9 ? 'warn' : 'good');
 const tripWhen = t => {
   const a = D.parse(t.from);
@@ -39,8 +49,27 @@ const tripWhen = t => {
     ? M.label(M.parse(t.month), true)
     : b === null || b === a
       ? D.label(a, { weekday: 'short', year: 'numeric' })
-      : `${D.label(a)} to ${D.label(b, { year: 'numeric' })} · ${plural(b - a + 1, 'day')}`;
+      : $t('{0} to {1} · {2}', D.label(a), D.label(b, { year: 'numeric' }), plural(b - a + 1, 'day'));
 };
+/** The month a trip pushes furthest below zero, and by how much. */
+function shortfallOf(negativeMonths) {
+  const worst = negativeMonths.reduce((low, m) => (m.close < low.close ? m : low));
+  return { k: worst.k, amount: -worst.close };
+}
+/** "Dec ends 12,01 € short", plus one way to make it fit: trim the biggest cost by that much. */
+function shortfallText(shortfall, monthCount, items) {
+  const amount = money(shortfall.amount);
+  const monthName = M.label(shortfall.k, true);
+  const text =
+    monthCount > 1
+      ? $t('{0} ends {1} short ({2} below zero).', monthName, amount, plural(monthCount, 'month'))
+      : $t('{0} ends {1} short.', monthName, amount);
+  const biggest = items.reduce((big, item) => (!big || item.amount > big.amount ? item : big), null);
+  if (!biggest || biggest.amount < shortfall.amount) {
+    return text;
+  }
+  return text + ' ' + $t('Trim “{0}” by {1} to fit.', biggest.name || $t('Cost'), money(Math.ceil(shortfall.amount)));
+}
 /** Everything a trip card or list row needs, worked out once. */
 function tripInfo(t) {
   const plan = Store.plan;
@@ -73,7 +102,7 @@ function tripInfo(t) {
         : $t('The earliest your plan can pay for this is {0}.', M.label(k, true));
     if (k !== null) {
       act = [
-        $t('Plan it for ') + M.label(k),
+        $t('Plan it for {0}', M.label(k)),
         () =>
           Actions.patch(
             'trips',
@@ -88,25 +117,24 @@ function tripInfo(t) {
     const touched = [...by.keys()].filter(inPlan).map(monthAt);
     const worst = touched.length ? touched.reduce((a, b) => (b.close < a.close ? b : a)) : null;
     const already = !fit.newNeg.length && !!worst && worst.status === 'neg';
-    tone = fit.newNeg.length
-      ? 'bad'
-      : already || fit.tone === 'warn' || (worst && worst.status === 'tight')
-        ? 'warn'
-        : 'good';
-    label = fit.newNeg.length
-      ? $t('too expensive')
-      : already
-        ? $t('month already short')
-        : tone === 'warn'
-          ? $t('tight')
-          : $t('fits');
-    text = fit.newNeg.length
-      ? $t(
-          'Pushes {0} below zero, first {1} (ends at {2}).',
-          plural(fit.newNeg.length, 'month'),
-          M.label(fit.newNeg[0].k, true),
-          money(fit.newNeg[0].close),
-        )
+    const shortfall = fit.newNeg.length ? shortfallOf(fit.newNeg) : null;
+    if (shortfall) {
+      // a few euros short on a big trip is a warning with a fix, not a verdict
+      tone = shortfall.amount < total * 0.05 ? 'warn' : 'bad';
+    } else if (already || fit.tone === 'warn' || (worst && worst.status === 'tight')) {
+      tone = 'warn';
+    } else {
+      tone = 'good';
+    }
+    if (shortfall) {
+      label = $t('doesn’t fit');
+    } else if (already) {
+      label = $t('month already short');
+    } else {
+      label = tone === 'warn' ? $t('tight') : $t('fits');
+    }
+    text = shortfall
+      ? shortfallText(shortfall, fit.newNeg.length, t.items)
       : already
         ? $t(
             '{0} is already short without this. With it, the month ends at {1}.',
@@ -163,9 +191,9 @@ V.trips = () => {
                 t.on && I.inPlan(k)
                   ? (m =>
                       m.status === 'neg'
-                        ? chip($t('ends at ') + money(m.close), 'bad')
+                        ? chip($t('ends at {0}', money(m.close)), 'bad')
                         : m.status === 'tight'
-                          ? chip($t('ends at ') + money(m.close), 'warn')
+                          ? chip($t('ends at {0}', money(m.close)), 'warn')
                           : chip($t('fits'), 'good'))(monthAt(k))
                   : null,
               ],
@@ -217,9 +245,9 @@ V.trips = () => {
         tile($t('Budget'), t.budget ? money(t.budget) : '–'),
         t.budget
           ? tile(
-              I.total > t.budget ? $t('Over') : $t('Left to plan'),
+              I.total > t.budget ? $t('Over') : $t('Unplanned'),
               money(Math.abs(t.budget - I.total)),
-              bt === 'over' ? 'bad' : bt === 'warn' ? 'warn' : 'good',
+              budgetLeftTone(bt, t.budget - I.total),
             )
           : tile($t('Paid in'), plural(I.by.size, 'month')),
       ),
@@ -233,7 +261,7 @@ V.trips = () => {
       keep(t.id + ':t', $t('Costs and notes'), details(t, I)),
     );
   });
-  // "Does it fit?" sorts by how well it fits, best first: fits, tight, already short, too expensive, ideas, switched off
+  // "Does it fit?" sorts by how well it fits, best first: fits, tight, already short, doesn't fit, ideas, switched off
   const FIT_ORDER = { good: 0, warn: 1, bad: 2, acc: 3, '': 4 };
   const table = () =>
     dataTable({
@@ -277,9 +305,7 @@ V.trips = () => {
     });
   return page(
     $t('Trips and events'),
-    $t(
-      'Trips, concerts, days out, and places you would like to go one day. Each one tells you whether your plan can pay for it.',
-    ),
+    $t('Trips and events, and whether they fit your plan.'),
     [
       segc(
         [

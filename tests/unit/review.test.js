@@ -41,6 +41,16 @@ test('money left over is reported as something that went well', () => {
   assert.equal(review.watch.length, 0);
 });
 
+test('keeping a sliver of income is not praised', () => {
+  // 1000 in, 990 out: 10 kept is 1% of income and under the 50 cushion
+  const { review } = reviewOf({ items: [{ id: 'tv000001', name: 'TV', amount: 290, month: '2026-11' }] });
+  assert.equal(review.leftOver, 10);
+  assert.equal(
+    review.good.some(entry => entry.id === 'leftOver'),
+    false,
+  );
+});
+
 test('a budget counts as kept only once the month is over', () => {
   const { plan, projection } = reviewOf({
     items: [{ id: 'spend001', name: 'Supermarket', amount: 200, budget: 'food0001', month: '2026-11' }],

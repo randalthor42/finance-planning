@@ -79,7 +79,10 @@ export function reviewPeriod(plan, projection, months, today = null) {
 
   /** What went well. Each item: an id the view knows how to phrase, and the numbers for it. */
   const good = [];
-  if (leftOver > 0) {
+  // Keeping a sliver (under 5% of income and under the cushion) is not worth a green tick.
+  const leftOverShare = moneyIn ? leftOver / moneyIn : 0;
+  const cushion = plan.settings.cushion;
+  if (leftOver > 0 && (leftOverShare >= 0.05 || (cushion > 0 && leftOver >= cushion))) {
     good.push({ id: 'leftOver', amount: leftOver, share: moneyIn ? leftOver / moneyIn : 0 });
   }
   if (saved > 0) {

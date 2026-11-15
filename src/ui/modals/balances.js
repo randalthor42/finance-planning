@@ -1,5 +1,5 @@
 /**
- * @file "What I have today": compare the planner with real balances and record the difference.
+ * @file "Update balances": compare the planner with real balances and record the difference.
  */
 import { D, M, Period } from '../../core/dates.js';
 import { fmtNum, money, signed } from '../../core/format.js';
@@ -16,7 +16,7 @@ import { spendable } from './account.js';
 import { curK, monthAt } from '../state.js';
 
 /**
- * "What I have today". One window: what is in each account, which lines of this month are already paid,
+ * "Update balances". One window: what is in each account, which lines of this month are already paid,
  * and how much you still expect to spend from each budget. The month is then worked out from that.
  */
 export function balancesModal() {
@@ -35,8 +35,15 @@ export function balancesModal() {
   const budgets = inside
     ? m.entries.filter(e => e.budget && e.budget.reserve && !e.paid && !e.budget.closed && e.budget.left > 0)
     : [];
-  // a line whose day has passed is probably paid already, so it starts ticked; a budget nobody logged against starts at a guess from the days left
-  const done = new Set(lines.filter(e => e.date !== null && e.date <= today).map(e => e.key));
+  // Nothing starts ticked: a line whose day has passed only gets an "overdue" chip, so opening and saving changes nothing.
+  // A budget nobody logged against starts at a guess from the days left.
+  const done = new Set();
+  /** Save stays disabled until something is entered or ticked: a save without changes must not move the month. */
+  let changed = false;
+  const markChanged = () => {
+    changed = true;
+    saveBtn.disabled = false;
+  };
   const left = {};
   budgets.forEach(e => {
     left[e.id] =
@@ -57,9 +64,8 @@ export function balancesModal() {
         (settings.payDay && settings.payFor === 'same'
           ? ' ' +
             $t(
-              'If the salary you are living on right now is the one from {0}, open Settings, This plan, and set “A salary pays for” to “The month after it arrives”. {1} then starts on that payday and today is inside it.',
+              'Living on the {0} salary? In Settings, set “Salary covers” to “The following month”.',
               D.label(Period.start(settings, m.k - 1)),
-              M.label(m.k),
             )
           : '')
       : $t(
@@ -99,14 +105,8 @@ export function balancesModal() {
             Math.abs(gap) < 0.005
               ? $t('They agree.')
               : gap < 0
-                ? $t(
-                    '{0} is not explained. It will count as spending that is not in the plan. If something above is already paid, tick it first.',
-                    money(-gap),
-                  )
-                : $t(
-                    'That is {0} more than expected. It will count as money that is not in the plan. If a line above is not really paid yet, untick it first.',
-                    money(gap),
-                  ),
+                ? $t('{0} unexplained → saved as unplanned spending.', money(-gap))
+                : $t('{0} more than expected → saved as unplanned income.', money(gap)),
         }),
         h(
           'div',
@@ -121,13 +121,13 @@ export function balancesModal() {
   const body = h(
     'div',
     { class: 'form' },
-    h('div', { class: 'form-sec', style: 'border:0;padding:0', text: $t('1. What you really have') }),
+    h('div', { class: 'form-sec', style: 'border:0;padding:0', text: $t('Balances') }),
     accounts.length
       ? accounts.map(a =>
           h(
             'label',
             { class: 'fld half' },
-            h('span', { class: 'fld-l', text: a.type === 'credit' ? $t('{0} (still available)', a.name) : a.name }),
+            h('span', { class: 'fld-l', text: a.type === 'credit' ? $t('{0}: available credit', a.name) : a.name }),
             moneyInp({
               value: a.type === 'credit' ? Math.max(0, a.limit - a.owed) : a.balance,
               blank: true,
@@ -139,6 +139,7 @@ export function balancesModal() {
                 } else {
                   a.balance = n || 0;
                 }
+                markChanged();
                 sum();
               },
             }),
@@ -155,6 +156,7 @@ export function balancesModal() {
             ph: inside ? fmtNum(m.now) : '',
             onInput: n => {
               v.direct = n;
+              markChanged();
               sum();
             },
           }),
@@ -165,12 +167,9 @@ export function balancesModal() {
           h(
             'div',
             { class: 'form-sec' },
-            $t('2. Already paid? '),
-            info(
-              $t(
-                'The lines of this month that are not ticked yet. Tick the ones that are already paid, so they are not counted twice. Lines whose day has passed start ticked.',
-              ),
-            ),
+            $t('Already paid?'),
+            ' ',
+            info($t('Tick what has already left your account.')),
           ),
           h(
             'div',
@@ -185,6 +184,7 @@ export function balancesModal() {
                   checked: done.has(e.key),
                   onchange: () => {
                     c.checked ? done.add(e.key) : done.delete(e.key);
+                    markChanged();
                     sum();
                   },
                 });
@@ -201,6 +201,9 @@ export function balancesModal() {
                       text: [e.date !== null ? D.label(e.date) : '', e.sub].filter(Boolean).join(' · '),
                     }),
                   ),
+                  e.date !== null && e.date < today
+                    ? h('span', { class: 'chip warn', text: $t('overdue, paid?') })
+                    : null,
                   h('span', { class: 'amt', text: signed(e.amount) }),
                 );
               }),
@@ -213,12 +216,9 @@ export function balancesModal() {
           h(
             'div',
             { class: 'form-sec' },
-            lines.length ? $t('3. Left in your budgets ') : $t('2. Left in your budgets '),
-            info(
-              $t(
-                'How much of each budget you still expect to spend this month. The amounts are what is left after the spends you logged, or a guess from the days left. What is gone is logged as one spend.',
-              ),
-            ),
+            $t('Still to spend from budgets'),
+            ' ',
+            info($t('What you still expect to spend. The rest is logged as one spend.')),
           ),
           budgets.map(e =>
             h(
@@ -230,6 +230,7 @@ export function balancesModal() {
                 blank: true,
                 onInput: n => {
                   left[e.id] = n || 0;
+                  markChanged();
                   sum();
                 },
               }),
@@ -244,30 +245,28 @@ export function balancesModal() {
     out,
   );
   sum();
+  const saveBtn = btn(
+    $t('Save'),
+    () => {
+      if (changed && known()) {
+        Actions.reconcile(
+          accounts,
+          inside ? m.key : null,
+          have() || 0,
+          lines.filter(e => done.has(e.key)),
+          left,
+        );
+      }
+      d.close();
+    },
+    'primary',
+  );
+  saveBtn.disabled = true;
   const d = modal({
-    title: $t('What I have today'),
+    title: $t('Update balances'),
     wide: inside && lines.length + budgets.length > 0,
     body,
-    foot: [
-      h('span', { class: 'sp' }),
-      btn($t('Cancel'), () => d.close(), 'ghost'),
-      btn(
-        $t('Save'),
-        () => {
-          if (known()) {
-            Actions.reconcile(
-              accounts,
-              inside ? m.key : null,
-              have() || 0,
-              lines.filter(e => done.has(e.key)),
-              left,
-            );
-          }
-          d.close();
-        },
-        'primary',
-      ),
-    ],
+    foot: [h('span', { class: 'sp' }), btn($t('Cancel'), () => d.close(), 'ghost'), saveBtn],
   });
   const f = body.querySelector('input');
   if (f) {

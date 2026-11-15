@@ -10,11 +10,18 @@ import { App } from '../app.js';
 import { h, sv } from '../dom.js';
 import { UI, curK } from '../state.js';
 
-function niceScale(lo, hi) {
-  const raw = (hi - lo || 1) / 4;
+/**
+ * Axis range and ticks. The range is at least `minRange` wide and steps are whole amounts, so an empty plan
+ * reads "0 · 25 · 50 · 75 · 100" instead of "1 1 1 0 0".
+ */
+function niceScale(lo, hi, minRange = 100) {
+  if (hi - lo < minRange) {
+    hi = lo + minRange;
+  }
+  const raw = (hi - lo) / 4;
   const mag = Math.pow(10, Math.floor(Math.log10(raw)));
   const nrm = raw / mag;
-  const step = (nrm <= 1 ? 1 : nrm <= 2 ? 2 : nrm <= 2.5 ? 2.5 : nrm <= 5 ? 5 : 10) * mag;
+  const step = Math.max(1, (nrm <= 1 ? 1 : nrm <= 2 ? 2 : nrm <= 2.5 ? 2.5 : nrm <= 5 ? 5 : 10) * mag);
   const a = Math.floor(lo / step) * step;
   const b = Math.ceil(hi / step) * step;
   const t = [];
@@ -47,7 +54,7 @@ export function cashChart() {
       vals.push(m.debt);
     }
   });
-  const [lo, hi, ticks] = niceScale(Math.min(...vals), Math.max(...vals, 1));
+  const [lo, hi, ticks] = niceScale(Math.min(...vals), Math.max(...vals, 1), Math.max(100, settings.cushion));
   const x = i => pl + (W - pl - pr) * (n > 1 ? i / (n - 1) : 0.5);
   const y = v => pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo));
   const pts = f => months.map((m, i) => x(i).toFixed(1) + ',' + y(f(m)).toFixed(1)).join(' ');
@@ -89,7 +96,11 @@ export function cashChart() {
         'stroke-dasharray': '4 4',
         'stroke-width': 1,
       }),
-      sv('text', { x: W - pr, y: y(settings.cushion) - 5, 'text-anchor': 'end' }, $t('cushion')),
+      sv(
+        'text',
+        { x: W - pr, y: y(settings.cushion) - 5, 'text-anchor': 'end' },
+        $t('Cushion {0}', compact(settings.cushion)),
+      ),
     );
   }
   const step = Math.ceil(n / 7);

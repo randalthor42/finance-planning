@@ -3,6 +3,7 @@
  */
 import { APP } from '../config.js';
 import { D } from '../core/dates.js';
+import { FMT } from '../core/format.js';
 import { $t } from '../core/i18n.js';
 import { clamp, isObj } from '../core/util.js';
 import { CAT_NAME } from '../models/categories.js';
@@ -108,16 +109,26 @@ export const IO = {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   },
-  /** Rows of cells as CSV text (opens in Excel). Cells that could be read as a formula are neutralised. */
+  /**
+   * Rows of cells as CSV text (opens in Excel). Cells that could be read as a formula are neutralised.
+   * With the European number format, Excel (es-ES, ro-RO, de-DE…) expects ";" between cells and "," in decimals,
+   * so those are used. The text starts with a byte order mark so accents survive.
+   */
   csvText(rows) {
+    const european = FMT.dec === ',';
+    const separator = european ? ';' : ',';
     const quote = value => {
       let text = String(value);
       if (/^[=+\-@\t\r]/.test(text) && isNaN(+text)) {
         text = "'" + text;
       }
-      return /[",\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+      if (european && /^-?\d+\.\d+$/.test(text)) {
+        text = text.replace('.', ',');
+      }
+      const needsQuotes = text.includes('"') || text.includes(separator) || text.includes('\n');
+      return needsQuotes ? '"' + text.replace(/"/g, '""') + '"' : text;
     };
-    return rows.map(row => row.map(quote).join(',')).join('\n');
+    return '﻿' + rows.map(row => row.map(quote).join(separator)).join('\n');
   },
   csv(proj) {
     const rows = [
