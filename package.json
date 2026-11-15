@@ -13,7 +13,8 @@
     "test:ui": "vite build --mode test --outDir dist-test && node tests/regression/ui.test.cjs && node tests/regression/smoke.cjs",
     "lint": "eslint src tests/unit",
     "format": "prettier --write src tests/unit",
-    "check": "npm run lint && npm test && npm run build"
+    "check": "npm run lint && npm test && npm run build",
+    "perf": "vite build --mode test --outDir dist-test && node scripts/perf.cjs real 4"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

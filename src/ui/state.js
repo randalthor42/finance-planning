@@ -26,10 +26,14 @@ export const UI = {
   insightsAll: false,
   /** Groups of the month planner that are folded away (Income, Bills, …). */
   closedGroups: new Set(),
+  /** Month planner: budgets whose logged spends are unfolded ('YYYY-MM:billId'). Folded by default. */
+  openBudgets: new Set(),
   /** Purchase log: months the person folded or opened by hand ({ 'YYYY-MM': true when folded }). Past months start folded. */
   itemMonths: {},
   /** Sort of each data table by its id: { column, descending }. */
   sort: {},
+  /** Rows shown in each paged data table by its id (dataTable pageSize), for this visit. */
+  tableLimit: {},
   /** Audit page: show the ledger of the current month or of the whole plan. */
   auditScope: 'month',
   /** Forecast page: which way of looking ahead, and its two inputs. */

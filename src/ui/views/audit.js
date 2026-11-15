@@ -160,6 +160,7 @@ V.audit = () => {
         id: 'audit-' + scope,
         rows,
         maxHeight: '70vh',
+        pageSize: 200,
         rowProps: row => ({ class: row.paid ? '' : 'dim' }),
         columns: [
           // one month needs no Month column

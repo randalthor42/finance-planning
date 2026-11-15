@@ -201,7 +201,8 @@ V.months = () => {
         );
     const description = [
       showDate && e.date !== null ? D.label(e.date, { weekday: 'short' }) : '',
-      b ? budgetText(b) : e.fix ? $t('What you really had, compared with the paid lines') : e.sub,
+      // inside its budget a spend does not repeat "From “budget”"
+      b ? budgetText(b) : e.fix ? $t('What you really had, compared with the paid lines') : sub && e.of ? '' : e.sub,
       !b && !e.of && (e.group === 'inc' || e.group === 'bill' || e.group === 'item') ? CAT_NAME[e.cat] : '',
     ]
       .filter(Boolean)
@@ -256,6 +257,40 @@ V.months = () => {
   const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
   const shown = m.entries.filter(e => !quiet(e));
   const body = [];
+  /**
+   * The spends logged against one budget, folded by default ("20 spends · 515,59 €"): a month of groceries would
+   * otherwise fill the page. Opening one is remembered for the visit.
+   */
+  const budgetSpends = (budgetEntry, spends) => {
+    if (!spends.length) {
+      return null;
+    }
+    const foldKey = m.key + ':' + budgetEntry.id;
+    const isOpen = UI.openBudgets.has(foldKey);
+    const total = spends.reduce((a, x) => a + x.amount, 0);
+    const toggle = h(
+      'button',
+      {
+        type: 'button',
+        class: 'spendfold' + (isOpen ? ' open' : ''),
+        'aria-expanded': String(isOpen),
+        onclick: () => {
+          if (isOpen) {
+            UI.openBudgets.delete(foldKey);
+          } else {
+            UI.openBudgets.add(foldKey);
+          }
+          App.render();
+        },
+      },
+      icon('right'),
+      h('span', { text: $t('{0} · {1}', plural(spends.length, 'spend'), money(-total)) }),
+    );
+    if (!isOpen) {
+      return toggle;
+    }
+    return [toggle, [...spends].sort((a, c) => (a.date || 0) - (c.date || 0)).map(x => line(x, true, true))];
+  };
   if (!days) {
     for (const [g, label] of [
       ['inc', $t('Income')],
@@ -310,10 +345,10 @@ V.months = () => {
           tops.map(e => [
             line(e, true),
             e.budget
-              ? es
-                  .filter(x => x.of === e.id)
-                  .sort((a, c) => (a.date || 0) - (c.date || 0))
-                  .map(x => line(x, true, true))
+              ? budgetSpends(
+                  e,
+                  es.filter(x => x.of === e.id),
+                )
               : null,
           ]),
         ),

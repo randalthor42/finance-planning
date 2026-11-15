@@ -14,6 +14,7 @@
  *     foot: [...cells],                   // optional totals row
  *   })
  * Cells are right-aligned (amounts) except the first column; `align: 'left'` on a column left-aligns a text column.
+ * `pageSize: 200` draws only the first 200 rows (after sorting) with a "Show {0} more" button: long ledgers stay fast.
  */
 import { $t } from '../../core/i18n.js';
 import { App } from '../app.js';
@@ -50,9 +51,12 @@ export function sortRows(rows, columns, sort) {
     .map(item => item.row);
 }
 
-export function dataTable({ id, rows, columns, rowProps, foot, maxHeight }) {
+export function dataTable({ id, rows, columns, rowProps, foot, maxHeight, pageSize }) {
   const sort = UI.sort[id] || null;
-  const sortedRows = sortRows(rows, columns, sort);
+  const allRows = sortRows(rows, columns, sort);
+  const limit = pageSize ? UI.tableLimit[id] || pageSize : Infinity;
+  const sortedRows = allRows.length > limit ? allRows.slice(0, limit) : allRows;
+  const hidden = allRows.length - sortedRows.length;
 
   const alignClass = column => (column.align === 'left' ? 'tl' : null);
   const headerCell = (column, position) => {
@@ -111,5 +115,21 @@ export function dataTable({ id, rows, columns, rowProps, foot, maxHeight }) {
       h('tbody', null, sortedRows.map(bodyRow)),
       foot ? h('tfoot', null, h('tr', null, foot)) : null,
     ),
+    hidden > 0
+      ? h(
+          'div',
+          { class: 'tblmore' },
+          h('button', {
+            type: 'button',
+            class: 'btn sm ghost',
+            text: $t('Show {0} more', Math.min(hidden, pageSize)),
+            onclick: () => {
+              UI.tableLimit[id] = limit + pageSize;
+              App.render();
+            },
+          }),
+          h('span', { class: 'muted small', text: $t('{0} of {1} rows', sortedRows.length, allRows.length) }),
+        )
+      : null,
   );
 }

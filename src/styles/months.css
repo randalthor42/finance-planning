@@ -180,3 +180,29 @@
     0 0 0 1px var(--accent),
     inset 0 -2px 0 var(--bad);
 }
+/* "20 spends · 515,59 €" under a budget: opens the logged spends */
+.spendfold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 2px 6px 6px 30px;
+  cursor: pointer;
+  text-align: left;
+}
+.spendfold:hover {
+  color: var(--text);
+}
+.spendfold .ico {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.15s;
+}
+.spendfold.open .ico {
+  transform: rotate(90deg);
+}

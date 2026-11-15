@@ -27,6 +27,7 @@ Runway is an offline personal finance planner. It is plain JavaScript (ES module
 | `npm run check` | Lint, unit tests and build. Run this before every commit. |
 | `npm run test:regression` | Larger engine regression suite. Needs the private fixtures (see Tests). |
 | `npm run test:ui` | Browser regression suite (Playwright; first run `npx playwright install chromium`). |
+| `npm run perf` | Performance probe on the test build: real plan, CPU slowed 4x; fails when a budget is exceeded (needs Playwright's Chromium). |
 
 ## Architecture in one picture
 

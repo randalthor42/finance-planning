@@ -18,6 +18,7 @@ import { card, cardDel, chip, empty, page, row, segc } from '../components/layou
 import { h } from '../dom.js';
 import { wishModal } from '../modals/wish.js';
 import { curK } from '../state.js';
+import { memo } from '../memo.js';
 import { V } from './registry.js';
 
 V.wishes = () => {
@@ -27,8 +28,11 @@ V.wishes = () => {
   const cush = plan.settings.cushion;
   const HOW = { cash: $t('Pay in one go'), save: $t('Save up first'), finance: $t('Finance it') };
   const currentMonth = curK();
+  // what-if projections, cached until the plan changes (folding, switching Cards/List or sorting reuses them)
   const run = (others, Wd, how, month) =>
-    project({ ...plan, wishes: [...others, { ...Wd, how, month, flex: false, on: true }] }, { today: Store.day });
+    memo(`wish-run:${Wd.id}:${how}:${month}`, [], () =>
+      project({ ...plan, wishes: [...others, { ...Wd, how, month, flex: false, on: true }] }, { today: Store.day }),
+    );
   const verdict = (R, base) => {
     const neg = R.months.filter((m, i) => m.status === 'neg' && base.months[i].status !== 'neg').length;
     const tight = R.months.filter((m, i) => m.status === 'tight' && base.months[i].status === 'ok').length;
@@ -41,7 +45,7 @@ V.wishes = () => {
   const status = Wd => (Wd.flex ? $t('no date yet') : Wd.on ? $t('in my plan') : $t('just an idea'));
   const cards = plan.wishes.map(Wd => {
     const others = plan.wishes.filter(x => x.id !== Wd.id);
-    const base = project({ ...plan, wishes: others }, { today: Store.day });
+    const base = memo('wish-base:' + Wd.id, [], () => project({ ...plan, wishes: others }, { today: Store.day }));
     const at = (R, k) => R.months[clamp(k - summary.s0, 0, summary.n - 1)];
     const sw = h('input', {
       type: 'checkbox',
@@ -52,15 +56,18 @@ V.wishes = () => {
     let rows;
     if (Wd.flex) {
       // No date yet: find the earliest month each way of paying works without breaking the plan.
-      const earliest = how => {
-        for (let k = how === 'save' ? currentMonth + 2 : currentMonth; k <= summary.endK; k++) {
-          const monthKey = M.key(k);
-          if (verdict(run(others, Wd, how, monthKey), base)[0] === 'good') {
-            return k;
+      // one projection per candidate month: only the answer is cached, not every candidate
+      const earliest = how =>
+        memo(`wish-earliest:${Wd.id}:${how}`, [currentMonth], () => {
+          for (let k = how === 'save' ? currentMonth + 2 : currentMonth; k <= summary.endK; k++) {
+            const candidate = { ...Wd, how, month: M.key(k), flex: false, on: true };
+            const projectionWith = project({ ...plan, wishes: [...others, candidate] }, { today: Store.day });
+            if (verdict(projectionWith, base)[0] === 'good') {
+              return k;
+            }
           }
-        }
-        return null;
-      };
+          return null;
+        });
       rows = ['cash', 'save', 'finance'].map(how => {
         const k = how === 'cash' ? firstFit(base, cush, Wd.price, currentMonth) : earliest(how);
         const c = k === null ? null : wishCalc({ ...Wd, month: M.key(k) }, summary.s0, how);
