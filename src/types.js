@@ -35,6 +35,7 @@
  * @property {object[]} goals Savings goals: { id, name, on, target, saved, monthly, from, to, by, rate, release }. `on: false` keeps the pot but adds nothing.
  * @property {object[]} wishes Wishlist.
  * @property {Object<string, Object<string, number>>} overrides One month only amounts: { "YYYY-MM": { entryKey: amount } }
+ * @property {Object<string, Object<string, boolean>>} reserveOver One month only choice for a budget: { "YYYY-MM": { entryKey: true (reserved) | false (tracked) } }
  * @property {Object<string, Object<string, (true|{d: string, a: ?string, v: number, t: ?string})>>} paid Ticks: { "YYYY-MM": { entryKey: tick } }
  * @property {Object<string, {d: ?string, a: number}>} fixes One correction per month from real money.
  * @property {Object<string, string>} notes

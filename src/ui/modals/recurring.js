@@ -25,11 +25,11 @@ const KIND_HINT = {
     'An upper limit you spend from during the month, like groceries, cigarettes or a haircut. You do not have to log anything: logging purchases is optional and only shows what is left.',
   ),
 };
-const RESERVE_MODES = [
+export const RESERVE_MODES = [
   ['reserved', $t('Reserved')],
   ['tracked', $t('Tracked')],
 ];
-const RESERVE_HINT = {
+export const RESERVE_HINT = {
   reserved: $t(
     'The whole amount is set aside every month, and what you log uses it up. Best for money you will certainly spend, like groceries.',
   ),

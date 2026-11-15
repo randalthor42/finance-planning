@@ -216,7 +216,11 @@ V.months = () => {
               b.left < 0 ? 'bad' : 'acc',
             )
           : null,
-        e.skipped ? chip($t('skipped this month'), 'warn') : e.over ? chip($t('changed this month'), 'acc') : null,
+        e.skipped
+          ? chip($t('skipped this month'), 'warn')
+          : e.over || (b && b.reserveOver)
+            ? chip($t('changed this month'), 'acc')
+            : null,
       ],
       extra: b
         ? h('div', { class: 'mini' }, bar(b.planned ? (b.spent / b.planned) * 100 : 100, b.left < 0 ? 'over' : 'good'))
@@ -233,11 +237,14 @@ V.months = () => {
               'plus',
             )
           : null,
-        amt(b ? -(b.closed ? b.spent : Math.max(b.planned, b.spent)) : e.onCard ? -e.charged : e.amount),
+        amt(b ? -(b.closed || !b.reserve ? b.spent : Math.max(b.planned, b.spent)) : e.onCard ? -e.charged : e.amount),
       ],
       onclick: !adj && e.key !== 'whatif' ? () => entryModal(e, m) : null,
     });
   };
+  // a tracked budget with nothing logged holds nothing back, so it stays out of the lines, the counts and "tick all"
+  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
+  const shown = m.entries.filter(e => !quiet(e));
   const body = [];
   if (!days) {
     for (const [g, label] of [
@@ -250,7 +257,7 @@ V.months = () => {
       ['goal', $t('Savings')],
       ['adjust', $t('Plan against reality')],
     ]) {
-      const es = m.entries.filter(e => e.group === g);
+      const es = shown.filter(e => e.group === g);
       if (!es.length) {
         continue;
       }
@@ -303,9 +310,9 @@ V.months = () => {
     }
   } else {
     const inR = e => e.date !== null && e.date >= m.start && e.date <= m.end;
-    const und = m.entries.filter(e => !inR(e));
+    const und = shown.filter(e => !inR(e));
     const by = {};
-    m.entries.filter(inR).forEach(e => (by[e.date] = by[e.date] || []).push(e));
+    shown.filter(inR).forEach(e => (by[e.date] = by[e.date] || []).push(e));
     let bal = r2(m.open + und.reduce((a, e) => a + e.amount, 0));
     let low = Infinity;
     let lowDay = null;
@@ -368,7 +375,7 @@ V.months = () => {
     );
   }
   let actualVal = null;
-  const tickable = m.entries.filter(e => e.group !== 'adjust' && !e.of && e.key !== 'whatif').map(e => e.key);
+  const tickable = shown.filter(e => e.group !== 'adjust' && !e.of && e.key !== 'whatif').map(e => e.key);
   const allPaid = tickable.length > 0 && m.entries.filter(e => tickable.includes(e.key)).every(e => e.paid);
   const inMonth = Store.day >= m.start && Store.day <= m.end;
   const budgets = m.entries.filter(e => e.budget);
@@ -425,10 +432,12 @@ V.months = () => {
     }
     if (trackedBudgets.length) {
       parts.push(
-        $t(
-          'Tracked budgets set nothing aside: the {0} you spent on them comes out of your free money.',
-          money(trackedSpent),
-        ),
+        trackedSpent
+          ? $t(
+              'Tracked budgets set nothing aside: the {0} you spent on them comes out of your free money.',
+              money(trackedSpent),
+            )
+          : $t('Tracked budgets set nothing aside and count only once you log a spend on them.'),
       );
     }
     return parts.join(' ');
@@ -584,12 +593,14 @@ V.months = () => {
                     'div',
                     { class: 'top' },
                     h('span', null, e.label, e.budget.reserve ? null : [' ', chip($t('tracked'), 'acc')]),
-                    h('span', { text: budgetText(e.budget) }),
+                    h('span', { text: quiet(e) ? $t('nothing logged, not counted') : budgetText(e.budget) }),
                   ),
-                  bar(
-                    e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
-                    e.budget.left < 0 ? 'over' : 'good',
-                  ),
+                  quiet(e)
+                    ? null
+                    : bar(
+                        e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
+                        e.budget.left < 0 ? 'over' : 'good',
+                      ),
                   h(
                     'div',
                     { class: 'acts', style: 'margin-top:6px' },

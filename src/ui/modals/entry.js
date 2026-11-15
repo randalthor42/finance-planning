@@ -12,7 +12,7 @@ import { formModal } from '../components/form.js';
 import { find, mainAcc } from '../helpers.js';
 import { goalModal } from './goal.js';
 import { itemModal } from './item.js';
-import { recModal } from './recurring.js';
+import { RESERVE_HINT, RESERVE_MODES, recModal } from './recurring.js';
 import { tripModal } from './trip.js';
 import { wishModal } from './wish.js';
 
@@ -39,6 +39,7 @@ export function entryModal(e, m) {
       values: {
         amount: e.budget ? e.budget.planned : e.onCard ? e.charged : Math.abs(e.amount),
         paid: !e.paid ? 'no' : e.paidFrom || mainAcc() || 'yes',
+        reserveMode: e.budget && !e.budget.reserve ? 'tracked' : 'reserved',
       },
       fields: [
         ...(e.budget
@@ -70,14 +71,43 @@ export function entryModal(e, m) {
               : $t('Amount for this month only'),
           hint: $t('Usual amount: {0}. Enter 0 to skip it this month. Other months do not change.', money(e.base)),
         },
+        ...(e.budget
+          ? [
+              {
+                k: 'reserveMode',
+                type: 'seg',
+                label: $t('Money this month'),
+                options: RESERVE_MODES,
+                hint: v => RESERVE_HINT[v.reserveMode],
+              },
+            ]
+          : []),
       ],
       extra: [
-        ...(e.over ? [[$t('Back to usual'), () => set(null)]] : []),
+        ...(e.over || (e.budget && e.budget.reserveOver)
+          ? [
+              [
+                $t('Back to usual'),
+                () => {
+                  Store.tag = 'e' + uid();
+                  set(null);
+                  if (e.budget) {
+                    Actions.setReserve(m.key, e.key, null, e.label);
+                  }
+                  Store.tag = null;
+                },
+              ],
+            ]
+          : []),
         [$t('Edit for every month'), () => recModal(list, e.id)],
       ],
       onSave: v => {
         Store.tag = 'e' + uid();
         set(v.amount === null ? null : v.amount);
+        if (e.budget) {
+          const want = v.reserveMode === 'reserved';
+          Actions.setReserve(m.key, e.key, want === (find('bills', e.id).reserve !== false) ? null : want, e.label);
+        }
         const was = !e.paid ? 'no' : e.paidFrom || mainAcc() || 'yes';
         if (!e.budget && v.paid !== was) {
           const amount = (e.amount > 0 ? 1 : -1) * (v.amount === null ? e.base : v.amount);

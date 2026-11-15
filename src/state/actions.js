@@ -305,6 +305,24 @@ export const Actions = {
         : $t('“{0}” set to {1} for {2} only', name, money(value), M.label(M.parse(monthKey))),
     );
   },
+  /** Reserve (true) or only track (false) one budget in one month. null goes back to the budget's usual choice. */
+  setReserve(monthKey, entryKey, value, name) {
+    return Store.commit(
+      p => {
+        const o = p.reserveOver[monthKey] || (p.reserveOver[monthKey] = {});
+        if (value === null) {
+          delete o[entryKey];
+        } else {
+          o[entryKey] = value;
+        }
+      },
+      value === null
+        ? $t('“{0}” back to its usual choice in {1}', name, M.label(M.parse(monthKey)))
+        : value
+          ? $t('“{0}” is set aside in {1} only', name, M.label(M.parse(monthKey)))
+          : $t('“{0}” is only tracked in {1}', name, M.label(M.parse(monthKey))),
+    );
+  },
   setNote(monthKey, text) {
     return Store.commit(
       p => {

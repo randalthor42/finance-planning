@@ -65,10 +65,16 @@ V.recurring = () => {
     const rows = plan[list];
     const inc = list === 'incomes';
     let total = 0;
+    let tracked = 0;
     const els = rows.map(r => {
       const st = recStatus(r, currentMonth);
       const live = !st || (!st[2] && !st[3]);
-      if (live) {
+      // a tracked budget sets nothing aside, so its limit is not part of the regular bills
+      const notCounted = !inc && r.budget && r.reserve === false;
+      if (notCounted) {
+        tracked++;
+      }
+      if (live && !notCounted) {
         total += r.amount / r.every;
       }
       return row({
@@ -103,7 +109,11 @@ V.recurring = () => {
           'div',
           { class: 'amt' },
           money(r.amount),
-          r.every > 1 ? h('div', { class: 'd', text: $t('≈ {0} a month', money(r.amount / r.every)) }) : null,
+          notCounted
+            ? h('div', { class: 'd', text: $t('a limit, not counted') })
+            : r.every > 1
+              ? h('div', { class: 'd', text: $t('≈ {0} a month', money(r.amount / r.every)) })
+              : null,
         ),
         onclick: () => recModal(list, r.id),
         del: () => remove(list, r.id),
@@ -127,6 +137,7 @@ V.recurring = () => {
               'div',
               { class: 'row', style: 'font-weight:650' },
               h('span', { class: 'grow', text: inc ? $t('Total income per month') : $t('Total bills per month') }),
+              tracked ? h('span', { class: 'muted', text: $t('without tracked budgets') }) : null,
               h('span', { class: 'amt', text: money(total) }),
             ),
           ]

@@ -122,3 +122,24 @@ test('a budget reserves its money unless it says otherwise', () => {
   const plan = normPlan({ bills: [{ id: 'food0001', name: 'Food', amount: 300, budget: true }] });
   assert.equal(plan.bills[0].reserve, true);
 });
+
+test('one month can reserve a tracked budget, or only track a reserved one', () => {
+  const bills = [
+    { id: 'rent0001', name: 'Rent', amount: 400 },
+    { id: 'food0001', name: 'Food', amount: 300, budget: true, reserve: false },
+  ];
+  const reservedOnce = firstMonthOf({ bills, reserveOver: { '2026-11': { 'bill:food0001': true } } });
+  assert.equal(reservedOnce.month.close, 350);
+  assert.equal(reservedOnce.month.entries.find(entry => entry.budget).budget.reserveOver, true);
+  assert.equal(reservedOnce.projection.months[1].entries.find(entry => entry.budget).budget.reserve, false);
+  const trackedOnce = firstMonthOf({
+    bills: [bills[0], { ...bills[1], reserve: true }],
+    reserveOver: { '2026-11': { 'bill:food0001': false } },
+  });
+  assert.equal(trackedOnce.month.close, 650);
+});
+
+test('the one month choice survives validation and drops anything that is not a yes or no', () => {
+  const plan = normPlan({ reserveOver: { '2026-11': { 'bill:food0001': true, 'bill:other001': 'x' } }, bills: [] });
+  assert.deepEqual(plan.reserveOver, { '2026-11': { 'bill:food0001': true } });
+});

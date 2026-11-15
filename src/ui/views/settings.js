@@ -169,6 +169,7 @@ V.settings = () => {
         h(
           'div',
           { class: 'rows' },
+          kv($t('Search'), $t('Ctrl + K')),
           kv($t('Undo'), $t('Ctrl + Z')),
           kv($t('Redo'), $t('Ctrl + Y  or  Ctrl + Shift + Z')),
           kv($t('Reorder a row'), $t('drag the dots, or focus them and use ↑ ↓')),

@@ -300,6 +300,8 @@ export function normPlan(p) {
       isObj(v) && num(v.a, -1e9, 1e9, undefined) !== undefined ? { d: day(v.d), a: num(v.a, -1e9, 1e9, 0) } : undefined,
     ),
     overrides: monthMap(p.overrides, v => keyMap(v, a => num(a, 0, 1e9, undefined))),
+    // a budget can be reserved or tracked for one month only, whatever its usual choice is
+    reserveOver: monthMap(p.reserveOver, v => keyMap(v, a => (typeof a === 'boolean' ? a : undefined))),
     // a tick: true (old data), or { d: day it was ticked, a: account it was paid from, v: amount moved, t: card it paid off }
     paid: monthMap(p.paid, v =>
       keyMap(v, a =>
