@@ -38,7 +38,8 @@ V.tools = () => {
   const tab = TOOLS.some(x => x[0] === UI.ttab) ? UI.ttab : 'hours';
   const inc =
     monthAt(currentMonth)
-      .entries.filter(e => e.group === 'inc')
+      // regular income only: refunds and one-off money in are not what an hour of work earns
+      .entries.filter(e => e.key.startsWith('inc:'))
       .reduce((a, e) => a + e.amount, 0) || summary.avgInc;
   const rate = inc / plan.settings.hoursMonth;
   const hrs = v => {

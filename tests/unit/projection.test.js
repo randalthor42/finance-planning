@@ -143,3 +143,44 @@ test('the one month choice survives validation and drops anything that is not a 
   const plan = normPlan({ reserveOver: { '2026-11': { 'bill:food0001': true, 'bill:other001': 'x' } }, bills: [] });
   assert.deepEqual(plan.reserveOver, { '2026-11': { 'bill:food0001': true } });
 });
+
+test('a tracked budget counts nothing this month but its whole limit in a month that has not started', () => {
+  const plan = normPlan({
+    settings: { startMonth: '2026-11', opening: 100, horizon: 3 },
+    incomes: [{ id: 'salary01', name: 'Salary', amount: 1000 }],
+    bills: [{ id: 'fun00001', name: 'Fun', amount: 100, budget: true, reserve: false }],
+  });
+  const withLimit = project(plan, { today: TODAY }).months;
+  const without = project(normPlan({ ...plan, bills: [] }), { today: TODAY }).months;
+  assert.equal(withLimit[0].close, without[0].close, 'current month: nothing set aside');
+  assert.equal(withLimit[1].net, without[1].net - 100, 'next month: the limit is counted');
+  assert.equal(withLimit[1].entries.find(entry => entry.budget).budget.countsLimit, true);
+});
+
+test('a refund lowers money out and is not income; the month end does not change', () => {
+  const { month: plain } = firstMonthOf();
+  const { month } = firstMonthOf({
+    items: [
+      { id: 'shoes001', name: 'Shoes', amount: 50, month: '2026-11' },
+      { id: 'refund01', name: 'Shoes back', amount: 50, kind: 'in', cat: 'refund', month: '2026-11' },
+    ],
+  });
+  assert.equal(month.inc, plain.inc);
+  assert.equal(month.out, plain.out - 50);
+  assert.equal(month.close, plain.close + 50);
+});
+
+test('money drawn from a credit card is financing: not income, but it is in the balance', () => {
+  const { month: plain } = firstMonthOf();
+  const { month } = firstMonthOf({
+    accounts: [{ id: 'card0001', name: 'Card', type: 'credit', limit: 1000, owed: 0 }],
+    items: [
+      { id: 'shoes001', name: 'Shoes', amount: 50, month: '2026-11' },
+      { id: 'draw0001', name: 'From card', amount: 120, kind: 'in', month: '2026-11', cover: 'card0001' },
+    ],
+  });
+  assert.equal(month.inc, plain.inc);
+  assert.equal(month.moved, 120);
+  assert.equal(month.entries.find(entry => entry.id === 'draw0001').group, 'transfer');
+  assert.equal(month.close, plain.close + 120);
+});

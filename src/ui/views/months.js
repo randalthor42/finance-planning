@@ -254,7 +254,7 @@ V.months = () => {
     });
   };
   // a tracked budget with nothing logged holds nothing back, so it stays out of the lines, the counts and "tick all"
-  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
+  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent && !e.budget.countsLimit;
   const shown = m.entries.filter(e => !quiet(e));
   const body = [];
   /**
@@ -300,6 +300,7 @@ V.months = () => {
       ['loan', $t('Loans')],
       ['wish', $t('Wishlist')],
       ['goal', $t('Savings')],
+      ['transfer', $t('Borrowed or from savings')],
       ['adjust', $t('Balance correction')],
     ]) {
       const es = shown.filter(e => e.group === g);
@@ -450,8 +451,9 @@ V.months = () => {
   note.value = plan.notes[m.key] || '';
   note.addEventListener('change', () => Actions.setNote(m.key, note.value));
   // only reserved budgets hold money back; tracked ones just show what you spent against a limit
-  const reservedBudgets = budgets.filter(e => e.budget.reserve);
-  const trackedBudgets = budgets.filter(e => !e.budget.reserve);
+  // in a month that has not started a limit counts in full, like a reserved budget
+  const reservedBudgets = budgets.filter(e => e.budget.reserve || e.budget.countsLimit);
+  const trackedBudgets = budgets.filter(e => !e.budget.reserve && !e.budget.countsLimit);
   // the same "budgets left" as the sum above and the Overview (a closed budget holds nothing back)
   const budgetLeft = position.budgetsLeft;
   const trackedSpent = trackedBudgets.reduce((a, e) => a + e.budget.spent, 0);
@@ -531,6 +533,7 @@ V.months = () => {
         money(m.out),
         money(r2(m.open + m.inc - m.out)),
       ),
+      m.moved ? $t('Borrowed or taken from savings: {0}.', signed(m.moved)) : null,
       correction,
     ].filter(Boolean);
   };
@@ -585,6 +588,7 @@ V.months = () => {
               fl($t('Start of month'), money(m.open)),
               fl($t('Money in'), signed(m.inc), 'good'),
               fl($t('Money out'), money(-m.out)),
+              m.moved ? fl($t('Borrowed or from savings'), signed(m.moved)) : null,
               fl(endLabel, money(m.close), endCls),
             ),
         // the equation shows the current month's sum; other months keep the sentence version

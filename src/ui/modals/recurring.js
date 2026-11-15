@@ -27,7 +27,7 @@ export const RESERVE_MODES = [
 ];
 export const RESERVE_HINT = {
   reserved: $t('Held back in full every month.'),
-  tracked: $t('Nothing held back; only logged spends count.'),
+  tracked: $t('Nothing held back this month; logged spends count. Future months count the limit.'),
 };
 /** One sentence on how the chosen bill type is planned (each sentence translated whole). */
 function kindPreview(v) {

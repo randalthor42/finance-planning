@@ -38,6 +38,7 @@ const groupName = group =>
     loan: $t('Loans'),
     wish: $t('Wishlist'),
     goal: $t('Savings'),
+    transfer: $t('Borrowed or from savings'),
     adjust: $t('Balance correction'),
   })[group] || group;
 

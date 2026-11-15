@@ -22,6 +22,17 @@ export function recurs(r, k, anchor) {
   return (((k - a) % r.every) + r.every) % r.every === 0;
 }
 
+/** The group of a one-off: a spend from a budget, money drawn from a card or savings (financing), money in, or a cost. */
+function itemGroup(item) {
+  if (item.budget) {
+    return 'bill';
+  }
+  if (item.cover) {
+    return 'transfer';
+  }
+  return item.kind === 'in' ? 'inc' : 'item';
+}
+
 /**
  * THE projection. plan -> { months[], loans{}, goals{}, summary }.
  * Every number shown anywhere in the app is read from this result.
@@ -173,9 +184,21 @@ export function project(plan, opts) {
           const ro = plan.reserveOver[m.key];
           const reserveOver = !!ro && has(ro, entryKey);
           const reserve = reserveOver ? ro[entryKey] : r.reserve !== false;
-          e.budget = { planned: amount, spent: sp, left: r2(amount - sp), closed: over2, done, reserve, reserveOver };
-          // a tracked budget sets nothing aside: only the spends you logged take money, and they take it from what is free
-          e.amount = !reserve || over2 ? 0 : -Math.max(0, amount - sp);
+          // A limit ("tracked" budget) sets nothing aside in the current month: only the spends you logged take money.
+          // A month that has not started has no spends yet, so there the limit itself is counted: otherwise every future
+          // month would look richer by the whole limit (v0.9 audit, B1).
+          const countsLimit = !reserve && m.start > today;
+          e.budget = {
+            planned: amount,
+            spent: sp,
+            left: r2(amount - sp),
+            closed: over2,
+            done,
+            reserve,
+            reserveOver,
+            countsLimit,
+          };
+          e.amount = over2 || (!reserve && !countsLimit) ? 0 : -Math.max(0, amount - sp);
           e.date = null;
         }
         put(m.k, e);
@@ -189,7 +212,7 @@ export function project(plan, opts) {
   for (const item of plan.items) {
     put(M.parse(item.month), {
       key: 'item:' + item.id,
-      group: item.budget ? 'bill' : item.kind === 'in' ? 'inc' : 'item',
+      group: itemGroup(item),
       id: item.id,
       label: item.name,
       cat: item.cat,
@@ -410,10 +433,18 @@ export function project(plan, opts) {
     m.open = bal;
     let inc = 0;
     let out = 0;
+    let moved = 0;
     let paid = 0;
-    const g = { inc: 0, bill: 0, item: 0, trip: 0, loan: 0, goal: 0, wish: 0 };
+    const g = { inc: 0, bill: 0, item: 0, trip: 0, loan: 0, goal: 0, wish: 0, transfer: 0 };
     for (const e of m.entries) {
-      if (e.amount > 0) {
+      // Money in and money out describe what you earn and spend (v0.9 audit, B2):
+      // - money drawn from a credit card or savings is financing, not income: it moves cash but is neither;
+      // - a refund is spending that came back, so it lowers money out instead of raising money in.
+      if (e.group === 'transfer') {
+        moved += e.amount;
+      } else if (e.amount > 0 && e.cat === 'refund') {
+        out -= e.amount;
+      } else if (e.amount > 0) {
         inc += e.amount;
       } else {
         out -= e.amount;
@@ -426,6 +457,7 @@ export function project(plan, opts) {
     m.inc = r2(inc);
     m.out = r2(out);
     m.net = r2(inc - out);
+    m.moved = r2(moved);
     m.paidOut = r2(paid);
     m.g = g;
     // What you should have right now = what the month started with, plus every line that is already paid (ticked, or a logged spend).
@@ -459,7 +491,7 @@ export function project(plan, opts) {
     m.now = r2(now);
     m.todo = r2(todo);
     m.fix = fix ? { d: D.parse(fix.d), a: fix.a } : null;
-    bal = r2(bal + m.net + (fix ? fix.a : 0));
+    bal = r2(bal + m.net + m.moved + (fix ? fix.a : 0));
     m.close = bal;
     m.cardDebt = r2(Object.values(cards).reduce((s, c) => s + c.series[i], 0));
     m.credit = r2(Object.values(cards).reduce((s, c) => s + Math.max(0, c.limit - c.series[i]), 0));

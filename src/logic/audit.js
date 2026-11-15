@@ -86,9 +86,14 @@ export function auditChecks(plan, projection) {
     if (!same(month.now + month.todo, month.close)) {
       rules.nowPlusToCome.push(month.key);
     }
-    const planned = month.entries.filter(entry => entry.group !== 'adjust');
-    const moneyIn = planned.reduce((sum, entry) => sum + Math.max(0, entry.amount), 0);
-    const moneyOut = planned.reduce((sum, entry) => sum + Math.max(0, -entry.amount), 0);
+    // corrections and financing (card draws, savings) are neither; a refund is spending that came back
+    const planned = month.entries.filter(entry => entry.group !== 'adjust' && entry.group !== 'transfer');
+    const isRefund = entry => entry.amount > 0 && entry.cat === 'refund';
+    const moneyIn = planned.reduce((sum, entry) => sum + (isRefund(entry) ? 0 : Math.max(0, entry.amount)), 0);
+    const moneyOut = planned.reduce(
+      (sum, entry) => sum + Math.max(0, -entry.amount) - (isRefund(entry) ? entry.amount : 0),
+      0,
+    );
     if (!same(moneyIn, month.inc) || !same(moneyOut, month.out)) {
       rules.inAndOut.push(month.key);
     }
