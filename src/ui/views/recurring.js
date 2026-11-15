@@ -57,6 +57,16 @@ export function recStatus(r, k) {
   }
   return null;
 }
+/**
+ * "Copy" opens the editor on a copy instead of saving one silently: an unnoticed copy is counted twice in every month.
+ * Nothing is added until the copy is saved.
+ */
+function copyInEditor(list, record) {
+  const fields = { ...record, name: $t('{0} copy', record.name).slice(0, 80) };
+  delete fields.id; // the editor gives the copy its own id
+  recModal(list, null, fields);
+}
+
 V.recurring = () => {
   const plan = Store.plan;
   const currentMonth = curK();
@@ -119,7 +129,7 @@ V.recurring = () => {
         del: () => remove(list, r.id),
         menu: [
           [$t('Amount changes from…'), () => changeModal(list, r.id)],
-          [$t('Copy'), () => Actions.duplicate(list, r.id)],
+          [$t('Copy'), () => copyInEditor(list, r)],
         ],
       });
     });

@@ -136,3 +136,47 @@
   max-width: 62ch;
   opacity: 0.85;
 }
+/* ‹ This month › stays together on one line, also on phones */
+.monthnav {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.monthnav .btn {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+}
+.monthnav .btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* a 2 px status line under every month so the strip can be scanned */
+.strip button.ok {
+  box-shadow: inset 0 -2px 0 var(--good);
+}
+.strip button.tight {
+  box-shadow: inset 0 -2px 0 var(--warn);
+}
+.strip button.neg {
+  box-shadow: inset 0 -2px 0 var(--bad);
+}
+/* the selected month keeps its accent ring as well as its status line */
+.strip button.sel.ok {
+  box-shadow:
+    0 0 0 1px var(--accent),
+    inset 0 -2px 0 var(--good);
+}
+.strip button.sel.tight {
+  box-shadow:
+    0 0 0 1px var(--accent),
+    inset 0 -2px 0 var(--warn);
+}
+.strip button.sel.neg {
+  box-shadow:
+    0 0 0 1px var(--accent),
+    inset 0 -2px 0 var(--bad);
+}

@@ -29,6 +29,20 @@ import { UI, monthAt, nowK, rangeLabel, selK } from '../state.js';
 import { FTABS, forecastCloses, forecastInputs } from './forecast.js';
 import { V } from './registry.js';
 
+/** ‹ This month › as one control. At the first or last month the arrow is disabled, not hidden, so nothing shifts. */
+function monthNav(k, summary) {
+  const previous = ibtn($t('Previous month'), () => App.go('months', { month: k - 1 }), '', 'left');
+  const next = ibtn($t('Next month'), () => App.go('months', { month: k + 1 }), '', 'right');
+  previous.disabled = k <= summary.s0;
+  next.disabled = k >= summary.s0 + summary.n - 1;
+  return h(
+    'div',
+    { class: 'monthnav', role: 'group', 'aria-label': $t('Month') },
+    previous,
+    btn($t('This month'), () => App.go('months', { month: null }), ''),
+    next,
+  );
+}
 V.months = () => {
   const plan = Store.plan;
   const settings = plan.settings;
@@ -501,14 +515,7 @@ V.months = () => {
           App.render();
         },
       ),
-      ibtn($t('Previous month'), () => App.go('months', { month: k - 1 }), k <= summary.s0 ? 'hide' : '', 'left'),
-      btn($t('This month'), () => App.go('months', { month: null }), ''),
-      ibtn(
-        $t('Next month'),
-        () => App.go('months', { month: k + 1 }),
-        k >= summary.s0 + summary.n - 1 ? 'hide' : '',
-        'right',
-      ),
+      monthNav(k, summary),
     ],
     overlayBanner,
     strip,

@@ -64,7 +64,9 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | What the Review page counts as "went well" / "to watch" | `src/logic/review.js` (rules) and `src/ui/views/review.js` (wording) |
 | The consistency rules and the full ledger (Audit page) | `src/logic/audit.js` |
 | What the global search looks through | `src/logic/search.js` (add one entry to `SOURCES`) |
-| A table that sorts by clicking its column titles | `src/ui/components/dataTable.js` |
+| A table that sorts by clicking its column titles | `src/ui/components/dataTable.js` (`align: 'left'` for text columns) |
+| Caching expensive derived data per plan revision | `src/ui/memo.js` |
+| Bills or incomes entered twice | `duplicateLines` in `src/logic/audit.js` |
 | What a plan may contain, defaults, migrations | `src/models/plan.js` |
 | What happens when the user changes something | `src/state/actions.js` |
 | Undo, redo, saving, the activity log | `src/state/store.js` |
@@ -174,7 +176,10 @@ Add a method to `Actions` (`src/state/actions.js`) that calls `Store.commit(plan
 
 **Performance**
 
-- The app re-renders the current view after each change. On a real plan this takes about 7 ms and `project()` about 0.5 ms, so do not add partial-update machinery unless a measurement shows a problem.
+- The app re-renders the current view after each change. Measured in the v0.9 audit (Chromium, real plan): `project()` about 2 ms, Overview about 27 ms, Month planner about 53 ms, one tick about 26 ms; with the CPU slowed 4x (a mid-range phone) the tick and the planner are 120-140 ms. Budget: under 50 ms on 4x. Measure before adding partial-update machinery.
+- Expensive derived data (what-if projections, forecasts) goes through `memo(key, inputs, fn)` in `ui/memo.js`: it is reused until `Store.rev` changes (every recalculation) or its inputs change. Never cache anything that reads the DOM or the date outside `Store`.
+- `Store.save()` is coalesced: it writes once at the end of the current task. `Store.flush()` writes at once; `main.js` calls it on `visibilitychange` and `pagehide`. Code that needs the data on disk immediately (before a reload) must call `Store.flush()`.
+- The undo stack keeps at most 60 steps and about 1M characters of snapshots. The purchase log keeps at most 5,000 entries per plan: `Store.commit` warns at 4,500 and refuses a change that would go past the limit.
 - Any listener added to `document` or `window` inside a function must be removed when the thing closes (see `popover.js`, `sortable.js`). Timers must be cleared (see `autosaver` in `modal.js`).
 - Do not keep references to DOM nodes of a previous render.
 

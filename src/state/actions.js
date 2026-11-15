@@ -59,7 +59,7 @@ export const Actions = {
         p => {
           const c = JSON.parse(JSON.stringify(x));
           c.id = uid();
-          c.name = (x.name + $t(' copy')).slice(0, 80);
+          c.name = $t('{0} copy', x.name).slice(0, 80);
           if (c.items) {
             c.items.forEach(i => {
               i.id = uid();
