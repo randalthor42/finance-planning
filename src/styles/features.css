@@ -815,3 +815,54 @@ tr.dim td {
     grid-column: 1 / -1;
   }
 }
+
+/* Overview (v0.9 S6): the month sum beside the insights, the chart across, the rest in flowing columns */
+.ov-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+.ov-grid > div {
+  grid-column: span 12;
+  min-width: 0;
+}
+.ov-grid > div > .card {
+  height: 100%;
+}
+@media (min-width: 1280px) {
+  .ov-grid > .ov-hero {
+    grid-column: span 8;
+  }
+  .ov-grid > .ov-side {
+    grid-column: span 4;
+  }
+}
+.ov-flow {
+  columns: 3 340px;
+  column-gap: 16px;
+}
+.ov-flow > .card {
+  break-inside: avoid;
+  margin-bottom: 16px;
+}
+@media (max-width: 860px) {
+  /* KPIs as one swipeable row instead of 2 + 1 + 1 */
+  .ov-kpis {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .ov-kpis .kpi {
+    flex: 0 0 72%;
+    scroll-snap-align: start;
+  }
+}
+/* in the narrow insights column the button goes under its sentence */
+.ov-side .note {
+  flex-wrap: wrap;
+}
+.ov-side .note > .btn {
+  margin-left: 26px;
+}

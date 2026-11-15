@@ -531,6 +531,24 @@ function debtText(debtNow, debtFreeK) {
   }
   return $t('Debt-free in {0}', M.label(debtFreeK));
 }
+/**
+ * "Safe to spend now": the room above the cushion that no month from now on goes below, so spending it today
+ * breaks nothing later (the same rule as "Can I afford this?" and the Wishlist).
+ */
+function safeToSpend(projection, fromK, cushion) {
+  const later = projection.months.filter(month => month.k >= fromK);
+  const lowest = later.reduce((low, month) => (month.close < low.close ? month : low), later[0]);
+  const amount = Math.max(0, Math.floor(lowest.close - cushion));
+  if (amount > 0) {
+    return { amount, text: cushion ? $t('keeps every month above your cushion') : $t('keeps every month above zero') };
+  }
+  return {
+    amount,
+    text: cushion
+      ? $t('{0} already goes under your cushion', M.label(lowest.k, true))
+      : $t('{0} already goes below zero', M.label(lowest.k, true)),
+  };
+}
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -549,23 +567,21 @@ V.overview = () => {
     );
   const debtFreeK = debtFreeFrom(projection, currentMonth);
   const lowCls = summary.min < 0 ? 'bad' : summary.min < plan.settings.cushion ? 'warn' : '';
+  // four numbers, the most useful first: what you can spend safely, where this month ends, the low point, debt
+  const safe = safeToSpend(projection, currentMonth, plan.settings.cushion);
   const kpis = h(
     'div',
-    { class: 'kpis' },
+    { class: 'kpis ov-kpis' },
+    kpi($t('Safe to spend now'), money(safe.amount), safe.text, safe.amount > 0 ? 'good' : 'bad'),
     kpi(monthEndLabel(plan.settings), money(m.close), $t('{0} this month', signed(m.net)), m.close < 0 ? 'bad' : ''),
     kpi($t('Lowest point'), money(summary.min), M.label(summary.minK, true), lowCls),
-    kpi(
-      $t('Surplus, monthly average'),
-      signed(summary.avgNet),
-      $t('as planned, {0}', plural(summary.n, 'month')),
-      summary.avgNet < 0 ? 'bad' : '',
-    ),
-    m.debt > 0 || summary.debtFree !== null ? kpi($t('Debt'), money(m.debt), debtText(m.debt, debtFreeK)) : null,
-    kpi(
-      $t('Net worth, {0}', M.label(last.k)),
-      money(last.worth),
-      $t('{0} at end of {1}', money(m.worth), M.label(currentMonth)),
-    ),
+    m.debt > 0 || summary.debtFree !== null
+      ? kpi($t('Debt'), money(m.debt), debtText(m.debt, debtFreeK))
+      : kpi(
+          $t('Net worth, {0}', M.label(last.k)),
+          money(last.worth),
+          $t('{0} at end of {1}', money(m.worth), M.label(currentMonth)),
+        ),
   );
   const noData = !plan.bills.length && !plan.items.length && !plan.trips.length;
   const starter = noData
@@ -679,116 +695,113 @@ V.overview = () => {
     null,
     kpis,
     starter,
-    nowCard(),
-    card($t('Where your money is heading'), null, null, cashChart()),
     h(
       'div',
-      { class: 'cols' },
-      h(
-        'div',
-        { class: 'stack' },
-        insightsCard(),
-        card(
-          $t('Monthly surplus'),
-          $t('In minus out.'),
-          null,
-          netBars(),
-          h(
-            'div',
-            { class: 'legend static' },
-            h('span', null, h('i', { style: 'background:var(--s-cash)' }), $t('Surplus')),
-            h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Spent more than came in')),
-          ),
-        ),
-        monthReviewCard(),
-        affordCard(),
+      { class: 'ov-grid' },
+      h('div', { class: 'ov-hero' }, nowCard()),
+      h('div', { class: 'ov-side' }, insightsCard()),
+      h('div', { class: 'ov-wide' }, card($t('Where your money is heading'), null, null, cashChart())),
+    ),
+    // the rest flows into as many columns as fit, most used first
+    h(
+      'div',
+      { class: 'ov-flow' },
+      card(
+        $t('Next to pay'),
+        $t('Unpaid costs, soonest first.'),
+        null,
+        due.length
+          ? h(
+              'div',
+              { class: 'rows' },
+              due.slice(0, 7).map(([k, e]) =>
+                row({
+                  title: e.label,
+                  desc:
+                    (e.date === null ? $t('No fixed day · {0}', M.label(k)) : D.label(e.date, { weekday: 'short' })) +
+                    (e.sub ? ' · ' + e.sub : ''),
+                  right: amt(e.amount),
+                  onclick: () => App.go('months', { month: k }),
+                }),
+              ),
+              due.length > 7
+                ? h('div', {
+                    class: 'muted small',
+                    style: 'padding:8px 6px 0',
+                    text: $t('and {0} more', due.length - 7),
+                  })
+                : null,
+            )
+          : h('p', { class: 'muted', text: $t('Nothing left to pay right now.') }),
       ),
-      h(
-        'div',
-        { class: 'stack' },
-        budgets.length
-          ? card(
-              $t('Budgets this month'),
-              $t('What you have spent from each budget so far.'),
-              btn($t('Log a spend'), () => logSpend(budgets[0].id, m), 'sm', 'plus'),
-              budgets.map(e =>
-                prow(
-                  e.label,
-                  budgetText(e.budget),
-                  e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
-                  e.budget.left < 0 ? 'over' : 'good',
-                  () => logSpend(e.id, m),
+      budgets.length
+        ? card(
+            $t('Budgets this month'),
+            $t('What you have spent from each budget so far.'),
+            btn($t('Log a spend'), () => logSpend(budgets[0].id, m), 'sm', 'plus'),
+            budgets.map(e =>
+              prow(
+                e.label,
+                budgetText(e.budget),
+                e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
+                e.budget.left < 0 ? 'over' : 'good',
+                () => logSpend(e.id, m),
+              ),
+            ),
+          )
+        : null,
+      card(
+        $t('Monthly surplus'),
+        $t('In minus out.'),
+        null,
+        netBars(),
+        h(
+          'div',
+          { class: 'legend static' },
+          h('span', null, h('i', { style: 'background:var(--s-cash)' }), $t('Surplus')),
+          h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Spent more than came in')),
+        ),
+      ),
+      monthReviewCard(),
+      affordCard(),
+      soon.length
+        ? card(
+            $t('Coming up later'),
+            $t('One-offs and trip costs in the following months.'),
+            null,
+            h(
+              'div',
+              { class: 'rows' },
+              soon.slice(0, 6).map(([k, e]) =>
+                row({
+                  title: e.label,
+                  desc: M.label(k) + (e.sub ? ' · ' + e.sub : ''),
+                  right: amt(e.amount),
+                  onclick: () => App.go('months', { month: k }),
+                }),
+              ),
+            ),
+          )
+        : null,
+      goalsLoans.length ? card($t('Savings and debt'), $t('Progress as of this month.'), null, goalsLoans) : null,
+      catRows.length
+        ? card(
+            $t('Where it goes'),
+            $t('Next 12 months, by category.'),
+            null,
+            catRows
+              .slice(0, 8)
+              .map(([c, v]) =>
+                h(
+                  'div',
+                  { class: 'catrow' },
+                  h('span', { text: CAT_NAME[c] || $t('Other') }),
+                  h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(2, (v / catMax) * 100)}%` })),
+                  h('span', { class: 'num muted', text: $t('{0} · {1}%', money(v), Math.round((v / catTotal) * 100)) }),
                 ),
               ),
-            )
-          : null,
-        card(
-          $t('Next to pay'),
-          $t('Unpaid costs, soonest first.'),
-          null,
-          due.length
-            ? h(
-                'div',
-                { class: 'rows' },
-                due.slice(0, 7).map(([k, e]) =>
-                  row({
-                    title: e.label,
-                    desc:
-                      (e.date === null ? $t('No fixed day · {0}', M.label(k)) : D.label(e.date, { weekday: 'short' })) +
-                      (e.sub ? ' · ' + e.sub : ''),
-                    right: amt(e.amount),
-                    onclick: () => App.go('months', { month: k }),
-                  }),
-                ),
-                due.length > 7
-                  ? h('div', {
-                      class: 'muted small',
-                      style: 'padding:8px 6px 0',
-                      text: $t('and {0} more', due.length - 7),
-                    })
-                  : null,
-              )
-            : h('p', { class: 'muted', text: $t('Nothing left to pay right now.') }),
-        ),
-        soon.length
-          ? card(
-              $t('Coming up later'),
-              $t('One-offs and trip costs in the following months.'),
-              null,
-              h(
-                'div',
-                { class: 'rows' },
-                soon.slice(0, 6).map(([k, e]) =>
-                  row({
-                    title: e.label,
-                    desc: M.label(k) + (e.sub ? ' · ' + e.sub : ''),
-                    right: amt(e.amount),
-                    onclick: () => App.go('months', { month: k }),
-                  }),
-                ),
-              ),
-            )
-          : null,
-        goalsLoans.length ? card($t('Savings and debt'), $t('Progress as of this month.'), null, goalsLoans) : null,
-        catRows.length
-          ? card(
-              $t('Where it goes'),
-              $t('Next 12 months, by category.'),
-              null,
-              catRows
-                .slice(0, 8)
-                .map(([c, v]) =>
-                  h(
-                    'div',
-                    { class: 'catrow' },
-                    h('span', { text: CAT_NAME[c] || $t('Other') }),
-                    h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(2, (v / catMax) * 100)}%` })),
-                    h('span', { class: 'num muted', text: `${money(v)} · ${Math.round((v / catTotal) * 100)}%` }),
-                  ),
-                ),
-            )
-          : null,
-      ),
+          )
+        : null,
     ),
   );
 };
