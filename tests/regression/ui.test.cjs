@@ -147,7 +147,7 @@ const FILE=PAGE;
  await pg.locator('.card',{hasText:'Camera'}).locator('label.switch').click();ok(await pg.evaluate(()=>Math.abs(Store.proj.months.reduce((a,m)=>a+m.g.wish,0)+800)<0.001&&Store.plan.wishes[0].on),'switching a wish on takes its price out of the plan');
  await pg.locator('.card',{hasText:'Camera'}).locator('.row',{hasText:'Finance it'}).getByRole('button',{name:'Choose'}).click();ok(await pg.evaluate(()=>Store.plan.wishes[0].how==='finance'&&Store.proj.months.some(m=>m.g.wish<0&&m.debt>0)),'financing a wish adds instalments and debt');
  await pg.screenshot({path:'v3-wishlist.png',fullPage:true});
- await pg.locator('.nav button[title="Review"]').click();ok(await pg.locator('.kpi').count()===4,'month review');await pg.screenshot({path:'v3-review.png',fullPage:true});await pg.getByRole('button',{name:'Year',exact:true}).click();ok(await pg.locator('h1',{hasText:'Review of 20'}).count()===1,'year review');await pg.screenshot({path:'v3-review-year.png',fullPage:true});
+ await pg.locator('.nav button[title="Review"]').click();ok(await pg.locator('.kpi').count()===5,'month review');await pg.screenshot({path:'v3-review.png',fullPage:true});await pg.getByRole('button',{name:'Year',exact:true}).click();ok(await pg.locator('h1',{hasText:'Review of 20'}).count()===1,'year review');await pg.screenshot({path:'v3-review-year.png',fullPage:true});
  await pg.locator('.nav button[title="Loans"]').click();ok(await pg.locator('.card',{hasText:'Debt payoff planner'}).locator('tbody tr').count()===2,'payoff planner');await pg.screenshot({path:'v3-loans.png',fullPage:true});
  await pg.evaluate(()=>App.go('settings',{stab:'activity'}));ok(await pg.locator('.card',{hasText:'Activity'}).locator('.row').count()>=8&&await pg.locator('.nav .subitems button').count()===6,'activity log is its own settings section');await pg.screenshot({path:'v3-settings.png',fullPage:true});
  ok(await pg.evaluate(()=>typeof PlanStore==='function'&&Store instanceof PlanStore&&typeof Actions.save==='function'),'data layer is separate from the page');
@@ -171,7 +171,7 @@ const FILE=PAGE;
  await pg.evaluate(()=>App.go('months',{month:curK()+1}));const c0=await pg.evaluate(()=>({close:monthAt(curK()+1).close,debt:monthAt(curK()+1).cardDebt}));await pg.locator('.row.click',{hasText:'Internet'}).first().click();await pg.locator('dialog select').first().selectOption({label:'Yes, from Credit card'});await pg.locator('dialog').getByRole('button',{name:'Save'}).click();
  ok(await pg.evaluate(c0=>{const m=monthAt(curK()+1),e=m.entries.find(e=>e.label==='Internet');return e.onCard&&e.amount===0&&e.charged===35&&Math.abs(m.close-(c0.close+35))<0.01&&m.cardDebt===c0.debt+35},c0)&&await pg.locator('.row',{hasText:'Internet'}).locator('.chip',{hasText:'on Credit card'}).count()===1,'paid with the credit card: cash stays, card debt grows');
  await pg.evaluate(()=>App.go('months',{month:null}));
- await pg.locator('.nav button[title="Accounts"]').click();ok(await pg.locator('.kpi').count()===3&&await pg.locator('.srow').count()===3,'accounts page');await pg.screenshot({path:'v4-accounts.png',fullPage:true});
+ await pg.locator('.nav button[title="Accounts"]').click();ok(await pg.locator('.kpi').count()===3&&await pg.locator('.acard').count()===3,'accounts page');await pg.screenshot({path:'v4-accounts.png',fullPage:true});
  // validation
  await pg.locator('.nav button[title="Purchase log"]').click();await pg.getByRole('button',{name:'Add to the log'}).first().click();await pg.getByPlaceholder('Water, trousers, concert tickets…').fill('No amount');await pg.locator('dialog').getByRole('button',{name:'Save'}).click();
  ok(await pg.locator('dialog[open] .form-err',{hasText:'Enter an amount above zero'}).count()===1&&await pg.evaluate(()=>!Store.plan.items.some(i=>i.name==='No amount')),'a purchase without an amount is refused');await pg.screenshot({path:'v4-validation.png'});
@@ -235,7 +235,7 @@ const FILE=PAGE;
  await pg.evaluate(()=>{localStorage.clear()});await pg.reload();
  // ---- v5: languages, main account, date range, grouped menu
  await pg.getByText('Look around with a sample plan').click();
- ok(await pg.locator('.navh').count()===3&&await pg.locator('.nav .navi').count()===14,'menu is grouped');
+ ok(await pg.locator('.navh').count()===3&&await pg.locator('.nav .navi').count()===15,'menu is grouped');
  await pg.evaluate(()=>App.go('settings',{stab:'language'}));
  const [ld]=await Promise.all([pg.waitForEvent('download'),pg.locator('.row',{hasText:'English'}).getByRole('button',{name:'Export'}).click()]);await ld.saveAs(FIX+'lang-en.json');
  const en=JSON.parse(fs.readFileSync(FIX+'lang-en.json','utf8'));ok(en.kind==='language'&&Object.keys(en.strings).length>1000&&en.strings['Overview']==='Overview'&&en.strings['#month:other']==='months','English language file has every text: '+Object.keys(en.strings).length);
@@ -251,11 +251,11 @@ const FILE=PAGE;
  fs.writeFileSync(FIX+'lang-bad.json',JSON.stringify({app:'runway',kind:'language',code:'en',strings:{}}));await pg.evaluate(()=>App.go('settings',{stab:'language'}));
  const [lb]=await Promise.all([pg.waitForEvent('filechooser'),pg.getByRole('button',{name:'Import a language file'}).click()]);await lb.setFiles(FIX+'lang-bad.json');await pg.waitForTimeout(200);ok(await pg.locator('.toast.bad').count()>=1,'a file that claims to be English is refused');
  // credit card: enter the limit and what is still available; what is owed is worked out
- await pg.locator('.nav .navi[title="Accounts"]').click();await pg.locator('.srow',{hasText:'Credit card'}).click();const lim=pg.locator('dialog label.fld',{hasText:'Card limit'}).locator('input'),av=pg.locator('dialog label.fld',{hasText:'Still available'}).locator('input');
+ await pg.locator('.nav .navi[title="Accounts"]').click();await pg.locator('.acard',{hasText:'Credit card'}).getByRole('button',{name:'Edit'}).click();const lim=pg.locator('dialog label.fld',{hasText:'Card limit'}).locator('input'),av=pg.locator('dialog label.fld',{hasText:'Still available'}).locator('input');
  await lim.fill('');await lim.pressSequentially('1400');await av.fill('');await av.pressSequentially('127');ok(await pg.locator('dialog .preview',{hasText:'You owe €1,273'}).count()===1&&await pg.locator('dialog label.fld',{hasText:'Owed'}).count()===0,'what you owe is shown, not asked');await pg.screenshot({path:'v5-card.png'});
  await pg.locator('dialog').getByRole('button',{name:'Save'}).click();ok(await pg.evaluate(()=>{const c=Store.plan.accounts.find(a=>a.type==='credit');return c.limit===1400&&c.owed===1273}),'card saved as limit and available');
  // main account, and the last-day picker starting at the first day
- await pg.locator('.nav .navi[title="Accounts"]').click();await pg.locator('.srow',{hasText:'Wallet'}).click({button:'right'});await pg.locator('.mpop.menu button',{hasText:'Make it the main account'}).click();
+ await pg.locator('.nav .navi[title="Accounts"]').click();await pg.locator('.acard',{hasText:'Wallet'}).getByRole('button',{name:'Make it the main account'}).click();
  ok(await pg.evaluate(()=>Store.plan.accounts.find(a=>a.main).name==='Wallet'&&Store.plan.accounts.filter(a=>a.main).length===1),'main account can be changed');
  await pg.locator('.nav .navi[title="Income and bills"]').click();await pg.getByRole('button',{name:'Add a bill'}).first().click();ok(await pg.locator('dialog label.fld',{hasText:'Paid from'}).locator('select').evaluate(e=>e.selectedOptions[0].textContent)==='Wallet'&&await pg.locator('dialog label.fld',{hasText:'Paid off by a loan?'}).count()===0,'new bills use the main account; the loan question only shows for debts');await pg.keyboard.press('Escape');
  await pg.locator('.nav .navi[title="Trips and events"]').click();await pg.getByRole('button',{name:'Plan a trip'}).first().click();await pg.locator('dialog .fld',{hasText:'First day'}).locator('.mbtn').click();for(let i=0;i<4;i++)await pg.locator('.mpop-h button').last().click();await pg.locator('.dpop-g button').nth(22).click();

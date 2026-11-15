@@ -9,6 +9,7 @@ import { Store } from './state/store.js';
 import { App } from './ui/app.js';
 import { POP, closePop } from './ui/components/popover.js';
 import { toast } from './ui/components/toast.js';
+import { searchModal } from './ui/modals/search.js';
 import { $ } from './ui/dom.js';
 import './ui/views/index.js';
 import { expose } from './debug.js';
@@ -25,6 +26,13 @@ document.addEventListener('keydown', e => {
     return closePop();
   }
   const key = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && key === 'k') {
+    e.preventDefault();
+    if (!document.querySelector('dialog[open]')) {
+      searchModal();
+    }
+    return;
+  }
   if (
     (e.ctrlKey || e.metaKey) &&
     (key === 'z' || key === 'y') &&

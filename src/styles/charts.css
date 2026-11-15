@@ -125,3 +125,16 @@ details.more > summary {
     grid-column: 2;
   }
 }
+
+/* a legend that only explains colours (no toggles) */
+.legend.static {
+  margin-top: 8px;
+}
+.legend.static span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-right: 14px;
+}

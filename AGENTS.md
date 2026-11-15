@@ -59,6 +59,11 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | Loan schedule, payoff planner | `src/logic/loans.js` |
 | Trip costs across a payday | `src/logic/trips.js` |
 | "When can I afford it", budget trends | `src/logic/advice.js` |
+| Forecast scenarios (recent pace, costs run higher) | `src/logic/forecast.js` |
+| What the Review page counts as "went well" / "to watch" | `src/logic/review.js` (rules) and `src/ui/views/review.js` (wording) |
+| The consistency rules and the full ledger (Audit page) | `src/logic/audit.js` |
+| What the global search looks through | `src/logic/search.js` (add one entry to `SOURCES`) |
+| A table that sorts by clicking its column titles | `src/ui/components/dataTable.js` |
 | What a plan may contain, defaults, migrations | `src/models/plan.js` |
 | What happens when the user changes something | `src/state/actions.js` |
 | Undo, redo, saving, the activity log | `src/state/store.js` |
@@ -92,7 +97,7 @@ The UI never edits `Store.plan` directly and never calculates money itself.
   - `close` = `now + todo`. Ticking a line moves its amount from `todo` to `now`; **a tick must never change `close`.**
 - A **budget** ("up to" bill) is spent bit by bit. Logged spends are real lines; the budget line itself is only what is still reserved.
 - A **correction** (`plan.fixes[month]`) is the difference between real money and the paid lines on the day the user checked. It is one more paid line.
-- **Credit cards**: a purchase planned on a card costs no cash; it adds to what the card owes in that month. A bill with `payTo` pays the card down.
+- **Credit cards**: a purchase planned on a card costs no cash; it adds to what the card owes in that month. A bill with `payTo` pays the card down. `account.owed` is what is owed **today**; `projection.cards[id]` has, per month, `added` (still planned on the card), `paidOff` (still to be paid off) and `series` (owed at the end of the month). Any screen that shows a card must say which of these it shows.
 - **Trips** that cross a payday share each cost between the salary months by trip days (`logic/trips.js`), unless the cost has its own pay month.
 
 ## Recipes
@@ -111,6 +116,14 @@ Nothing else changes. Read data from `Store.plan` and `Store.proj`; change data 
 ### Add a new editing window
 
 Create `src/ui/modals/myThing.js` and use `formModal({ title, values, fields, onSave })` from `ui/components/form.js`. Copy `modals/goal.js` as a starting point. Save with `upsert('listName', record)` from `ui/helpers.js`.
+
+### Add a table
+
+Use `dataTable({ id, rows, columns })` from `ui/components/dataTable.js`. A column with a `value` function sorts when its title is clicked; a column without one (buttons) does not. For a status column, return a rank from `value` (see "Does it fit?" in `views/trips.js`).
+
+### Make a new kind of record searchable
+
+Add one entry to `SOURCES` in `src/logic/search.js` and one opener in `src/ui/modals/search.js`.
 
 ### Add a tool (calculator)
 
@@ -198,6 +211,10 @@ tests/
 - **Unit tests** cover the core mechanics only: dates and pay periods, money parsing, loans, the month sum (ticks, budgets, corrections), trips across a payday, `normPlan`, and backup round trips. Keep them simple: one behaviour per test, made-up data, plain assertions. When a mechanic changes on purpose, change its test in the same commit.
 - **Regression suites** compare against real backups and drive the built file in a browser. Run them before a release. They need `tests/fixtures/real*.json`.
 - Tests live outside `src/` and are never bundled. The only test hook inside `src/` is `debug.js`, which the normal build removes.
+
+## Invariants (never break these)
+
+`auditChecks` in `src/logic/audit.js` lists the rules every projection must satisfy: balances carry over, a month is the sum of its lines, `now + todo = close`, money in and out match the lines, net worth is cash plus savings minus debt. They are shown on the Audit page and run in `tests/unit/review.test.js`. If you change the engine and one fails, the engine is wrong, not the rule.
 
 ## Definition of done
 

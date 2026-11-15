@@ -108,14 +108,18 @@ export const IO = {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   },
-  csv(proj) {
-    const q = v => {
-      v = String(v);
-      if (/^[=+\-@\t\r]/.test(v) && isNaN(+v)) {
-        v = "'" + v;
+  /** Rows of cells as CSV text (opens in Excel). Cells that could be read as a formula are neutralised. */
+  csvText(rows) {
+    const quote = value => {
+      let text = String(value);
+      if (/^[=+\-@\t\r]/.test(text) && isNaN(+text)) {
+        text = "'" + text;
       }
-      return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+      return /[",\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
     };
+    return rows.map(row => row.map(quote).join(',')).join('\n');
+  },
+  csv(proj) {
     const rows = [
       [
         $t('Month'),
@@ -143,6 +147,6 @@ export const IO = {
       }
       rows.push([m.key, D.key(m.end), 'balance', $t('Cash at month end'), '', '', '', m.close.toFixed(2)]);
     }
-    return rows.map(r => r.map(q).join(',')).join('\n');
+    return IO.csvText(rows);
   },
 };

@@ -2,76 +2,120 @@
  * @file Accounts page: balances, credit cards, and the check against real money.
  */
 import { D, M } from '../../core/dates.js';
-import { fmtNum, money } from '../../core/format.js';
+import { fmtNum, money, signed } from '../../core/format.js';
 import { $t } from '../../core/i18n.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
-import { btn } from '../components/button.js';
+import { btn, ibtn } from '../components/button.js';
 import { info } from '../components/info.js';
-import { card, chip, empty, page, row } from '../components/layout.js';
+import { bar, card, cardDel, empty, page } from '../components/layout.js';
 import { fixNote } from '../components/monthNotes.js';
-import { grip, sortable } from '../components/sortable.js';
 import { h } from '../dom.js';
-import { remove } from '../helpers.js';
 import { ACC_TYPES, accountModal, spendable } from '../modals/account.js';
 import { balancesModal } from '../modals/balances.js';
 import { recModal } from '../modals/recurring.js';
 import { curK, monthAt } from '../state.js';
 import { V } from './registry.js';
 
+/**
+ * One account as a card. A credit card shows the three numbers that used to disagree between pages, side by side:
+ * what you owe today (the account), what this month's plan still adds and pays off, and where that leaves the card.
+ */
+function accountCard(account, plan, projection, monthPosition) {
+  const typeName = ACC_TYPES.find(type => type[0] === account.type)[1];
+  const isCredit = account.type === 'credit';
+  const canBeMain = account.type === 'debit' || account.type === 'cash';
+  const usedBy = [
+    ...plan.incomes.filter(income => income.account === account.id).map(income => income.name + $t(' comes in')),
+    ...plan.bills.filter(bill => bill.account === account.id).map(bill => bill.name),
+    ...plan.bills
+      .filter(bill => bill.payTo === account.id)
+      .map(bill => $t('paid off by “{0}”, {1} a month', bill.name, money(bill.amount))),
+  ].join(', ');
+
+  const actions = h(
+    'div',
+    { class: 'acts' },
+    canBeMain
+      ? ibtn(
+          account.main ? $t('Main account') : $t('Make it the main account'),
+          () => (account.main ? null : Actions.setMain(account.id)),
+          'sm ghost' + (account.main ? ' on' : ''),
+          'star',
+        )
+      : null,
+    ibtn($t('Edit'), () => accountModal(account.id), 'sm ghost', 'edit'),
+    cardDel('accounts', account.id),
+  );
+  const header = h(
+    'div',
+    { class: 'card-h' },
+    h('div', { class: 'grow', style: 'min-width:0' }, h('h2', { text: account.name }), h('p', { text: typeName })),
+    actions,
+  );
+
+  if (!isCredit) {
+    return h(
+      'section',
+      { class: 'card acard' },
+      header,
+      h('div', { class: 'abig ' + (account.balance < 0 ? 'bad' : ''), text: money(account.balance) }),
+      usedBy ? h('p', { class: 'small muted', text: usedBy }) : null,
+      account.note ? h('p', { class: 'small muted', text: account.note }) : null,
+    );
+  }
+
+  const cardPlan = projection.cards[account.id];
+  const owedNow = account.owed;
+  const addedThisMonth = cardPlan ? cardPlan.added[monthPosition] : 0;
+  const paidThisMonth = cardPlan ? cardPlan.paidOff[monthPosition] : 0;
+  const owedAtEnd = cardPlan ? cardPlan.series[monthPosition] : owedNow;
+  const line = (label, value) =>
+    h('div', { class: 'aline' }, h('span', { class: 'muted', text: label }), h('span', { class: 'num', text: value }));
+  return h(
+    'section',
+    { class: 'card acard' },
+    header,
+    h('div', { class: 'abig', text: money(Math.max(0, account.limit - owedNow)) }),
+    h('p', { class: 'small muted', text: $t('available today, of a {0} limit', money(account.limit)) }),
+    bar(account.limit ? (owedNow / account.limit) * 100 : 0, owedNow > account.limit * 0.9 ? 'over' : 'warn'),
+    h(
+      'div',
+      { class: 'alines' },
+      line($t('Owed today'), money(owedNow)),
+      addedThisMonth ? line($t('Still planned on it this month'), signed(addedThisMonth)) : null,
+      paidThisMonth ? line($t('Still to pay off this month'), signed(-paidThisMonth)) : null,
+      line($t('Owed at the end of the month'), money(owedAtEnd)),
+      line($t('Available then'), money(Math.max(0, account.limit - owedAtEnd))),
+    ),
+    usedBy ? h('p', { class: 'small muted', text: usedBy + (account.apr ? ` · ${fmtNum(account.apr)}%` : '') }) : null,
+    account.note ? h('p', { class: 'small muted', text: account.note }) : null,
+  );
+}
+
 V.accounts = () => {
   const plan = Store.plan;
+  const projection = Store.proj;
   const a = plan.accounts;
   const m = monthAt(curK());
+  const monthPosition = m.k - projection.summary.s0;
   const spend = spendable(a);
-  const avail = x => Math.max(0, x.limit - x.owed);
-  const emergency = a.reduce((s, x) => s + (x.type === 'credit' ? avail(x) : x.type === 'savings' ? x.balance : 0), 0);
+  // credit that is really free: what the card allows, minus what is owed and what this month's plan still puts on it
+  const freeCredit = x => {
+    const cardPlan = projection.cards[x.id];
+    return Math.max(0, x.limit - x.owed - (cardPlan ? cardPlan.added[monthPosition] : 0));
+  };
+  const emergency = a.reduce(
+    (s, x) => s + (x.type === 'credit' ? freeCredit(x) : x.type === 'savings' ? x.balance : 0),
+    0,
+  );
   const owed = a.reduce((s, x) => s + x.owed, 0);
-  const use = id =>
-    [
-      ...plan.incomes.filter(x => x.account === id).map(x => x.name + $t(' comes in')),
-      ...plan.bills.filter(x => x.account === id).map(x => x.name),
-      ...plan.bills.filter(x => x.payTo === id).map(x => $t('paid off by “{0}”, {1} a month', x.name, money(x.amount))),
-    ].join(', ');
   const box = h(
     'div',
-    { class: 'rows' },
-    a.map(x =>
-      row({
-        left: grip(),
-        cls: 'srow wrap',
-        title: x.name,
-        chips: [
-          x.note ? info(x.note) : null,
-          x.main ? chip($t('main'), 'acc') : null,
-          chip(ACC_TYPES.find(t => t[0] === x.type)[1], x.type === 'credit' ? 'warn' : ''),
-        ],
-        desc: [
-          x.type === 'credit'
-            ? $t('{0} owed of {1}', money(x.owed), money(x.limit)) + (x.apr ? ` · ${fmtNum(x.apr)}%` : '')
-            : '',
-          use(x.id),
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        right: h(
-          'div',
-          { class: 'amt' },
-          money(x.type === 'credit' ? avail(x) : x.balance),
-          x.type === 'credit' ? h('div', { class: 'd', text: $t('available') }) : null,
-        ),
-        onclick: () => accountModal(x.id),
-        del: () => remove('accounts', x.id),
-        menu: [
-          x.type === 'debit' || x.type === 'cash'
-            ? [$t('Make it the main account'), () => Actions.setMain(x.id)]
-            : null,
-        ],
-      }),
-    ),
+    { class: 'acards' },
+    a.map(x => accountCard(x, plan, projection, monthPosition)),
   );
-  sortable(box, '.srow', (f, t) => Actions.move('accounts', f, t), 'accounts');
   const cards = a.filter(x => x.type === 'credit');
   const noPay = cards.filter(c => c.owed > 0 && !plan.bills.some(b => b.payTo === c.id));
   return page(
@@ -110,7 +154,11 @@ V.accounts = () => {
           'div',
           { class: 'l' },
           $t('Emergency money'),
-          info($t('Savings accounts plus what is still available on credit cards. Never counted as money to spend.')),
+          info(
+            $t(
+              'Savings accounts plus the credit that is really free: the limit, minus what you owe, minus what this month still puts on the card. Never counted as money to spend.',
+            ),
+          ),
         ),
         h('div', { class: 'v', text: money(emergency) }),
         h('div', {
@@ -129,13 +177,13 @@ V.accounts = () => {
     h(
       'div',
       { class: 'cols lead' },
-      card(
-        $t('Your accounts'),
-        null,
-        null,
-        a.length
-          ? box
-          : empty(
+      a.length
+        ? box
+        : card(
+            $t('Your accounts'),
+            null,
+            null,
+            empty(
               $t('No accounts yet'),
               $t(
                 'Add your bank account, your cash and your credit card. You can also skip this and enter one total with “What I have today”.',
@@ -143,7 +191,7 @@ V.accounts = () => {
               $t('Add an account'),
               () => accountModal(),
             ),
-      ),
+          ),
       h(
         'div',
         { class: 'stack' },

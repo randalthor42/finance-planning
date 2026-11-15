@@ -360,16 +360,23 @@ export function project(plan, opts) {
     }
     let owed = a.owed;
     const ser = [];
+    // per month: what the plan still puts on the card, and what the plan still pays off (both not yet inside "owed")
+    const added = [];
+    const paidOff = [];
     months.forEach((m, i) => {
+      let addedNow = 0;
+      let paidNow = 0;
       if (i >= today_i) {
         if (i > today_i && a.apr > 0) {
           owed = r2(owed * (1 + a.apr / 1200));
         }
-        owed = r2(owed + (charges[i][a.id] || 0));
+        addedNow = charges[i][a.id] || 0;
+        owed = r2(owed + addedNow);
         for (const e of m.entries) {
           const pr = (plan.paid[m.key] || {})[e.key];
           const done = pr === true || (isObj(pr) && (pr.t === a.id || beforeCheck(i, pr)));
           if (e.payTo === a.id && e.amount < 0 && !done) {
+            paidNow = r2(paidNow + Math.min(owed, -e.amount));
             owed = r2(Math.max(0, owed + e.amount));
           }
         }
@@ -387,8 +394,10 @@ export function project(plan, opts) {
         } // a loan took the card debt over
       }
       ser.push(owed);
+      added.push(r2(addedNow));
+      paidOff.push(paidNow);
     });
-    cards[a.id] = { series: ser, limit: a.limit };
+    cards[a.id] = { series: ser, limit: a.limit, added, paidOff };
   }
   let bal = settings.opening;
   const sum = { min: Infinity, minK: s0, negN: 0, tightN: 0, firstNeg: null, net: 0, inc: 0, out: 0 };

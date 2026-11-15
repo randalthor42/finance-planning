@@ -27,6 +27,9 @@ import { rollModal, settingsModal } from '../modals/settings.js';
 import { tripModal } from '../modals/trip.js';
 import { UI, curK, monthAt, nowK, rangeLabel } from '../state.js';
 import { V } from './registry.js';
+import { reviewPeriod } from '../../logic/review.js';
+import { forecastScenario } from '../../logic/forecast.js';
+import { goodText, watchText } from './review.js';
 
 function insights() {
   const plan = Store.plan;
@@ -88,7 +91,7 @@ function insights() {
   {
     const cm = monthAt(currentMonth);
     const inM = Store.day >= cm.start && Store.day <= cm.end;
-    if (!cm.fix && inM && !Store.db.hideCheck) {
+    if (!cm.fix && inM && !UI.hideCheck) {
       out.push({
         tone: 'info',
         text: $t(
@@ -417,6 +420,40 @@ function nowCard() {
     ),
   );
 }
+/** The current month in two lines: the best thing and the thing most worth watching, with a way into the full review. */
+function monthReviewCard() {
+  const month = monthAt(curK());
+  const review = reviewPeriod(Store.plan, Store.proj, [month], Store.day);
+  const pace = forecastScenario(Store.proj, month.k - Store.proj.summary.s0, {
+    type: 'pace',
+    sampleMonths: UI.forecast.sampleMonths,
+  });
+  const paceEnd = pace.rows[pace.rows.length - 1];
+  const line = (tone, iconName, text) =>
+    h('div', { class: 'note ' + tone }, icon(iconName), h('div', { class: 'grow', text }));
+  return card(
+    $t('How {0} is going', M.label(month.k, true)),
+    $t('{0} went well, {1} to watch.', review.good.length, review.watch.length),
+    btn($t('Full review'), () => App.go('review', { month: month.k }), 'sm'),
+    h(
+      'div',
+      { class: 'notes' },
+      review.watch.length ? line('warn', 'alert', watchText(review.watch[0])) : null,
+      review.good.length ? line('good', 'check', goodText(review.good[0])) : null,
+      line(
+        'info',
+        'info',
+        $t(
+          'As planned, the plan ends at {0}. If later months go like the next {1}, it ends at {2}.',
+          money(paceEnd.planClose),
+          plural(UI.forecast.sampleMonths, 'month'),
+          money(paceEnd.close),
+        ),
+      ),
+    ),
+  );
+}
+
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -601,7 +638,14 @@ V.overview = () => {
           $t('Money in minus money out. Red months spend more than comes in.'),
           null,
           netBars(),
+          h(
+            'div',
+            { class: 'legend static' },
+            h('span', null, h('i', { style: 'background:var(--good)' }), $t('Money left over')),
+            h('span', null, h('i', { style: 'background:var(--bad)' }), $t('Spent more than came in')),
+          ),
         ),
+        monthReviewCard(),
         affordCard(),
       ),
       h(

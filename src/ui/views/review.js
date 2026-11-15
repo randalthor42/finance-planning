@@ -1,90 +1,119 @@
 /**
- * @file Review page: one month or one year looked at after the fact.
+ * @file Review page: look at one month or one year and see what went well, what to watch, where the money went
+ * and where the plan is heading. The numbers come from logic/review.js; this file only decides how to say them.
  */
-import { D, M } from '../../core/dates.js';
+import { M } from '../../core/dates.js';
 import { money, signed } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
+import { forecastScenario } from '../../logic/forecast.js';
+import { reviewPeriod } from '../../logic/review.js';
 import { CAT_NAME } from '../../models/categories.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
-import { amt, budgetText, card, chip, page, prow, row, segc } from '../components/layout.js';
+import { dataTable } from '../components/dataTable.js';
+import { card, page, segc } from '../components/layout.js';
 import { monthField } from '../components/pickers.js';
 import { h } from '../dom.js';
-import { remove } from '../helpers.js';
-import { itemModal, logPurchase } from '../modals/item.js';
-import { UI, monthAt, rangeLabel, selK } from '../state.js';
+import { icon } from '../icons.js';
+import { UI, monthAt, nowK, selK } from '../state.js';
 import { V } from './registry.js';
-import { budgetTone } from './trips.js';
 
-/** Looking back (or ahead) at one month or one year: where the money went, budgets, and plan against reality. */
-V.review = () => {
-  const projection = Store.proj;
-  const summary = projection.summary;
-  const k = selK();
-  const m = monthAt(k);
-  const yearly = UI.rview === 'year';
-  const kv = (l, v, className) =>
-    h(
-      'div',
-      { class: 'row' },
-      h('span', { class: 'grow muted', text: l }),
-      h('span', { class: 'amt ' + (className || ''), text: v }),
-    );
-  const kp = (l, v, className, sub) =>
-    h(
-      'div',
-      { class: 'kpi' },
-      h('div', { class: 'l', text: l }),
-      h('div', { class: 'v ' + (className || ''), text: v }),
-      sub ? h('div', { class: 's', text: sub }) : null,
-    );
-  const GN = {
-    inc: $t('Income'),
-    bill: $t('Bills and living costs'),
-    item: $t('Purchases'),
-    trip: $t('Trips and events'),
-    loan: $t('Loans'),
-    wish: $t('Wishlist'),
-    goal: $t('Savings'),
-  };
-  const catBars = ms => {
-    const c = {};
-    let tot = 0;
-    ms.forEach(x =>
-      x.entries.forEach(e => {
-        if (e.amount < 0 && e.group !== 'adjust') {
-          c[e.cat] = (c[e.cat] || 0) - e.amount;
-          tot -= e.amount;
-        }
-      }),
-    );
-    const r = Object.entries(c).sort((a, b) => b[1] - a[1]);
-    return r.length
-      ? r
-          .slice(0, 9)
-          .map(([cat, v]) =>
-            h(
-              'div',
-              { class: 'catrow' },
-              h('span', { text: CAT_NAME[cat] || $t('Other') }),
-              h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(2, (v / r[0][1]) * 100)}%` })),
-              h('span', { class: 'num muted', text: `${money(v)} · ${Math.round((v / tot) * 100)}%` }),
-            ),
-          )
-      : h('p', { class: 'muted', text: $t('No spending.') });
-  };
-  const years = [...new Set(projection.months.map(x => Math.floor(x.k / 12)))];
-  const acts = [
+const percent = share => Math.round(share * 100) + '%';
+const categoryName = cat => CAT_NAME[cat] || $t('Other');
+
+/** One sentence for each thing that went well. */
+export function goodText(item) {
+  switch (item.id) {
+    case 'leftOver':
+      return $t('You kept {0}, which is {1} of what came in.', money(item.amount), percent(item.share));
+    case 'saved':
+      return $t('You put {0} into savings ({1} of your income).', money(item.amount), percent(item.share));
+    case 'debtDown':
+      return $t('Your debt went down by {0}.', money(item.amount));
+    case 'budgetsKept':
+      return $t('You stayed inside every budget you logged against, {0} under in total.', money(item.amount));
+    case 'aboveCushion':
+      return $t('You stayed above your cushion the whole time.');
+    case 'noSurprises':
+      return $t('Your real money matched the plan: almost no spending outside it.');
+    default:
+      return item.id;
+  }
+}
+
+/** One sentence for each thing to watch, with what it costs over a year where that helps. */
+export function watchText(item) {
+  switch (item.id) {
+    case 'negative':
+      return $t(
+        '{0} below zero, the worst at {1} in {2}.',
+        plural(item.count, 'month'),
+        money(item.amount),
+        M.label(item.monthIndex, true),
+      );
+    case 'spentMore':
+      return $t('You spent {0} more than came in.', money(item.amount));
+    case 'overBudget':
+      return $t(
+        '“{0}” went {1} over its budget. At that rate it is {2} a year.',
+        item.name,
+        money(item.amount),
+        money(item.yearly),
+      );
+    case 'unplanned':
+      return $t(
+        '{0} was spent outside the plan ({1} of everything you spent).',
+        money(item.amount),
+        percent(item.share),
+      );
+    case 'cardUp':
+      return $t('You owe {0} more on credit cards than at the start.', money(item.amount));
+    case 'tight':
+      return $t('{0} under your cushion.', plural(item.count, 'month'));
+    case 'subscriptions':
+      return $t('Subscriptions took {0}, which is {1} a year.', money(item.amount), money(item.yearly));
+    case 'topCategory':
+      return $t('{0} is {1} of your spending ({2}).', categoryName(item.cat), percent(item.share), money(item.amount));
+    default:
+      return item.id;
+  }
+}
+
+const insightList = (items, toText, tone, iconName, emptyText) =>
+  items.length
+    ? h(
+        'div',
+        { class: 'notes' },
+        items.map(item =>
+          h('div', { class: 'note ' + tone }, icon(iconName), h('div', { class: 'grow', text: toText(item) })),
+        ),
+      )
+    : h('p', { class: 'muted', text: emptyText });
+
+const kpi = (label, value, className, sub) =>
+  h(
+    'div',
+    { class: 'kpi' },
+    h('div', { class: 'l', text: label }),
+    h('div', { class: 'v ' + (className || ''), text: value }),
+    sub ? h('div', { class: 's', text: sub }) : null,
+  );
+
+/** Month or year switch, the picker for it, and earlier / later buttons. */
+function periodPicker(monthIndex, yearly, summary, years) {
+  const lastIndex = summary.s0 + summary.n - 1;
+  const step = yearly ? 12 : 1;
+  return [
     segc(
       [
         ['month', $t('Month')],
         ['year', $t('Year')],
       ],
       UI.rview,
-      v => {
-        UI.rview = v;
+      view => {
+        UI.rview = view;
         App.render();
       },
     ),
@@ -95,279 +124,207 @@ V.review = () => {
             class: 'inp',
             style: 'width:auto',
             'aria-label': $t('Year to review'),
-            onchange: e =>
-              App.go('review', {
-                month: clamp(+e.target.value * 12 + (k % 12), summary.s0, summary.s0 + summary.n - 1),
-              }),
+            onchange: event =>
+              App.go('review', { month: clamp(+event.target.value * 12 + (monthIndex % 12), summary.s0, lastIndex) }),
           },
-          years.map(y => h('option', { value: y, text: y, selected: y === Math.floor(k / 12) })),
+          years.map(year => h('option', { value: year, text: year, selected: year === Math.floor(monthIndex / 12) })),
         )
       : h(
           'div',
           { style: 'width:190px' },
-          monthField({ value: M.key(k), sm: true, onChange: v => App.go('review', { month: M.parse(v) }) }),
+          monthField({
+            value: M.key(monthIndex),
+            sm: true,
+            onChange: value => App.go('review', { month: M.parse(value) }),
+          }),
         ),
-    ibtn($t('Earlier'), () => App.go('review', { month: Math.max(summary.s0, k - (yearly ? 12 : 1)) }), '', 'left'),
-    ibtn(
-      $t('Later'),
-      () => App.go('review', { month: Math.min(summary.s0 + summary.n - 1, k + (yearly ? 12 : 1)) }),
-      '',
-      'right',
-    ),
+    ibtn($t('Earlier'), () => App.go('review', { month: Math.max(summary.s0, monthIndex - step) }), '', 'left'),
+    ibtn($t('Later'), () => App.go('review', { month: Math.min(lastIndex, monthIndex + step) }), '', 'right'),
   ];
-  // what the money in each budget actually went on, grouped by the name you logged (water, cat food, cigarettes…)
-  const spendBreak = ms => {
-    const g = new Map();
-    ms.forEach(x =>
-      x.entries.forEach(e => {
-        if (e.of) {
-          const key = e.sub.replace(/^From /, '') + ' · ' + e.label.trim().toLowerCase();
-          const r = g.get(key) || { label: e.label.trim(), sub: e.sub, sum: 0, n: 0 };
-          r.sum -= e.amount;
-          r.n++;
-          g.set(key, r);
-        }
-      }),
-    );
-    const rows = [...g.values()].sort((a, b) => b.sum - a.sum);
-    return rows.length
-      ? card(
-          $t('What your budgets went on'),
-          $t('Spends you logged, grouped by name.'),
-          null,
-          h(
-            'div',
-            { class: 'rows' },
-            rows.slice(0, 12).map(r =>
-              row({
-                title: r.label,
-                desc: `${r.sub} · ${r.n === 1 ? $t('once') : $t('{0} times', r.n)}`,
-                right: amt(-r.sum),
-              }),
-            ),
-          ),
-        )
-      : null;
-  };
-  if (yearly) {
-    const y = Math.floor(k / 12);
-    const ms = projection.months.filter(x => Math.floor(x.k / 12) === y);
-    const inc = ms.reduce((a, x) => a + x.inc, 0);
-    const out = ms.reduce((a, x) => a + x.out, 0);
-    const saved = -ms.reduce((a, x) => a + Math.min(0, x.g.goal), 0);
-    const best = ms.reduce((a, b) => (b.net > a.net ? b : a));
-    const worst = ms.reduce((a, b) => (b.net < a.net ? b : a));
-    const end = ms[ms.length - 1];
-    return page(
-      $t('Review of {0}', y),
-      ms.length < 12
-        ? $t(
-            'Your plan covers {0} of {1}: {2} to {3}.',
-            plural(ms.length, 'month'),
-            y,
-            M.label(ms[0].k),
-            M.label(end.k),
-          )
-        : $t('The whole year at a glance.'),
-      acts,
+}
+
+V.review = () => {
+  const plan = Store.plan;
+  const projection = Store.proj;
+  const summary = projection.summary;
+  const monthIndex = selK();
+  const yearly = UI.rview === 'year';
+  const year = Math.floor(monthIndex / 12);
+  const months = yearly ? projection.months.filter(month => Math.floor(month.k / 12) === year) : [monthAt(monthIndex)];
+  const years = [...new Set(projection.months.map(month => Math.floor(month.k / 12)))];
+  const review = reviewPeriod(plan, projection, months, Store.day);
+  const periodName = yearly ? String(year) : M.label(monthIndex, true);
+
+  // a period that is not over yet shows planned numbers; say so, because a review reads like the past
+  const today = Store.day;
+  const lastMonth = months[months.length - 1];
+  const timing =
+    lastMonth.end < today
+      ? $t('This period is over: these are the numbers it ended on.')
+      : months[0].start > today
+        ? $t('This period has not started: these are the planned numbers.')
+        : $t('This period is still running: paid lines are real, the rest is the plan.');
+
+  // where the plan is heading if later months go like the recent ones
+  const currentPosition = clamp(nowK() - summary.s0, 0, projection.months.length - 1);
+  const pace = forecastScenario(projection, currentPosition, { type: 'pace', sampleMonths: UI.forecast.sampleMonths });
+  const paceEnd = pace.rows[pace.rows.length - 1];
+
+  const topAmount = review.categories.length ? review.categories[0].amount : 0;
+  const categoryRows = review.categories
+    .slice(0, 9)
+    .map(category =>
       h(
         'div',
-        { class: 'kpis' },
-        kp($t('Money in'), money(inc)),
-        kp($t('Money out'), money(out)),
-        kp(
-          $t('Left over'),
-          signed(inc - out),
-          inc - out < 0 ? 'bad' : 'good',
-          inc ? $t('{0}% of income', Math.round(((inc - out) / inc) * 100)) : '',
-        ),
-        kp($t('Put into savings'), money(saved)),
-      ),
-      h(
-        'div',
-        { class: 'cols' },
-        h(
-          'div',
-          { class: 'stack' },
-          card($t('Where it went'), $t('By category.'), null, catBars(ms)),
-          spendBreak(ms),
-          card(
-            $t('By type'),
-            null,
-            null,
-            h(
-              'div',
-              { class: 'rows' },
-              Object.keys(GN).map(g => {
-                const v = ms.reduce((a, x) => a + x.g[g], 0);
-                return Math.round(v * 100) ? kv(GN[g], signed(v), v > 0 ? 'good' : '') : null;
-              }),
-            ),
-          ),
-        ),
-        h(
-          'div',
-          { class: 'stack' },
-          card(
-            $t('Month by month'),
-            $t('Click a month to open it.'),
-            null,
-            h(
-              'div',
-              { class: 'rows' },
-              ms.map(x =>
-                row({
-                  title: M.label(x.k, true),
-                  chips:
-                    x.status === 'neg'
-                      ? chip($t('below zero'), 'bad')
-                      : x.status === 'tight'
-                        ? chip($t('tight'), 'warn')
-                        : null,
-                  desc: $t('in {0} · out {1} · ends at {2}', money(x.inc), money(x.out), money(x.close)),
-                  right: amt(x.net),
-                  onclick: () => App.go('months', { month: x.k }),
-                }),
-              ),
-            ),
-          ),
-          card(
-            $t('Highlights'),
-            null,
-            null,
-            h(
-              'div',
-              { class: 'rows' },
-              kv($t('Best month'), `${M.label(best.k)} (${signed(best.net)})`),
-              kv($t('Hardest month'), `${M.label(worst.k)} (${signed(worst.net)})`),
-              kv($t('Months that end below zero'), String(ms.filter(x => x.status === 'neg').length)),
-              kv($t('Cash at the end'), money(end.close)),
-              kv($t('Debt at the end'), money(end.debt)),
-              kv($t('Savings at the end'), money(end.savings)),
-            ),
-          ),
-        ),
+        { class: 'catrow' },
+        h('span', { text: categoryName(category.cat) }),
+        h('div', { class: 'bar' }, h('i', { style: `width:${Math.max(2, (category.amount / topAmount) * 100)}%` })),
+        h('span', { class: 'num muted', text: `${money(category.amount)} · ${percent(category.share)}` }),
       ),
     );
-  }
-  const costs = m.entries
-    .filter(e => e.amount < 0 && e.group !== 'adjust' && !e.budget)
-    .sort((a, b) => a.amount - b.amount);
-  const budgets = m.entries.filter(e => e.budget);
-  const bought = m.entries.filter(e => e.key.startsWith('item:') && e.amount < 0);
-  const over = Store.day > m.end;
+
+  const budgetTable = dataTable({
+    id: 'review-budgets',
+    rows: review.budgets,
+    columns: [
+      { label: $t('Budget'), value: budget => budget.name, cell: budget => budget.name },
+      { label: $t('Allowed'), value: budget => budget.planned, cell: budget => money(budget.planned) },
+      { label: $t('Logged'), value: budget => budget.spent, cell: budget => money(budget.spent) },
+      {
+        label: $t('Left or over'),
+        value: budget => budget.difference,
+        cell: budget => signed(budget.difference),
+        cellProps: budget => ({ class: budget.difference < 0 ? 'bad' : '' }),
+      },
+    ],
+  });
+
+  const biggestRows = review.biggest.map(line =>
+    h(
+      'button',
+      { type: 'button', class: 'row click searchrow', onclick: () => App.go('months', { month: line.monthIndex }) },
+      h(
+        'span',
+        { class: 'grow' },
+        h('span', { class: 't', text: line.label }),
+        h('span', {
+          class: 'd',
+          text: [yearly ? M.label(line.monthIndex) : '', line.detail].filter(Boolean).join(' · '),
+        }),
+      ),
+      h('span', { class: 'amt', text: money(-line.amount) }),
+    ),
+  );
+
   return page(
-    $t('Review of {0}', M.label(k, true)),
-    (Store.plan.settings.payDay ? rangeLabel(m) + ' · ' : '') +
-      (over
-        ? $t('This month is over.')
-        : Store.day < m.start
-          ? $t('This month has not started yet, so this is the plan.')
-          : $t('This month is still running.')),
-    acts,
+    $t('Review of {0}', periodName),
+    $t('Look at a month or a year: what you did well, what to watch, and where that leads.'),
+    periodPicker(monthIndex, yearly, summary, years),
+    h('p', { class: 'small muted', style: 'margin:-4px 0 10px', text: timing }),
     h(
       'div',
       { class: 'kpis' },
-      kp($t('Money in'), money(m.inc)),
-      kp($t('Money out'), money(m.out), '', $t('{0} against your average month', signed(m.out - summary.avgOut))),
-      kp($t('Left over'), signed(m.net), m.net < 0 ? 'bad' : 'good'),
-      kp(
-        $t('Ends at'),
-        money(m.close),
-        m.close < 0 ? 'bad' : '',
-        m.actual != null
-          ? m.adjust
-            ? $t(
-                'real balance, {0} {1} than planned',
-                money(Math.abs(m.adjust)),
-                m.adjust > 0 ? $t('better') : $t('worse'),
-              )
-            : $t('real balance, exactly as planned')
-          : $t('planned, no check-in yet'),
+      kpi($t('Money in'), money(review.moneyIn)),
+      kpi(
+        $t('Money out'),
+        money(review.moneyOut),
+        '',
+        review.unplanned ? $t('{0} more outside the plan', money(review.unplanned)) : null,
+      ),
+      kpi(
+        $t('Left over'),
+        signed(review.leftOver),
+        review.leftOver < 0 ? 'bad' : 'good',
+        review.moneyIn ? $t('{0} of what came in', percent(review.leftOver / review.moneyIn)) : null,
+      ),
+      kpi($t('Put into savings'), money(review.saved)),
+      kpi(
+        lastMonth.end < today ? $t('Ended at') : $t('Ends at'),
+        money(review.endBalance),
+        review.endBalance < 0 ? 'bad' : '',
+        $t('started at {0}', money(review.startBalance)),
       ),
     ),
     h(
       'div',
       { class: 'cols' },
-      h(
-        'div',
-        { class: 'stack' },
-        card($t('Where it went'), $t('By category.'), null, catBars([m])),
-        budgets.length
-          ? card(
-              $t('Budgets'),
-              over ? $t('What you used. The rest went back into your cash.') : $t('So far.'),
-              null,
-              budgets.map(e =>
-                prow(
-                  e.label,
-                  budgetText(e.budget),
-                  e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
-                  budgetTone(e.budget.spent, e.budget.planned),
-                ),
-              ),
-            )
-          : null,
-        spendBreak([m]),
-        card(
-          $t('By type'),
-          null,
-          null,
-          h(
-            'div',
-            { class: 'rows' },
-            Object.keys(GN).map(g =>
-              Math.round(m.g[g] * 100) ? kv(GN[g], signed(m.g[g]), m.g[g] > 0 ? 'good' : '') : null,
-            ),
-            kv($t('Ticked off as paid'), `${costs.filter(e => e.paid).length} of ${costs.length}`),
-          ),
-        ),
+      card(
+        $t('What went well'),
+        null,
+        null,
+        insightList(review.good, goodText, 'good', 'check', $t('Nothing stands out yet.')),
+      ),
+      card(
+        $t('What to watch'),
+        null,
+        null,
+        insightList(review.watch, watchText, 'warn', 'alert', $t('Nothing to worry about in this period.')),
+      ),
+    ),
+    h(
+      'div',
+      { class: 'cols' },
+      card(
+        $t('Where it went'),
+        $t('Planned and logged costs by category.'),
+        null,
+        categoryRows.length ? categoryRows : h('p', { class: 'muted', text: $t('No spending.') }),
       ),
       h(
         'div',
         { class: 'stack' },
+        review.budgets.length
+          ? card(
+              $t('Budgets'),
+              $t('What each budget allowed against what you logged. Click a column to sort.'),
+              null,
+              budgetTable,
+            )
+          : null,
         card(
           $t('Biggest costs'),
           null,
-          btn($t('Open month'), () => App.go('months', { month: k }), 'sm'),
-          costs.length
-            ? h(
-                'div',
-                { class: 'rows' },
-                costs.slice(0, 8).map(e =>
-                  row({
-                    title: e.label,
-                    desc: [e.date !== null ? D.label(e.date, { weekday: 'short' }) : '', e.sub || CAT_NAME[e.cat]]
-                      .filter(Boolean)
-                      .join(' · '),
-                    right: amt(e.amount),
-                  }),
-                ),
-              )
-            : h('p', { class: 'muted', text: $t('Nothing spent.') }),
+          null,
+          biggestRows.length
+            ? h('div', { class: 'rows' }, biggestRows)
+            : h('p', { class: 'muted', text: $t('No costs in this period.') }),
         ),
-        card(
-          $t('Purchases and one-offs'),
-          $t('{0}, {1} in total.', plural(bought.length, 'entry'), money(-bought.reduce((a, e) => a + e.amount, 0))),
-          btn($t('Log a purchase'), () => logPurchase(m), 'sm', 'plus'),
-          bought.length
-            ? h(
-                'div',
-                { class: 'rows' },
-                bought.slice(0, 10).map(e =>
-                  row({
-                    title: e.label,
-                    desc: [
-                      e.date !== null ? D.label(e.date, { weekday: 'short' }) : $t('no exact day'),
-                      e.sub || CAT_NAME[e.cat],
-                    ].join(' · '),
-                    right: amt(e.amount),
-                    onclick: () => itemModal(e.id),
-                    del: () => remove('items', e.id),
-                  }),
-                ),
-              )
-            : h('p', { class: 'muted', text: $t('Nothing logged for this month.') }),
+      ),
+    ),
+    card(
+      $t('Where this leads'),
+      $t(
+        'The end of your plan, as planned and if later months go like your next {0}.',
+        plural(UI.forecast.sampleMonths, 'month'),
+      ),
+      btn(
+        $t('Open the forecast'),
+        () => {
+          UI.forecast.type = 'pace';
+          App.go('forecast');
+        },
+        'sm',
+      ),
+      h(
+        'div',
+        { class: 'flow' },
+        h(
+          'div',
+          null,
+          h('div', { class: 'l', text: $t('As planned') }),
+          h('div', { class: 'v', text: money(paceEnd.planClose) }),
+        ),
+        h(
+          'div',
+          null,
+          h('div', { class: 'l', text: $t('At your recent pace') }),
+          h('div', { class: 'v ' + (paceEnd.close < 0 ? 'bad' : ''), text: money(paceEnd.close) }),
+        ),
+        h(
+          'div',
+          null,
+          h('div', { class: 'l', text: $t('Difference') }),
+          h('div', { class: 'v', text: signed(paceEnd.close - paceEnd.planClose) }),
         ),
       ),
     ),

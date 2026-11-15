@@ -8,6 +8,7 @@ import { Store } from '../state/store.js';
 import { POP, closePop } from './components/popover.js';
 import { $, h, sv } from './dom.js';
 import { icon } from './icons.js';
+import { searchModal } from './modals/search.js';
 import { UI } from './state.js';
 import { langPicker } from './views/language.js';
 import { V } from './views/registry.js';
@@ -24,6 +25,7 @@ const NAV = [
       ['months', $t('Month planner'), 'calendar'],
       ['forecast', $t('Forecast'), 'table'],
       ['review', $t('Review'), 'chart'],
+      ['audit', $t('Audit'), 'check'],
     ],
   ],
   [
@@ -71,6 +73,19 @@ function renderSide() {
         'stroke-linecap': 'round',
         'stroke-linejoin': 'round',
       }),
+    );
+  // the logo is the way home, as on any site
+  const home = () =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'logobtn',
+        'aria-label': $t('Go to the overview'),
+        title: $t('Overview'),
+        onclick: () => App.go('overview'),
+      },
+      logo(),
     );
   const pick =
     plans.length > 1
@@ -151,7 +166,7 @@ function renderSide() {
     h(
       'div',
       { class: 'brand' },
-      logo(),
+      home(),
       h('div', { class: 'grow' }, h('span', { class: 'bname', text: APP.name }), pick),
       h(
         'button',
@@ -163,6 +178,13 @@ function renderSide() {
         },
         icon('x'),
       ),
+    ),
+    h(
+      'button',
+      { type: 'button', class: 'searchbtn', title: $t('Search your plan (Ctrl K)'), onclick: searchModal },
+      icon('list'),
+      h('span', { class: 'grow', text: $t('Search…') }),
+      h('kbd', { text: 'Ctrl K' }),
     ),
     h(
       'nav',
@@ -201,7 +223,7 @@ function renderSide() {
       },
       icon('menu'),
     ),
-    logo(),
+    home(),
     h('b', { text: current ? current[1] : APP.name }),
     h('span', { class: 'grow' }),
     undo(),

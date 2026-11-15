@@ -14,6 +14,7 @@ import { info } from '../components/info.js';
 import { amt, bar, budgetText, card, chip, empty, page, row, segc } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { coverNote, fixNote } from '../components/monthNotes.js';
+import { ctxMenu } from '../components/popover.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
 import { accName, remove } from '../helpers.js';
@@ -186,14 +187,36 @@ V.months = () => {
         continue;
       }
       const tops = es.filter(e => !e.of || !es.some(x => x.budget && x.id === e.of));
+      // the group title folds its lines away; the total stays visible either way
+      const isClosed = UI.closedGroups.has(g);
+      const paidCount = es.filter(e => e.paid).length;
       body.push(
         h(
-          'div',
-          { class: 'grp-h' },
+          'button',
+          {
+            type: 'button',
+            class: 'grp-h grp-toggle' + (isClosed ? ' closed' : ''),
+            'aria-expanded': String(!isClosed),
+            title: isClosed ? $t('Show the lines') : $t('Hide the lines'),
+            onclick: () => {
+              if (isClosed) {
+                UI.closedGroups.delete(g);
+              } else {
+                UI.closedGroups.add(g);
+              }
+              App.render();
+            },
+          },
+          icon('right'),
           h('span', { text: label }),
+          h('span', { class: 'grp-n', text: $t('{0} of {1} paid', paidCount, es.length) }),
+          h('span', { class: 'grow' }),
           h('span', { class: 'num', text: signed(es.reduce((a, e) => a + e.amount, 0)) }),
         ),
       );
+      if (isClosed) {
+        continue;
+      }
       body.push(
         h(
           'div',
@@ -310,6 +333,20 @@ V.months = () => {
   note.addEventListener('change', () => Actions.setNote(m.key, note.value));
   const budgetLeft = budgets.reduce((a, e) => a + Math.max(0, e.budget.left), 0);
   const daysLeft = Store.day >= m.start && Store.day <= m.end ? m.end - Store.day + 1 : 0;
+  // one button, one menu: everything that can be added to this month
+  const addMenu = event =>
+    ctxMenu(event, [
+      [$t('Purchase'), () => logPurchase(m)],
+      [$t('Planned one-off'), () => itemModal(null, { month: monthKey })],
+      [$t('Money in'), () => itemModal(null, { month: monthKey, kind: 'in', cat: 'other' })],
+      [$t('Trip or event'), () => tripModal(null, { month: monthKey })],
+      [$t('New bill from this month'), () => recModal('bills', null, { from: monthKey })],
+      [$t('Budget'), () => recModal('bills', null, { budget: true })],
+      [$t('Loan'), () => loanModal()],
+    ]);
+  // the sum behind the tiles, folded away until someone wants to see it
+  const explainBox = props =>
+    h('details', { class: 'more' }, h('summary', { text: $t('How this adds up') }), h('p', props));
   return page(
     $t('Month planner'),
     $t(
@@ -348,7 +385,7 @@ V.months = () => {
         ]
           .filter(Boolean)
           .join(' · ') || null,
-        btn($t('Add to this month'), () => itemModal(null, { month: monthKey }), 'primary sm', 'plus'),
+        btn($t('Add to this month'), addMenu, 'primary sm', 'plus'),
         coverNote(m),
         inMonth
           ? h(
@@ -367,7 +404,7 @@ V.months = () => {
               fl($t('Money out'), money(-m.out)),
               fl($t('End of month'), money(m.close), endCls),
             ),
-        h('p', {
+        explainBox({
           class: 'small muted',
           style: 'margin-top:8px',
           text: inMonth
@@ -399,7 +436,7 @@ V.months = () => {
           ? h(
               'div',
               { class: 'acts', style: 'margin-top:10px' },
-              inMonth && !Store.db.hideCheck ? btn($t('I really have a different amount'), balancesModal, 'sm') : null,
+              inMonth && !UI.hideCheck ? btn($t('I really have a different amount'), balancesModal, 'sm') : null,
               tickable.length
                 ? btn(
                     allPaid ? $t('Untick all') : $t('Tick all as paid'),
@@ -473,22 +510,7 @@ V.months = () => {
               null,
               btn($t('Add a budget'), () => recModal('bills', null, { budget: true }), 'sm', 'plus'),
             ),
-        card(
-          $t('Add to ') + M.label(k),
-          null,
-          null,
-          h(
-            'div',
-            { class: 'acts' },
-            btn($t('Purchase'), () => logPurchase(m), 'sm', 'plus'),
-            btn($t('Planned one-off'), () => itemModal(null, { month: monthKey }), 'sm', 'plus'),
-            btn($t('Money in'), () => itemModal(null, { month: monthKey, kind: 'in', cat: 'other' }), 'sm', 'plus'),
-            btn($t('Trip'), () => tripModal(null, { month: monthKey }), 'sm', 'plus'),
-            btn($t('New bill from here'), () => recModal('bills', null, { from: monthKey }), 'sm', 'plus'),
-            btn($t('Loan'), () => loanModal(), 'sm', 'plus'),
-          ),
-        ),
-        (inMonth || over) && !Store.db.hideCheck
+        (inMonth || over) && !UI.hideCheck
           ? card(
               $t('Check against reality'),
               inMonth
@@ -505,8 +527,10 @@ V.months = () => {
                 ibtn(
                   $t('Hide this card'),
                   () => {
-                    Store.setPref('hideCheck', true);
-                    toast($t('Card hidden. Bring it back in Settings, Look and behaviour.'));
+                    // hidden for this visit only: it is back the next time the page is loaded
+                    UI.hideCheck = true;
+                    App.render();
+                    toast($t('Card hidden until you reload the page.'));
                   },
                   'sm ghost',
                   'x',

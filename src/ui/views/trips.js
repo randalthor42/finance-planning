@@ -13,6 +13,7 @@ import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { linkify } from '../components/info.js';
 import { amt, bar, card, cardDel, chip, empty, keep, page, row, segc, tile } from '../components/layout.js';
+import { dataTable } from '../components/dataTable.js';
 import { h } from '../dom.js';
 import { tripModal } from '../modals/trip.js';
 import { curK, monthAt } from '../state.js';
@@ -232,51 +233,48 @@ V.trips = () => {
       keep(t.id + ':t', $t('Costs and notes'), details(t, I)),
     );
   });
+  // "Does it fit?" sorts by how well it fits, best first: fits, tight, already short, too expensive, ideas, switched off
+  const FIT_ORDER = { good: 0, warn: 1, bad: 2, acc: 3, '': 4 };
   const table = () =>
-    h(
-      'div',
-      { class: 'tblw' },
-      h(
-        'table',
-        null,
-        h(
-          'thead',
-          null,
-          h(
-            'tr',
-            null,
-            [$t('Name'), $t('When'), $t('Cost'), $t('Budget'), $t('Does it fit?'), ''].map(x => h('th', { text: x })),
-          ),
-        ),
-        h(
-          'tbody',
-          null,
-          sorted.map(t => {
-            const I = tripInfo(t);
-            return h(
-              'tr',
-              { class: t.on || t.kind === 'idea' ? '' : 'dim' },
-              h('td', null, h('b', { text: t.name })),
-              h('td', { text: t.kind === 'idea' ? $t('Someday') : tripWhen(t) }),
-              h('td', { text: money(I.total) }),
-              h('td', { text: t.budget ? money(t.budget) : '–' }),
-              h('td', { title: I.text }, chip(I.label, I.tone), I.act ? [' ', btn(I.act[0], I.act[1], 'sm')] : null),
-              h(
-                'td',
-                null,
-                h(
-                  'div',
-                  { class: 'acts', style: 'justify-content:flex-end' },
-                  sw(t),
-                  ibtn($t('Edit'), () => tripModal(t.id), 'sm', 'edit'),
-                  cardDel('trips', t.id),
-                ),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
+    dataTable({
+      id: 'trips',
+      rows: sorted.map(trip => ({ trip, info: tripInfo(trip) })),
+      rowProps: row => ({ class: row.trip.on || row.trip.kind === 'idea' ? '' : 'dim' }),
+      columns: [
+        { label: $t('Name'), value: row => row.trip.name, cell: row => h('b', { text: row.trip.name }) },
+        {
+          label: $t('When'),
+          value: row => (row.trip.kind === 'idea' ? null : D.parse(row.trip.from) || M.parse(row.trip.month) * 31),
+          cell: row => (row.trip.kind === 'idea' ? $t('Someday') : tripWhen(row.trip)),
+        },
+        { label: $t('Cost'), value: row => row.info.total, cell: row => money(row.info.total) },
+        {
+          label: $t('Budget'),
+          value: row => row.trip.budget || null,
+          cell: row => (row.trip.budget ? money(row.trip.budget) : '–'),
+        },
+        {
+          label: $t('Does it fit?'),
+          value: row => FIT_ORDER[row.info.tone] ?? 4,
+          cellProps: row => ({ title: row.info.text }),
+          cell: row => [
+            chip(row.info.label, row.info.tone),
+            row.info.act ? [' ', btn(row.info.act[0], row.info.act[1], 'sm')] : null,
+          ],
+        },
+        {
+          label: '',
+          cell: row =>
+            h(
+              'div',
+              { class: 'acts', style: 'justify-content:flex-end' },
+              sw(row.trip),
+              ibtn($t('Edit'), () => tripModal(row.trip.id), 'sm', 'edit'),
+              cardDel('trips', row.trip.id),
+            ),
+        },
+      ],
+    });
   return page(
     $t('Trips and events'),
     $t(

@@ -37,9 +37,9 @@ const logRow = e =>
   );
 export const STABS = [
   ['general', $t('This plan')],
+  ['plans', $t('All plans')],
   ['look', $t('Look and behaviour')],
   ['language', $t('Language')],
-  ['plans', $t('Plans')],
   ['backup', $t('Backup and transfer')],
   ['activity', $t('Activity')],
 ];
@@ -136,18 +136,6 @@ V.settings = () => {
               ],
               db.theme,
               v => Store.setPref('theme', v),
-            ),
-          ),
-          opt(
-            $t('Check against reality'),
-            $t('The card in the month planner that compares the plan with your real money.'),
-            segc(
-              [
-                ['on', $t('Show')],
-                ['off', $t('Hide')],
-              ],
-              db.hideCheck ? 'off' : 'on',
-              v => Store.setPref('hideCheck', v === 'off'),
             ),
           ),
           opt(

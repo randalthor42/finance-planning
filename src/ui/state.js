@@ -20,6 +20,16 @@ export const UI = {
   open: new Set(),
   itemFilter: 'upcoming',
   afford: { amount: 0, month: null },
+  /** The "Check against reality" card was closed for this visit. Not saved: it is back after a reload. */
+  hideCheck: false,
+  /** Groups of the month planner that are folded away (Income, Bills, …). */
+  closedGroups: new Set(),
+  /** Sort of each data table by its id: { column, descending }. */
+  sort: {},
+  /** Audit page: show the ledger of the current month or of the whole plan. */
+  auditScope: 'month',
+  /** Forecast page: which way of looking ahead, and its two inputs. */
+  forecast: { type: 'plan', sampleMonths: 4, percent: 10 },
 };
 export const nowK = () => (Store.plan ? Period.now(Store.plan.settings) : M.now());
 export const curK = () => {
