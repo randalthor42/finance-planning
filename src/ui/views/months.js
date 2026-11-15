@@ -26,7 +26,7 @@ import { loanModal } from '../modals/loan.js';
 import { recModal } from '../modals/recurring.js';
 import { tripModal } from '../modals/trip.js';
 import { UI, monthAt, nowK, rangeLabel, selK } from '../state.js';
-import { FTABS, forecastCloses } from './forecast.js';
+import { FTABS, forecastCloses, forecastInputs } from './forecast.js';
 import { V } from './registry.js';
 
 V.months = () => {
@@ -77,6 +77,11 @@ V.months = () => {
                 h('option', { value: tab[0], text: tab[1], selected: tab[0] === UI.overlay }),
               ),
             ),
+            // the same inputs as on the Forecast page: change a value and the numbers below update at once
+            forecastInputs(UI.overlay, change => {
+              Object.assign(UI.forecast, change);
+              App.render();
+            }),
             btn(
               $t('Back to the plan'),
               () => {

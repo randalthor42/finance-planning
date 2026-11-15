@@ -154,6 +154,25 @@ export class PlanStore {
     this.db.active = id;
     this.reset();
   }
+  /** Give a plan (open or not) a new name. A name another plan already has gets a number, like in addPlan. */
+  renamePlan(id, name) {
+    const plan = this.db.plans[id];
+    if (!plan || plan.name === name) {
+      return;
+    }
+    const others = Object.values(this.db.plans)
+      .filter(x => x.id !== id)
+      .map(x => x.name);
+    let unique = name;
+    let n = 2;
+    while (others.includes(unique)) {
+      unique = `${name} (${n++})`;
+    }
+    this.log($t('Renamed plan “{0}” to “{1}”', plan.name, unique));
+    plan.name = unique;
+    this.save();
+    this.onChange();
+  }
   removePlan(id) {
     const p = this.db.plans[id];
     if (!p) {

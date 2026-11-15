@@ -187,6 +187,8 @@ export function normPlan(p) {
   const bills = list(p.bills, x => ({
     ...rec(x, catIds, 'other'),
     budget: !!x.budget,
+    // a budget either sets its money aside every month (reserve) or only counts what you really spend from it
+    reserve: !x.budget || x.reserve !== false,
     vary: !x.budget && !!x.vary,
     payTo: !x.budget && creditIds.includes(x.payTo) ? x.payTo : null,
     untilLoan: loanIds.includes(x.untilLoan) ? x.untilLoan : null,

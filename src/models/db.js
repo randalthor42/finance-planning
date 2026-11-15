@@ -27,6 +27,7 @@ export function normDB(raw) {
     autosave: !!raw.autosave,
     toastPos: ['tr', 'br', 'tl', 'bl'].includes(raw.toastPos) ? raw.toastPos : 'tr',
     tripView: raw.tripView === 'list' ? 'list' : 'grid',
+    wishView: raw.wishView === 'list' ? 'list' : 'grid',
     log: Array.isArray(raw.log)
       ? raw.log
           .filter(isObj)

@@ -80,35 +80,39 @@ export function fixNote(m) {
     return null;
   }
   const on = f.d === null ? M.label(m.k) : D.label(f.d, { weekday: 'short' });
+  // One number to take in at a glance, then two short lines. A single long sentence across a wide card is hard to read.
+  const headline =
+    f.a < 0
+      ? $t('{0} spent outside the plan', money(-f.a))
+      : f.a > 0
+        ? $t('{0} more than the plan expected', money(f.a))
+        : $t('The planner and your real money agree');
+  const detail =
+    f.a < 0
+      ? $t('Your real money was lower than the paid lines add up to.')
+      : f.a > 0
+        ? $t('Your real money was higher than the paid lines add up to.')
+        : null;
   return h(
     'div',
     { class: 'notes' },
-    f.a
-      ? h(
-          'div',
-          { class: 'note info' },
-          icon('info'),
-          h('div', {
-            class: 'grow',
-            text:
-              f.a < 0
-                ? $t(
-                    'Checked on {0}: you had {1} less than the paid lines add up to. It is counted as spending that is not in the plan, so the numbers here match your real money.',
-                    on,
-                    money(-f.a),
-                  )
-                : $t(
-                    'Checked on {0}: you had {1} more than the paid lines add up to. It is counted as money that is not in the plan, so the numbers here match your real money.',
-                    on,
-                    money(f.a),
-                  ),
-          }),
-        )
-      : h(
-          'div',
-          { class: 'note good' },
-          icon('check'),
-          h('div', { class: 'grow', text: $t('Checked on {0}: the planner and your real money agree.', on) }),
-        ),
+    h(
+      'div',
+      { class: 'note fixnote ' + (f.a ? 'info' : 'good') },
+      icon(f.a ? 'info' : 'check'),
+      h(
+        'div',
+        { class: 'grow' },
+        h('div', { class: 'fix-when', text: $t('Checked on {0}', on) }),
+        h('div', { class: 'fix-head', text: headline }),
+        detail
+          ? h('div', {
+              class: 'fix-detail',
+              text:
+                detail + ' ' + $t('It is counted as one extra line, so the numbers here match what you really have.'),
+            })
+          : null,
+      ),
+    ),
   );
 }

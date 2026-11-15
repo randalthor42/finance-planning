@@ -242,6 +242,32 @@ function runForecast(type) {
 }
 
 /**
+ * The inputs one forecast really uses (months to learn from, weight, percentages), as form rows.
+ * Shared by the Forecast page and the banner in the month planner, so the values can be changed in either place.
+ * @param {string} type A forecast type from FTABS.
+ * @param {(change: object) => void} apply Called with the changed setting; the caller saves it and redraws.
+ */
+export function forecastInputs(type, apply) {
+  const settings = UI.forecast;
+  return [
+    ['pace', 'smooth', 'trend', 'range'].includes(type)
+      ? numberInput($t('Months to learn from'), settings.sampleMonths, 1, 24, sampleMonths => apply({ sampleMonths }))
+      : null,
+    type === 'smooth'
+      ? numberInput($t('Weight of the latest month %'), settings.alphaPercent, 10, 90, alphaPercent =>
+          apply({ alphaPercent }),
+        )
+      : null,
+    type === 'cautious'
+      ? numberInput($t('Costs higher by %'), settings.percent, 1, 100, percent => apply({ percent }))
+      : null,
+    type === 'income'
+      ? numberInput($t('Income lower by %'), settings.incomePercent, 1, 100, incomePercent => apply({ incomePercent }))
+      : null,
+  ].filter(Boolean);
+}
+
+/**
  * Where every month would end under one forecast, for showing it in the month planner.
  * The plan itself is never changed: this is only another way to look at it.
  * @returns {?{name: string, closes: Map<number, number>}} null for "as planned".
@@ -268,7 +294,6 @@ V.forecast = () => {
 
   const isRange = type === 'range';
   const isScenario = type !== 'plan' && !isRange;
-  const usesSample = ['pace', 'smooth', 'trend', 'range'].includes(type);
   const { result, range } = type === 'plan' ? {} : runForecast(type);
   const lastRow = result ? result.rows[result.rows.length - 1] : null;
   const lastRange = range ? range.rows[range.rows.length - 1] : null;
@@ -378,24 +403,7 @@ V.forecast = () => {
           },
         )
       : null,
-    usesSample
-      ? numberInput($t('Months to learn from'), settings.sampleMonths, 1, 24, sampleMonths =>
-          setForecast({ sampleMonths }),
-        )
-      : null,
-    type === 'smooth'
-      ? numberInput($t('Weight of the latest month %'), settings.alphaPercent, 10, 90, alphaPercent =>
-          setForecast({ alphaPercent }),
-        )
-      : null,
-    type === 'cautious'
-      ? numberInput($t('Costs higher by %'), settings.percent, 1, 100, percent => setForecast({ percent }))
-      : null,
-    type === 'income'
-      ? numberInput($t('Income lower by %'), settings.incomePercent, 1, 100, incomePercent =>
-          setForecast({ incomePercent }),
-        )
-      : null,
+    ...forecastInputs(type, setForecast),
   ].filter(Boolean);
 
   return page(

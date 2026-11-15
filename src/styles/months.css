@@ -119,3 +119,20 @@
 .grp-toggle .grow {
   flex: 1 1 auto;
 }
+
+/* what the last check against real money found: a small date, one clear number, one short explanation */
+.fixnote .fix-when {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+.fixnote .fix-head {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin: 1px 0 3px;
+}
+.fixnote .fix-detail {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  max-width: 62ch;
+  opacity: 0.85;
+}

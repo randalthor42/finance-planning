@@ -130,7 +130,8 @@ function renderSide() {
       icon('redo'),
     );
   const item = n => {
-    const sub = SUBS[n[0]] && UI.view === n[0] ? SUBS[n[0]]() : null;
+    const hasSub = !!SUBS[n[0]] && UI.view === n[0];
+    const sub = hasSub && !UI.subClosed ? SUBS[n[0]]() : null;
     return [
       h(
         'button',
@@ -138,8 +139,9 @@ function renderSide() {
           type: 'button',
           class: 'navi',
           'aria-current': UI.view === n[0] ? 'page' : null,
+          'aria-expanded': hasSub ? String(!UI.subClosed) : null,
           title: n[1],
-          onclick: () => App.go(n[0]),
+          onclick: () => (hasSub ? App.toggleSub() : App.go(n[0])),
         },
         icon(n[2]),
         h('span', { text: n[1] }),
@@ -271,9 +273,15 @@ export const App = {
     main.dataset.view = view;
     scrollTo(0, same ? y : 0);
   },
+  /** Fold or unfold the sub-sections of the open menu item. */
+  toggleSub() {
+    UI.subClosed = !UI.subClosed;
+    App.render();
+  },
   go(view, o) {
     Object.assign(UI, o || {});
     UI.view = view;
+    UI.subClosed = false;
     App.menu(false, true);
     App.render();
   },

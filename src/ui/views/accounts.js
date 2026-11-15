@@ -23,7 +23,7 @@ import { V } from './registry.js';
  * One account as a card. A credit card shows the three numbers that used to disagree between pages, side by side:
  * what you owe today (the account), what this month's plan still adds and pays off, and where that leaves the card.
  */
-function accountCard(account, plan, projection, monthPosition) {
+function accountCard(account, plan, projection, monthPosition, allAccounts) {
   const typeName = ACC_TYPES.find(type => type[0] === account.type)[1];
   const isCredit = account.type === 'credit';
   const canBeMain = account.type === 'debit' || account.type === 'cash';
@@ -57,11 +57,30 @@ function accountCard(account, plan, projection, monthPosition) {
   );
 
   if (!isCredit) {
+    // where this money counts, and how much of the spending money it is: gives the card the same shape as a credit card
+    const line = (label, value) =>
+      h(
+        'div',
+        { class: 'aline' },
+        h('span', { class: 'muted', text: label }),
+        h('span', { class: 'num', text: value }),
+      );
+    const spends = account.type === 'debit' || account.type === 'cash';
+    const share = spends ? spendable(allAccounts) : 0;
     return h(
       'section',
       { class: 'card acard' },
       header,
       h('div', { class: 'abig ' + (account.balance < 0 ? 'bad' : ''), text: money(account.balance) }),
+      spends && share > 0 ? bar(Math.max(0, Math.min(100, (account.balance / share) * 100)), 'warn') : null,
+      h(
+        'div',
+        { class: 'alines' },
+        line($t('Counted in'), spends ? $t('To spend now') : $t('Emergency money')),
+        spends && share > 0
+          ? line($t('Share of your spending money'), fmtNum(Math.round((account.balance / share) * 100)) + '%')
+          : null,
+      ),
       usedBy ? h('p', { class: 'small muted', text: usedBy }) : null,
       account.note ? h('p', { class: 'small muted', text: account.note }) : null,
     );
@@ -79,8 +98,8 @@ function accountCard(account, plan, projection, monthPosition) {
     { class: 'card acard' },
     header,
     h('div', { class: 'abig', text: money(Math.max(0, account.limit - owedNow)) }),
-    h('p', { class: 'small muted', text: $t('available today, of a {0} limit', money(account.limit)) }),
     bar(account.limit ? (owedNow / account.limit) * 100 : 0, owedNow > account.limit * 0.9 ? 'over' : 'warn'),
+    h('p', { class: 'small muted', text: $t('available today, of a {0} limit', money(account.limit)) }),
     h(
       'div',
       { class: 'alines' },
@@ -289,8 +308,8 @@ V.accounts = () => {
         ? card(null, null, null, accountTable(a, projection, monthPosition))
         : h(
             'div',
-            { class: 'acards' },
-            a.map(x => accountCard(x, plan, projection, monthPosition)),
+            { class: 'acards' + (a.length >= 3 ? ' fill' : '') },
+            a.map(x => accountCard(x, plan, projection, monthPosition, a)),
           )
       : card(
           $t('Your accounts'),
@@ -305,7 +324,6 @@ V.accounts = () => {
             () => accountModal(),
           ),
         ),
-    // the notes sit under the accounts, never between them
     h('div', { class: 'rgrid' }, checkCard, payCard),
   );
 };

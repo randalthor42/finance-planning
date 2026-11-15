@@ -170,8 +170,10 @@ export function project(plan, opts) {
           const sp = (spent[m.key] || {})[r.id] || 0;
           const done = has(plan.paid[m.key] || {}, entryKey);
           const over2 = sp > 0 && (m.end < today || done);
-          e.budget = { planned: amount, spent: sp, left: r2(amount - sp), closed: over2, done };
-          e.amount = over2 ? 0 : -Math.max(0, amount - sp);
+          const reserve = r.reserve !== false;
+          e.budget = { planned: amount, spent: sp, left: r2(amount - sp), closed: over2, done, reserve };
+          // a tracked budget sets nothing aside: only the spends you logged take money, and they take it from what is free
+          e.amount = !reserve || over2 ? 0 : -Math.max(0, amount - sp);
           e.date = null;
         }
         put(m.k, e);

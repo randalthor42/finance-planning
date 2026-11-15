@@ -77,13 +77,23 @@ V.recurring = () => {
         cls: 'srow ' + (st && st[2] ? 'off' : ''),
         chips: [
           r.note ? info(r.note) : null,
-          r.budget ? chip($t('budget'), 'acc') : r.vary ? chip($t('varies')) : null,
+          r.budget
+            ? chip(r.reserve === false ? $t('tracked budget') : $t('budget'), 'acc')
+            : r.vary
+              ? chip($t('varies'))
+              : null,
           st ? chip(st[0], st[1]) : null,
         ],
         desc: [
           CAT_NAME[r.cat],
           EVERY.find(e => e[0] === r.every)[1].toLowerCase(),
-          r.budget ? $t('spent bit by bit') : r.day ? $t('on the ') + ordinal(r.day) : '',
+          r.budget
+            ? r.reserve === false
+              ? $t('counts only when spent')
+              : $t('spent bit by bit')
+            : r.day
+              ? $t('on the ') + ordinal(r.day)
+              : '',
           leftToPay(r),
           (plan.accounts.find(a => a.id === r.account) || {}).name,
         ]

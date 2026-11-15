@@ -265,6 +265,47 @@ const FILE=PAGE;
  await pg.evaluate(()=>{localStorage.clear()});await pg.reload();
  // dark + mobile
  await pg.getByText('Look around with a sample plan').click();await pg.evaluate(()=>{Store.db.theme='dark';App.render()});await pg.screenshot({path:'s7-dark.png',fullPage:true});
+ // forecast inputs really change what the month planner shows, and can be changed right there in its banner
+ for(const [tab,label,lo,hi] of [['smooth','Weight of the latest month %',20,80],['cautious','Costs higher by %',5,60],['income','Income lower by %',5,60],['pace','Months to learn from',2,9]]){
+  await pg.evaluate(t=>App.go('forecast',{ftab:t}),tab);await pg.getByRole('button',{name:'Show in the month planner'}).click();await pg.waitForTimeout(60);
+  const at=async v=>{const i=pg.locator('.note.info').first().getByLabel(label);await i.fill(String(v));await i.dispatchEvent('change');await pg.waitForTimeout(60);return pg.locator('.strip').innerText()};
+  const s1=await at(lo),s2=await at(hi);
+  ok(s1!==s2&&await pg.locator('.note.info').first().getByLabel(label).inputValue()===String(hi),'forecast input "'+label+'" is in the month planner banner and changes its numbers');
+ }
+ await pg.evaluate(()=>App.go('months'));await pg.getByRole('button',{name:'Back to the plan'}).click();
+ // a first-time visitor gets the same plan form as Settings, with the first plan name filled in
+ {const fresh=await (await b.newContext({viewport:{width:1100,height:900}})).newPage();await fresh.goto(FILE);
+  await fresh.getByRole('button',{name:'Create my plan'}).click();
+  const labels=await fresh.locator('dialog .fld-l').allInnerTexts();
+  ok(['Plan name','First month of the plan','Months to plan ahead','Cash at the start','Safety cushion','Payday','Currency'].every(l=>labels.some(x=>x.startsWith(l)))&&await fresh.locator('dialog .lines').count()===2,'the welcome page offers every plan setting, income and bills');
+  await fresh.getByLabel('Months to plan ahead').fill('12');
+  const c0=fresh.locator('dialog label.fld',{hasText:'Cash at the start'}).locator('input');await c0.fill('');await c0.pressSequentially('800');
+  await fresh.getByRole('button',{name:'Create plan'}).click();await fresh.waitForTimeout(200);
+  ok(await fresh.evaluate(()=>Store.plan.name==='My plan'&&Store.plan.settings.horizon===12&&Store.plan.settings.opening===800)&&await fresh.locator('.welcome').count()===0&&await fresh.locator('h1',{hasText:'Overview'}).count()===1,'creating the first plan from the welcome page opens the overview');await fresh.close();}
+ // a budget can be tracked only: the modal offers the choice and the plan remembers it
+ await pg.locator('.nav button[title="Income and bills"]').click();await pg.getByRole('button',{name:'Add a bill'}).first().click();
+ await pg.getByPlaceholder('Rent, groceries, phone…').fill('Eating out test');await pg.locator('dialog .seg button',{hasText:'Up to'}).click();
+ ok(await pg.locator('dialog .seg button',{hasText:'Tracked'}).count()===1,'a budget offers Reserved and Tracked');
+ await pg.locator('dialog .seg button',{hasText:'Tracked'}).click();await pg.locator('dialog input[inputmode=decimal]').first().pressSequentially('120');await pg.getByRole('button',{name:'Save'}).click();await pg.waitForTimeout(120);
+ ok(await pg.evaluate(()=>{const b=Store.plan.bills.find(x=>x.name==='Eating out test');return b&&b.budget&&b.reserve===false&&monthAt(curK()).entries.find(e=>e.label==='Eating out test').amount===0}),'a tracked budget is saved and sets nothing aside');
+ // plans: create one with everything a plan needs, and rename any plan, open or not
+ await pg.evaluate(()=>App.go('settings',{stab:'plans'}));
+ await pg.getByRole('button',{name:'New plan',exact:true}).click();
+ await pg.getByLabel('Plan name').fill('Trial run');await pg.getByLabel('Months to plan ahead').fill('18');
+ const cash=pg.locator('dialog label.fld',{hasText:'Cash at the start'}).locator('input');await cash.fill('');await cash.pressSequentially('1500');
+ const lineBoxes=pg.locator('dialog .lines');
+ const inc=lineBoxes.nth(0).locator('.lines-row').first();await inc.locator('input[inputmode=decimal]').pressSequentially('2100');
+ await lineBoxes.nth(1).locator('.lines-row').first().locator('input[inputmode=decimal]').pressSequentially('650');
+ await lineBoxes.nth(1).getByRole('button',{name:'Add a bill'}).click();
+ const second=lineBoxes.nth(1).locator('.lines-row').nth(1);await second.locator('input[type=text]:not([inputmode])').fill('Phone');await second.locator('input[inputmode=decimal]').pressSequentially('30');
+ await pg.getByRole('button',{name:'Create plan'}).click();await pg.waitForTimeout(150);
+ ok(await pg.evaluate(()=>Store.plan.name==='Trial run'&&Store.plan.settings.horizon===18&&Store.plan.settings.opening===1500),'new plan is created with the name, months and cash chosen in the form');
+ ok(await pg.evaluate(()=>{const p=Store.plan;return p.incomes.length===1&&p.incomes[0].amount===2100&&p.incomes[0].cat==='salary'&&p.bills.length===2&&p.bills[0].name==='Rent'&&p.bills[0].amount===650&&p.bills[0].cat==='housing'&&p.bills[1].name==='Phone'&&p.bills[1].amount===30}),'income and bills typed in the new-plan form become the plan lines');
+ await pg.evaluate(()=>App.go('settings',{stab:'plans'}));
+ const activeId=await pg.evaluate(()=>Store.db.active);
+ await pg.locator('main .row').filter({has:pg.getByRole('button',{name:'Open',exact:true})}).first().getByRole('button',{name:'Rename plan'}).click();
+ await pg.getByLabel('Plan name').fill('Renamed one');await pg.getByRole('button',{name:'Save'}).click();await pg.waitForTimeout(150);
+ ok(await pg.evaluate(b=>Store.db.active===b&&Object.values(Store.db.plans).some(p=>p.name==='Renamed one')&&Store.plan.name==="Trial run",activeId),'a plan that is not open can be renamed');
  await pg.setViewportSize({width:390,height:800});await pg.screenshot({path:'s8-mobile.png'});
  await pg.waitForTimeout(350);ok(await pg.locator('.side').evaluate(e=>e.getBoundingClientRect().right<=0),'menu is hidden on a phone');await pg.getByRole('button',{name:'Open menu'}).click();await pg.waitForTimeout(300);ok(await pg.locator('.side').evaluate(e=>e.getBoundingClientRect().left===0),'hamburger opens the menu');await pg.screenshot({path:'v4-mobile-menu.png'});await pg.locator('.nav button[title="Month planner"]').click();await pg.waitForTimeout(300);ok(await pg.evaluate(()=>!document.body.classList.contains('nav-open')&&UI.view==='months'),'choosing a page closes the menu');await pg.screenshot({path:'s9-mobile-month.png'});
  const sl=await pg.locator('.strip').evaluate(e=>{e.scrollLeft=200;return e.scrollLeft});ok(sl>0,'month strip scrolls sideways');

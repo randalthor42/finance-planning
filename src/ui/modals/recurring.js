@@ -25,6 +25,18 @@ const KIND_HINT = {
     'An upper limit you spend from during the month, like groceries, cigarettes or a haircut. You do not have to log anything: logging purchases is optional and only shows what is left.',
   ),
 };
+const RESERVE_MODES = [
+  ['reserved', $t('Reserved')],
+  ['tracked', $t('Tracked')],
+];
+const RESERVE_HINT = {
+  reserved: $t(
+    'The whole amount is set aside every month, and what you log uses it up. Best for money you will certainly spend, like groceries.',
+  ),
+  tracked: $t(
+    'Nothing is set aside. Only what you really log counts, and it comes out of your free money. Best for spending you want to watch but not plan for, like eating out or shopping.',
+  ),
+};
 const accountOpts = none => [['', none], ...Store.plan.accounts.map(a => [a.id, a.name])];
 export function recModal(list, id, preset) {
   const inc = list === 'incomes';
@@ -64,12 +76,24 @@ export function recModal(list, id, preset) {
         : current
           ? $t('Edit bill or living cost')
           : $t('Add bill or living cost'),
-    values: { ...start, kind: start.budget ? 'budget' : start.vary ? 'vary' : 'fixed' },
+    values: {
+      ...start,
+      kind: start.budget ? 'budget' : start.vary ? 'vary' : 'fixed',
+      reserveMode: start.reserve === false ? 'tracked' : 'reserved',
+    },
     fields: [
       { k: 'name', type: 'text', label: $t('Name'), ph: inc ? $t('Salary') : $t('Rent, groceries, phone…') },
       ...(inc
         ? []
         : [{ k: 'kind', type: 'seg', label: $t('Type'), options: BILL_KINDS, hint: v => KIND_HINT[v.kind] }]),
+      {
+        k: 'reserveMode',
+        type: 'seg',
+        label: $t('Money'),
+        options: RESERVE_MODES,
+        show: v => v.kind === 'budget',
+        hint: v => RESERVE_HINT[v.reserveMode],
+      },
       { k: 'amount', type: 'money', label: $t('Amount'), half: true },
       { k: 'every', type: 'select', numeric: true, label: $t('How often'), options: EVERY, half: true, live: true },
       { k: 'cat', type: 'select', label: $t('Category'), options: inc ? INCATS : CATS, half: true, live: true },
@@ -146,7 +170,9 @@ export function recModal(list, id, preset) {
       (v.kind === 'vary'
         ? $t('Planned as an estimate. ')
         : v.kind === 'budget'
-          ? $t('Planned as the most you would spend in a month. ')
+          ? v.reserveMode === 'tracked'
+            ? $t('A limit to watch: nothing is set aside until you spend. ')
+            : $t('Planned as the most you would spend in a month. ')
           : '') + (v.every > 1 && v.amount ? $t('That is about {0} a month.', money(v.amount / v.every)) : ''),
     onSave: v =>
       need(v) ||
@@ -157,6 +183,7 @@ export function recModal(list, id, preset) {
           : (upsert(list, {
               ...v,
               budget: v.kind === 'budget',
+              reserve: v.kind !== 'budget' || v.reserveMode !== 'tracked',
               vary: v.kind === 'vary',
               payTo: v.kind === 'fixed' && v.payTo ? v.payTo : null,
               untilLoan: !inc && debtLike(v) && v.untilLoan ? v.untilLoan : null,

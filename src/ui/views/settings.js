@@ -15,7 +15,7 @@ import { confirmModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
 import { exportModal, importFlow } from '../modals/backup.js';
-import { rollModal, settingsModal } from '../modals/settings.js';
+import { newPlanModal, renamePlanModal, rollModal, settingsModal } from '../modals/settings.js';
 import { UI, curK, monthAt } from '../state.js';
 import { languageCard } from './language.js';
 import { V } from './registry.js';
@@ -217,6 +217,7 @@ V.settings = () => {
                   'sm ghost',
                   'copy',
                 ),
+                ibtn($t('Rename plan'), () => renamePlanModal(x.id), 'sm ghost', 'edit'),
                 ibtn(
                   $t('Delete plan'),
                   () =>
@@ -242,21 +243,8 @@ V.settings = () => {
             type: 'button',
             class: 'btn sm',
             disabled: full,
-            text: $t('New empty plan'),
-            onclick: () => {
-              UI.month = null;
-              Store.addPlan({
-                name: $t('New plan'),
-                settings: {
-                  currency: settings.currency,
-                  numFmt: settings.numFmt,
-                  dateFmt: settings.dateFmt,
-                  payDay: settings.payDay,
-                  payShift: settings.payShift,
-                  payFor: settings.payFor,
-                },
-              });
-            },
+            text: $t('New plan'),
+            onclick: newPlanModal,
           }),
           h('button', {
             type: 'button',

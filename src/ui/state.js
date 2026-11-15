@@ -34,6 +34,8 @@ export const UI = {
   ftab: 'plan',
   /** A forecast shown on top of the month planner, or null. Display only: the plan is not changed. */
   overlay: null,
+  /** The open menu item's sub-sections are folded away (click the item again to open them). */
+  subClosed: false,
   /** Accounts page: 'cards' or 'list'. */
   accountView: 'cards',
 };

@@ -83,11 +83,16 @@ export function modal({ title, body, foot, wide, onClose, guard, err }) {
  * Autosave helper shared by every editing modal. When the "save as I type" setting is on, save() runs shortly after each change
  * and all of a modal's saves count as ONE undo step. When it is off, nothing is saved until the Save button.
  */
-export function autosaver(save, allow = true) {
+export function autosaver(save, allow = true, getState = null) {
   const tag = 'm' + uid();
   const on = allow && Store.db.autosave;
   let timer = null;
   let dirty = false;
+  // "Changed" means the values differ from when the window opened (or was last saved), not that a field was clicked.
+  // Clicking into an input or switching a tab inside the window touches the form without changing anything.
+  const snapshot = () => (getState ? JSON.stringify(getState()) : null);
+  let cleanState = snapshot();
+  const reallyChanged = () => (getState ? snapshot() !== cleanState : true);
   const run = () => {
     clearTimeout(timer);
     timer = null;
@@ -96,6 +101,7 @@ export function autosaver(save, allow = true) {
       const ok = save();
       if (ok) {
         dirty = false;
+        cleanState = snapshot();
       }
       return ok;
     } finally {
@@ -105,11 +111,12 @@ export function autosaver(save, allow = true) {
   return {
     on,
     get dirty() {
-      return dirty && !on;
+      return dirty && !on && reallyChanged();
     },
     touch() {
       dirty = true;
-      if (on) {
+      // with autosave on, nothing is saved (and no undo step is made) unless a value really changed
+      if (on && reallyChanged()) {
         clearTimeout(timer);
         timer = setTimeout(run, 450);
       }

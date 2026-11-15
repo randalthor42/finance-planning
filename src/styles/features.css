@@ -741,6 +741,9 @@ tr.dim td {
   gap: 14px;
   align-content: start;
 }
+.acards.fill {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
 .acard .abig {
   font-size: 1.5rem;
   font-weight: 700;
@@ -768,4 +771,40 @@ tr.dim td {
 }
 .btn.icon.on {
   color: var(--accent);
+}
+
+/* a labelled number input (forecast settings), on the Forecast page and in the month planner banner */
+.frow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.alines + p {
+  margin-top: 10px;
+}
+
+/* a growing list of rows inside a form: name, optional category, amount, remove */
+.lines {
+  display: grid;
+  gap: 8px;
+}
+.lines-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px auto;
+  gap: 8px;
+  align-items: center;
+}
+.lines-row.with-cat {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 120px auto;
+}
+.lines > .btn {
+  justify-self: start;
+}
+@media (max-width: 640px) {
+  .lines-row.with-cat {
+    grid-template-columns: minmax(0, 1fr) 110px auto;
+  }
+  .lines-row.with-cat > :first-child {
+    grid-column: 1 / -1;
+  }
 }

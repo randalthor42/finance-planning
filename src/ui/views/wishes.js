@@ -13,7 +13,8 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { linkify } from '../components/info.js';
-import { card, cardDel, chip, empty, page, row } from '../components/layout.js';
+import { dataTable } from '../components/dataTable.js';
+import { card, cardDel, chip, empty, page, row, segc } from '../components/layout.js';
 import { h } from '../dom.js';
 import { wishModal } from '../modals/wish.js';
 import { curK } from '../state.js';
@@ -37,6 +38,7 @@ V.wishes = () => {
         ? ['warn', $t('{0} under your cushion', plural(tight, 'month'))]
         : ['good', $t('fits')];
   };
+  const status = Wd => (Wd.flex ? $t('no date yet') : Wd.on ? $t('in my plan') : $t('just an idea'));
   const cards = plan.wishes.map(Wd => {
     const others = plan.wishes.filter(x => x.id !== Wd.id);
     const base = project({ ...plan, wishes: others }, { today: Store.day });
@@ -154,13 +156,7 @@ V.wishes = () => {
         h(
           'div',
           { style: 'min-width:0' },
-          h(
-            'h2',
-            null,
-            Wd.name,
-            ' ',
-            chip(Wd.flex ? $t('no date yet') : Wd.on ? $t('in my plan') : $t('just an idea'), Wd.on ? 'acc' : ''),
-          ),
+          h('h2', null, Wd.name, ' ', chip(status(Wd), Wd.on ? 'acc' : '')),
           h(
             'p',
             null,
@@ -202,12 +198,62 @@ V.wishes = () => {
     );
   });
   const on = plan.wishes.filter(w => w.on);
+  const list = Store.db.wishView === 'list';
+  const table = () =>
+    dataTable({
+      id: 'wishes',
+      rows: plan.wishes,
+      rowProps: Wd => ({ class: Wd.on || Wd.flex ? '' : 'dim' }),
+      columns: [
+        { label: $t('Name'), value: Wd => Wd.name, cell: Wd => h('b', { text: Wd.name }) },
+        { label: $t('Price'), value: Wd => Wd.price, cell: Wd => money(Wd.price) },
+        {
+          label: $t('When'),
+          value: Wd => (Wd.flex ? null : M.parse(Wd.month)),
+          cell: Wd => (Wd.flex ? $t('whenever it fits') : M.label(M.parse(Wd.month), true)),
+        },
+        { label: $t('How'), value: Wd => (Wd.flex ? null : HOW[Wd.how]), cell: Wd => (Wd.flex ? '–' : HOW[Wd.how]) },
+        {
+          label: $t('Status'),
+          value: Wd => (Wd.flex ? 2 : Wd.on ? 0 : 1),
+          cell: Wd => chip(status(Wd), Wd.on ? 'acc' : ''),
+        },
+        {
+          label: '',
+          cell: Wd => {
+            const box = h('input', {
+              type: 'checkbox',
+              checked: Wd.on,
+              'aria-label': $t('Count this in my plan'),
+              onchange: () => Actions.toggle('wishes', Wd.id, box.checked),
+            });
+            return h(
+              'div',
+              { class: 'acts', style: 'justify-content:flex-end' },
+              Wd.flex ? null : h('label', { class: 'switch', title: $t('Count it in my plan') }, box),
+              ibtn($t('Edit'), () => wishModal(Wd.id), 'sm', 'edit'),
+              cardDel('wishes', Wd.id),
+            );
+          },
+        },
+      ],
+    });
   return page(
     $t('Wishlist'),
     $t(
       'Things you want to buy. Not sure when? Leave the date open and the wishlist finds the earliest month your plan can pay for it. Nothing changes in your plan until you choose.',
     ),
-    [btn($t('Add a wish'), () => wishModal(), 'primary', 'plus')],
+    [
+      segc(
+        [
+          ['grid', $t('Cards')],
+          ['list', $t('List')],
+        ],
+        Store.db.wishView,
+        v => Store.setPref('wishView', v),
+      ),
+      btn($t('Add a wish'), () => wishModal(), 'primary', 'plus'),
+    ],
     cards.length
       ? [
           h(
@@ -238,7 +284,7 @@ V.wishes = () => {
               h('div', { class: 's', text: $t('what you could spend without breaking a later month') }),
             ),
           ),
-          h('div', { class: 'cols' }, cards),
+          list ? card(null, null, null, table()) : h('div', { class: 'cols' }, cards),
         ]
       : card(
           null,

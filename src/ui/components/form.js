@@ -3,7 +3,7 @@
  */
 import { $t } from '../../core/i18n.js';
 import { uid } from '../../core/util.js';
-import { btn } from './button.js';
+import { btn, ibtn } from './button.js';
 import { info } from './info.js';
 import { autosaver, modal } from './modal.js';
 import { moneyInp } from './moneyInput.js';
@@ -140,6 +140,77 @@ function fieldEl(f, v, ctx) {
         }),
       ),
     );
+  } else if (f.type === 'lines') {
+    // a short list of rows (name, optional category, amount) that can grow: v[f.k] is an array of { name, cat, amount }
+    tag = 'div';
+    const rows = v[f.k];
+    c = h(
+      'div',
+      { class: 'lines' },
+      rows.map((row, index) =>
+        h(
+          'div',
+          { class: 'lines-row' + (f.cats ? ' with-cat' : '') },
+          (() => {
+            const name = h('input', {
+              class: 'inp',
+              type: 'text',
+              value: row.name,
+              maxlength: 60,
+              placeholder: f.ph || '',
+              'aria-label': f.label,
+            });
+            name.addEventListener('input', () => {
+              row.name = name.value;
+              changed();
+            });
+            return name;
+          })(),
+          f.cats
+            ? (() => {
+                const cat = h(
+                  'select',
+                  { class: 'inp', 'aria-label': $t('Category') },
+                  f.cats.map(o => h('option', { value: o[0], text: o[1], selected: o[0] === row.cat })),
+                );
+                cat.addEventListener('change', () => {
+                  row.cat = cat.value;
+                  changed();
+                });
+                return cat;
+              })()
+            : null,
+          moneyInp({
+            value: row.amount,
+            label: $t('Amount'),
+            onInput: n => {
+              row.amount = n || 0;
+              changed();
+            },
+          }),
+          ibtn(
+            $t('Remove'),
+            () => {
+              rows.splice(index, 1);
+              ctx.touch();
+              ctx.redraw();
+            },
+            'sm ghost',
+            'trash',
+          ),
+        ),
+      ),
+      btn(
+        f.add || $t('Add a line'),
+        () => {
+          rows.push({ name: '', cat: f.cats ? f.cats[0][0] : '', amount: 0 });
+          ctx.touch();
+          ctx.redraw();
+        },
+        'sm ghost',
+        'plus',
+      ),
+    );
   } else if (f.type === 'toggle') {
     tag = 'div';
     const cb = h('input', { type: 'checkbox', checked: !!v[f.k] });
@@ -170,11 +241,15 @@ export function formModal({ title, fields, values, onSave, onDelete, saveLabel, 
   const form = h('form', { class: 'form', id: fid, novalidate: true });
   const err = h('div', { class: 'form-err', role: 'alert' });
   const pv = preview ? h('div', { class: 'preview' }) : null;
-  const A = autosaver(() => {
-    const m = onSave(v);
-    err.textContent = m || '';
-    return !m;
-  }, !!auto);
+  const A = autosaver(
+    () => {
+      const m = onSave(v);
+      err.textContent = m || '';
+      return !m;
+    },
+    !!auto,
+    () => v,
+  );
   const isAuto = A.on;
   const prev = () => {
     if (pv) {

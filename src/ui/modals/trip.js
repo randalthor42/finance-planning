@@ -67,7 +67,7 @@ export function tripModal(id, preset) {
     upsert('trips', { ...t, items: A.on ? t.items : t.items.filter(i => i.name.trim() || i.amount) });
     return true;
   };
-  const A = autosaver(save);
+  const A = autosaver(save, true, () => t);
   const name = h('input', {
     class: 'inp',
     type: 'text',

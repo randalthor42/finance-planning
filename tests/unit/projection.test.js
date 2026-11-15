@@ -89,3 +89,36 @@ test('a savings goal that is switched off keeps its pot but takes no money from 
   assert.equal(switchedOff.month.savings, 300);
   assert.equal(counted.plan.goals[0].on, true); // old plans without the field stay counted
 });
+
+test('a reserved budget sets its whole amount aside, a tracked budget sets nothing aside', () => {
+  const reserved = firstMonthOf();
+  assert.equal(reserved.month.close, 350);
+  const tracked = firstMonthOf({
+    bills: [
+      { id: 'rent0001', name: 'Rent', amount: 400 },
+      { id: 'food0001', name: 'Food', amount: 300, budget: true, reserve: false },
+    ],
+  });
+  assert.equal(tracked.month.close, 650);
+  assert.equal(tracked.month.entries.find(entry => entry.budget).budget.reserve, false);
+});
+
+test('money spent from a tracked budget comes out of the free money', () => {
+  const { month } = firstMonthOf({
+    bills: [
+      { id: 'rent0001', name: 'Rent', amount: 400 },
+      { id: 'food0001', name: 'Food', amount: 300, budget: true, reserve: false },
+    ],
+    items: [
+      { id: 'shoes001', name: 'Shoes', amount: 50, month: '2026-11' },
+      { id: 'spend001', name: 'Supermarket', amount: 120, budget: 'food0001', month: '2026-11' },
+    ],
+  });
+  assert.equal(month.close, 530);
+  assert.equal(month.entries.find(entry => entry.budget).budget.left, 180);
+});
+
+test('a budget reserves its money unless it says otherwise', () => {
+  const plan = normPlan({ bills: [{ id: 'food0001', name: 'Food', amount: 300, budget: true }] });
+  assert.equal(plan.bills[0].reserve, true);
+});

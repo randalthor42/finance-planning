@@ -32,7 +32,9 @@ export function balancesModal() {
   const lines = inside
     ? m.entries.filter(e => e.group !== 'adjust' && !e.of && !e.budget && !e.onCard && !e.paid && e.amount !== 0)
     : [];
-  const budgets = inside ? m.entries.filter(e => e.budget && !e.paid && !e.budget.closed && e.budget.left > 0) : [];
+  const budgets = inside
+    ? m.entries.filter(e => e.budget && e.budget.reserve && !e.paid && !e.budget.closed && e.budget.left > 0)
+    : [];
   // a line whose day has passed is probably paid already, so it starts ticked; a budget nobody logged against starts at a guess from the days left
   const done = new Set(lines.filter(e => e.date !== null && e.date <= today).map(e => e.key));
   const left = {};
