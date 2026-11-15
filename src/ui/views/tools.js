@@ -11,6 +11,8 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { dataTable } from '../components/dataTable.js';
+import { listState, listToolbar } from '../components/listToolbar.js';
+import { applyQuery } from '../../logic/listQuery.js';
 import { card, page } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { h } from '../dom.js';
@@ -29,6 +31,40 @@ export const TOOLS = [
   ['split', $t('Split a bill')],
   ['unit', $t('Unit price')],
 ];
+/** "From your plan" as hours of work: searchable, filtered by where it comes from, with the total of what is shown. */
+function hoursTable(rows, hours, days) {
+  const fields = [
+    { key: 'name', label: $t('From your plan'), type: 'text', value: row => row.name },
+    { key: 'source', label: $t('Source'), type: 'enum', value: row => row.source },
+    { key: 'price', label: $t('Price'), type: 'money', value: row => row.price },
+  ];
+  const query = listState('tools-hours');
+  const result = applyQuery(rows, query, fields);
+  return h(
+    'div',
+    { style: 'margin-top:12px' },
+    listToolbar({ id: 'tools-hours', query, fields, result, rows, filters: ['source'] }),
+    dataTable({
+      id: 'tools-hours',
+      rows: result.rows,
+      maxHeight: '340px',
+      columns: [
+        { label: $t('From your plan'), value: row => row.name, cell: row => row.name },
+        { label: $t('Source'), align: 'left', value: row => row.source, cell: row => row.source },
+        { label: $t('Price'), value: row => row.price, cell: row => money(row.price) },
+        { label: $t('Work time'), value: row => row.price, cell: row => h('b', { text: hours(row.price) }) },
+        { label: '', cell: row => days(row.price), cellProps: () => ({ class: 'muted' }) },
+      ],
+      foot: [
+        h('td', { text: $t('Total') }),
+        h('td'),
+        h('td', { text: money(result.sums.price) }),
+        h('td', null, h('b', { text: hours(result.sums.price) })),
+        h('td', { class: 'muted', text: days(result.sums.price) }),
+      ],
+    }),
+  );
+}
 V.tools = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -121,21 +157,10 @@ V.tools = () => {
         ),
         out,
         things.length
-          ? h(
-              'div',
-              { style: 'margin-top:12px' },
-              dataTable({
-                id: 'tools-hours',
-                rows: things.map(([name, price, source]) => ({ name, price, source })),
-                maxHeight: '340px',
-                columns: [
-                  { label: $t('From your plan'), value: row => row.name, cell: row => row.name },
-                  { label: $t('Source'), align: 'left', value: row => row.source, cell: row => row.source },
-                  { label: $t('Price'), value: row => row.price, cell: row => money(row.price) },
-                  { label: $t('Work time'), value: row => row.price, cell: row => h('b', { text: hrs(row.price) }) },
-                  { label: '', cell: row => days(row.price), cellProps: () => ({ class: 'muted' }) },
-                ],
-              }),
+          ? hoursTable(
+              things.map(([name, price, source]) => ({ name, price, source })),
+              hrs,
+              days,
             )
           : null,
       );

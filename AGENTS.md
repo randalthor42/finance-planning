@@ -65,6 +65,7 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | What the Review page counts as "went well" / "to watch" | `src/logic/review.js` (rules) and `src/ui/views/review.js` (wording) |
 | The consistency rules and the full ledger (Audit page) | `src/logic/audit.js` |
 | What the global search looks through | `src/logic/search.js` (add one entry to `SOURCES`) |
+| Search, filters and sort above a list | `src/logic/listQuery.js` + `src/ui/components/listToolbar.js` |
 | A table that sorts by clicking its column titles | `src/ui/components/dataTable.js` (`align: 'left'` for text columns) |
 | Caching expensive derived data per plan revision | `src/ui/memo.js` |
 | Bills or incomes entered twice | `duplicateLines` in `src/logic/audit.js` |
@@ -127,6 +128,13 @@ Create `src/ui/modals/myThing.js` and use `formModal({ title, values, fields, on
 ### Add a table
 
 Use `dataTable({ id, rows, columns })` from `ui/components/dataTable.js`. A column with a `value` function sorts when its title is clicked; a column without one (buttons) does not. For a status column, return a rank from `value` (see "Does it fit?" in `views/trips.js`).
+
+### Add search, filters and sort to a list
+
+Describe the columns once as `fields` (`{ key, label, type, value(row), options? }`), keep the state with
+`listState(id)`, get the rows with `applyQuery(rows, query, fields)` (`src/logic/listQuery.js`, pure and unit-tested)
+and draw `listToolbar({ id, query, fields, result, filters, sorts })` (`src/ui/components/listToolbar.js`) above them.
+Totals that describe the whole list (like "Total bills per month") stay computed over all rows.
 
 ### Make a new kind of record searchable
 

@@ -19,6 +19,8 @@ import { h } from '../dom.js';
 import { wishModal } from '../modals/wish.js';
 import { curK } from '../state.js';
 import { memo } from '../memo.js';
+import { listState, listToolbar } from '../components/listToolbar.js';
+import { applyQuery } from '../../logic/listQuery.js';
 import { V } from './registry.js';
 
 V.wishes = () => {
@@ -43,7 +45,29 @@ V.wishes = () => {
         : ['good', $t('fits')];
   };
   const status = Wd => (Wd.flex ? $t('no date yet') : Wd.on ? $t('in my plan') : $t('just an idea'));
-  const cards = plan.wishes.map(Wd => {
+  // one search, filter and sort for both views, so Cards and List show the same wishes in the same order
+  const fields = [
+    { key: 'name', label: $t('Name'), type: 'text', value: Wd => Wd.name },
+    { key: 'price', label: $t('Price'), type: 'money', value: Wd => Wd.price },
+    { key: 'month', label: $t('Month'), type: 'number', value: Wd => (Wd.flex ? null : M.parse(Wd.month)) },
+    { key: 'status', label: $t('Status'), type: 'enum', value: Wd => status(Wd) },
+  ];
+  const query = listState('wishes');
+  const result = applyQuery(plan.wishes, query, fields);
+  const toolbarEl =
+    plan.wishes.length > 1
+      ? listToolbar({
+          id: 'wishes',
+          query,
+          fields,
+          result,
+          rows: plan.wishes,
+          filters: ['status'],
+          sorts: ['price', 'month', 'name'],
+          customSort: $t('As added'),
+        })
+      : null;
+  const cards = result.rows.map(Wd => {
     const others = plan.wishes.filter(x => x.id !== Wd.id);
     const base = memo('wish-base:' + Wd.id, [], () => project({ ...plan, wishes: others }, { today: Store.day }));
     const at = (R, k) => R.months[clamp(k - summary.s0, 0, summary.n - 1)];
@@ -209,7 +233,7 @@ V.wishes = () => {
   const table = () =>
     dataTable({
       id: 'wishes',
-      rows: plan.wishes,
+      rows: result.rows,
       rowProps: Wd => ({ class: Wd.on || Wd.flex ? '' : 'dim' }),
       columns: [
         { label: $t('Name'), value: Wd => Wd.name, cell: Wd => h('b', { text: Wd.name }) },
@@ -259,7 +283,7 @@ V.wishes = () => {
       ),
       btn($t('Add a wish'), () => wishModal(), 'primary', 'plus'),
     ],
-    cards.length
+    plan.wishes.length
       ? [
           h(
             'div',
@@ -289,7 +313,17 @@ V.wishes = () => {
               h('div', { class: 's', text: $t('without any later month going under your cushion') }),
             ),
           ),
-          list ? card(null, null, null, table()) : h('div', { class: 'cols' }, cards),
+          toolbarEl,
+          !cards.length
+            ? card(
+                null,
+                null,
+                null,
+                h('p', { class: 'muted', text: $t('Nothing matches. Clear the search or filters.') }),
+              )
+            : list
+              ? card(null, null, null, table())
+              : h('div', { class: 'cols' }, cards),
         ]
       : card(
           null,

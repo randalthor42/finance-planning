@@ -9,6 +9,8 @@ import { EVERY } from '../../models/categories.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { btn } from '../components/button.js';
+import { listState, listToolbar } from '../components/listToolbar.js';
+import { applyQuery } from '../../logic/listQuery.js';
 import { amt, card, chip, empty, mono, page, row } from '../components/layout.js';
 import { h } from '../dom.js';
 import { remove } from '../helpers.js';
@@ -39,15 +41,26 @@ V.subs = () => {
   let perM = 0;
   let perYear = 0;
   let n = 0;
-  const rows = subs.map(b => {
+  // the totals cover every subscription; search and sort only change what is listed
+  for (const b of subs) {
     const st = recStatus(b, currentMonth);
-    const live = !st || (!st[2] && !st[3]);
-    const yearCost = nextYearCost(b, currentMonth, anchorK);
-    perYear += yearCost;
-    if (live) {
+    perYear += nextYearCost(b, currentMonth, anchorK);
+    if (!st || (!st[2] && !st[3])) {
       perM += b.amount / b.every;
       n++;
     }
+  }
+  const fields = [
+    { key: 'name', label: $t('Name'), type: 'text', value: b => b.name },
+    { key: 'amount', label: $t('Amount'), type: 'money', value: b => b.amount / b.every },
+    { key: 'day', label: $t('Day'), type: 'number', value: b => b.day || null },
+  ];
+  const query = listState('subs', { sort: { key: 'amount', descending: true } });
+  const result = applyQuery(subs, query, fields);
+  const rows = result.rows.map(b => {
+    const st = recStatus(b, currentMonth);
+    const live = !st || (!st[2] && !st[3]);
+    const yearCost = nextYearCost(b, currentMonth, anchorK);
     return row({
       left: mono(b.name),
       title: b.name,
@@ -109,6 +122,9 @@ V.subs = () => {
       null,
       rows.length
         ? [
+            subs.length > 1
+              ? listToolbar({ id: 'subs', query, fields, result, sorts: ['amount', 'day', 'name'] })
+              : null,
             h('div', { class: 'rows' }, rows),
             h('p', {
               class: 'small muted',

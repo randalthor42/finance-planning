@@ -36,6 +36,8 @@ export const UI = {
   itemMonths: {},
   /** Sort of each data table by its id: { column, descending }. */
   sort: {},
+  /** Search, filters and sort of each list with a toolbar (listToolbar), by list id, for this visit. */
+  lists: {},
   /** Rows shown in each paged data table by its id (dataTable pageSize), for this visit. */
   tableLimit: {},
   /** Audit page: show the ledger of the current month or of the whole plan. */

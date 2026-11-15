@@ -18,6 +18,8 @@ import { h } from '../dom.js';
 import { tripModal } from '../modals/trip.js';
 import { curK, monthAt } from '../state.js';
 import { memo } from '../memo.js';
+import { listState, listToolbar } from '../components/listToolbar.js';
+import { applyQuery } from '../../logic/listQuery.js';
 import { V } from './registry.js';
 
 /**
@@ -165,12 +167,43 @@ function tripInfo(t) {
 V.trips = () => {
   const plan = Store.plan;
   const list = Store.db.tripView === 'list';
-  const sorted = [...plan.trips].sort(
+  const planned = [...plan.trips].sort(
     (a, b) =>
       (a.kind === 'idea') - (b.kind === 'idea') ||
       M.parse(a.month) - M.parse(b.month) ||
       (D.parse(a.from) || 0) - (D.parse(b.from) || 0),
   );
+  // one search, filter and sort for both views, so switching Cards and List keeps the same trips in the same order
+  const kindName = { trip: $t('Trip'), event: $t('Event'), idea: $t('Idea') };
+  const fields = [
+    { key: 'name', label: $t('Name'), type: 'text', value: t => t.name },
+    { key: 'when', label: $t('When'), type: 'number', value: t => (t.kind === 'idea' ? null : M.parse(t.month)) },
+    { key: 'cost', label: $t('Cost'), type: 'money', value: t => t.items.reduce((a, i) => a + i.amount, 0) },
+    {
+      key: 'kind',
+      label: $t('Kind'),
+      type: 'enum',
+      value: t => t.kind,
+      options: Object.entries(kindName).filter(([kind]) => plan.trips.some(t => t.kind === kind)),
+    },
+    { key: 'fit', label: $t('Does it fit?'), type: 'enum', value: t => tripInfo(t).label },
+  ];
+  const query = listState('trips');
+  const result = applyQuery(planned, query, fields);
+  const sorted = result.rows;
+  const toolbarEl =
+    planned.length > 1
+      ? listToolbar({
+          id: 'trips',
+          query,
+          fields,
+          result,
+          rows: planned,
+          filters: ['kind', 'fit'],
+          sorts: ['when', 'cost', 'name'],
+          customSort: $t('By date'),
+        })
+      : null;
   const sw = t => {
     const c = h('input', {
       type: 'checkbox',
@@ -325,7 +358,8 @@ V.trips = () => {
       btn($t('Someday idea'), () => tripModal(null, { kind: 'idea', on: false }), '', 'plus'),
       btn($t('Plan a trip'), () => tripModal(), 'primary', 'plus'),
     ],
-    !sorted.length
+    toolbarEl,
+    !planned.length
       ? card(
           null,
           null,
@@ -337,8 +371,10 @@ V.trips = () => {
             () => tripModal(),
           ),
         )
-      : list
-        ? card(null, null, null, table())
-        : h('div', { class: 'tgrid' }, cards),
+      : !sorted.length
+        ? card(null, null, null, h('p', { class: 'muted', text: $t('Nothing matches. Clear the search or filters.') }))
+        : list
+          ? card(null, null, null, table())
+          : h('div', { class: 'tgrid' }, cards),
   );
 };

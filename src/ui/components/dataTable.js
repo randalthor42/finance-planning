@@ -17,22 +17,10 @@
  * `pageSize: 200` draws only the first 200 rows (after sorting) with a "Show {0} more" button: long ledgers stay fast.
  */
 import { $t } from '../../core/i18n.js';
+import { compareValues } from '../../logic/listQuery.js';
 import { App } from '../app.js';
 import { h } from '../dom.js';
 import { UI } from '../state.js';
-
-/** Order two sort values: numbers by size, text alphabetically, empty values last. */
-function compareValues(first, second) {
-  const firstEmpty = first === null || first === undefined || first === '';
-  const secondEmpty = second === null || second === undefined || second === '';
-  if (firstEmpty || secondEmpty) {
-    return Number(firstEmpty) - Number(secondEmpty);
-  }
-  if (typeof first === 'number' && typeof second === 'number') {
-    return first - second;
-  }
-  return String(first).localeCompare(String(second), undefined, { numeric: true, sensitivity: 'base' });
-}
 
 /** The rows in the order chosen for this table. Pure: the input array is not changed. */
 export function sortRows(rows, columns, sort) {

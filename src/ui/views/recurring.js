@@ -10,6 +10,8 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { btn } from '../components/button.js';
 import { info } from '../components/info.js';
+import { listState, listToolbar } from '../components/listToolbar.js';
+import { applyQuery, isFiltered } from '../../logic/listQuery.js';
 import { card, chip, empty, page, row } from '../components/layout.js';
 import { grip, sortable } from '../components/sortable.js';
 import { h } from '../dom.js';
@@ -67,6 +69,34 @@ function copyInEditor(list, record) {
   recModal(list, null, fields);
 }
 
+/** The kind of a bill as the bill window names it. */
+const billKindName = r => {
+  if (r.budget) {
+    return r.reserve === false ? $t('Limit') : $t('Budget');
+  }
+  return r.vary ? $t('Estimate') : $t('Fixed');
+};
+/** What the toolbar of an income or bill list can search, filter and sort by. */
+function recurringFields(records, inc) {
+  const cats = [...new Set(records.map(r => r.cat))].map(cat => [cat, CAT_NAME[cat] || $t('Other')]);
+  const fields = [
+    { key: 'name', label: $t('Name'), type: 'text', value: r => r.name },
+    { key: 'amount', label: $t('Amount'), type: 'money', value: r => r.amount / r.every },
+    { key: 'day', label: $t('Day'), type: 'number', value: r => r.day || null },
+    { key: 'cat', label: $t('Category'), type: 'enum', value: r => r.cat, options: cats },
+  ];
+  if (!inc) {
+    const kinds = ['Fixed', 'Estimate', 'Budget', 'Limit'];
+    fields.push({
+      key: 'kind',
+      label: $t('Type'),
+      type: 'enum',
+      value: billKindName,
+      options: kinds.map(k => [$t(k), $t(k)]),
+    });
+  }
+  return fields;
+}
 V.recurring = () => {
   const plan = Store.plan;
   const currentMonth = curK();
@@ -76,7 +106,8 @@ V.recurring = () => {
     const inc = list === 'incomes';
     let total = 0;
     let tracked = 0;
-    const els = rows.map(r => {
+    // the totals always cover the whole list; search, filters and sort only change what is shown
+    for (const r of rows) {
       const st = recStatus(r, currentMonth);
       const live = !st || (!st[2] && !st[3]);
       // a tracked budget sets nothing aside, so its limit is not part of the regular bills
@@ -87,8 +118,17 @@ V.recurring = () => {
       if (live && !notCounted) {
         total += r.amount / r.every;
       }
+    }
+    const fields = recurringFields(rows, inc);
+    const query = listState('rec:' + list);
+    const result = applyQuery(rows, query, fields);
+    // dragging sets the custom order, so it only makes sense when the list shows that order in full
+    const canDrag = !query.sort && !isFiltered(query);
+    const els = result.rows.map(r => {
+      const st = recStatus(r, currentMonth);
+      const notCounted = !inc && r.budget && r.reserve === false;
       return row({
-        left: grip(),
+        left: canDrag ? grip() : null,
         title: r.name,
         cls: 'srow ' + (st && st[2] ? 'off' : ''),
         chips: [
@@ -135,13 +175,29 @@ V.recurring = () => {
     });
     totals[list] = total;
     const box = h('div', { class: 'rows' }, els);
-    sortable(box, '.srow', (a, b) => Actions.move(list, a, b), list);
+    if (canDrag) {
+      sortable(box, '.srow', (a, b) => Actions.move(list, a, b), list);
+    }
+    const bar =
+      rows.length > 1
+        ? listToolbar({
+            id: 'rec:' + list,
+            query,
+            fields,
+            result,
+            rows,
+            filters: inc ? ['cat'] : ['kind', 'cat'],
+            sorts: ['name', 'amount', 'day', 'cat'],
+            customSort: $t('Custom (drag)'),
+          })
+        : null;
     return card(
       title,
       sub,
       btn(addLabel, () => recModal(list), 'primary sm', 'plus'),
       rows.length
         ? [
+            bar,
             box,
             h(
               'div',
@@ -165,7 +221,7 @@ V.recurring = () => {
   const b = block(
     'bills',
     $t('Bills and living costs'),
-    $t('Money that goes out regularly. Drag the dots to reorder.'),
+    $t('Money that goes out regularly. In Custom order, drag the dots to reorder.'),
     $t('Add a bill'),
   );
   const left = totals.incomes - totals.bills;
