@@ -16,12 +16,14 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
 import { cashChart, netBars } from '../components/charts.js';
-import { amt, bar, budgetText, card, page, prow, row, tile } from '../components/layout.js';
+import { amt, bar, budgetText, card, page, prow, row } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { monthField } from '../components/pickers.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
-import { balancesModal } from '../modals/balances.js';
+import { balanceChip, balancesModal } from '../modals/balances.js';
+import { monthEquation } from '../components/monthEquation.js';
+import { monthPosition } from '../../logic/position.js';
 import { goalModal } from '../modals/goal.js';
 import { itemModal, logPurchase, logSpend } from '../modals/item.js';
 import { recModal } from '../modals/recurring.js';
@@ -89,17 +91,6 @@ function insights() {
         : $t('You stay above zero in every month. Lowest: {0} in {1}.', money(summary.min), M.label(summary.minK)),
       k: summary.minK,
     });
-  }
-  {
-    const cm = monthAt(currentMonth);
-    const inM = Store.day >= cm.start && Store.day <= cm.end;
-    if (!cm.fix && inM && !UI.hideCheck) {
-      out.push({
-        tone: 'info',
-        text: $t('Balances not updated this month.'),
-        act: [$t('Update balances'), balancesModal],
-      });
-    }
   }
   for (const duplicate of duplicateLines(plan)) {
     out.push({
@@ -433,11 +424,8 @@ function nowCard() {
   const today = Store.day;
   const len = m.end - m.start + 1;
   const inside = today >= m.start && today <= m.end;
-  const daysLeft = inside ? m.end - today + 1 : len;
   const budgets = m.entries.filter(e => e.budget);
-  const budgetLeft = budgets.reduce((a, e) => a + (e.paid ? 0 : Math.max(0, e.budget.left)), 0);
-  const toPay = -m.entries.reduce((a, e) => a + (e.still < 0 && !e.budget ? e.still : 0), 0);
-  const toIn = m.entries.reduce((a, e) => a + (e.still > 0 ? e.still : 0), 0);
+  const position = monthPosition(m, today);
   const sub =
     today < m.start
       ? $t('Starts in {0}, on {1}', plural(m.start - today, 'day'), D.label(m.start, { weekday: 'short' }))
@@ -456,36 +444,16 @@ function nowCard() {
     sub,
     btn($t('Open month'), () => App.go('months', { month: currentMonth }), 'sm'),
     inside ? bar(((today - m.start + 1) / len) * 100) : null,
-    h(
-      'div',
-      { class: 'nowgrid' },
-      tile(
-        $t('You have now'),
-        money(m.now),
-        m.now < 0 ? 'bad' : '',
-        m.fix && m.fix.d !== null ? $t('Checked {0}', D.label(m.fix.d)) : $t('Not checked yet'),
-      ),
-      tile(
-        $t('Still to pay'),
-        money(Math.max(0, toPay)),
-        '',
-        toIn > 0 ? $t('{0} still to come in', money(toIn)) : null,
-      ),
-      budgets.length
-        ? tile(
-            $t('Budgets left'),
-            money(budgetLeft),
-            '',
-            $t('{0}/day for {1}', money(budgetLeft / daysLeft), plural(daysLeft, 'day')),
-          )
-        : null,
-      tile(
-        monthEndLabel(settings),
-        money(m.close),
-        m.close < 0 ? 'bad' : 'good',
-        $t('Month surplus: {0}', signed(m.net)),
-      ),
-    ),
+    monthEquation(position, {
+      endLabel: monthEndLabel(settings),
+      endClass: m.close < 0 ? 'bad' : 'good',
+      status: balanceChip(m),
+      perDayText:
+        position.budgetsLeft > 0 && position.daysLeft
+          ? $t('{0}/day for {1}', money(position.perDay), plural(position.daysLeft, 'day'))
+          : null,
+    }),
+    h('p', { class: 'small muted', text: $t('Month surplus: {0}', signed(m.net)) }),
     h(
       'div',
       { class: 'acts' },

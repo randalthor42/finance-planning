@@ -12,9 +12,11 @@ import { info } from '../components/info.js';
 import { dataTable } from '../components/dataTable.js';
 import { bar, card, cardDel, empty, page, segc } from '../components/layout.js';
 import { fixNote } from '../components/monthNotes.js';
+import { monthEquation } from '../components/monthEquation.js';
+import { monthPosition as positionOf } from '../../logic/position.js';
 import { h } from '../dom.js';
 import { ACC_TYPES, accountModal, spendable } from '../modals/account.js';
-import { balancesModal } from '../modals/balances.js';
+import { balanceChip, balancesModal } from '../modals/balances.js';
 import { recModal } from '../modals/recurring.js';
 import { UI, curK, monthAt } from '../state.js';
 import { V } from './registry.js';
@@ -189,20 +191,24 @@ V.accounts = () => {
     0,
   );
   const owed = a.reduce((s, x) => s + x.owed, 0);
+  // the same sum as the Overview and the month planner, with the balance check status under "You have now"
   const checkCard = card(
     $t('Balance check'),
     null,
-    null,
-    fixNote(m) || h('p', { class: 'muted', text: $t('Not checked this month.') }),
+    btn($t('Open the month'), () => App.go('months', { month: m.k }), 'sm'),
+    monthEquation(positionOf(m, Store.day), {
+      endLabel: plan.settings.payDay ? $t('Left by payday') : $t('Month-end balance'),
+      endClass: m.close < 0 ? 'bad' : '',
+      status: balanceChip(m),
+    }),
+    fixNote(m),
     m.fix
       ? h(
           'div',
           { class: 'acts', style: 'margin-top:10px' },
-          btn($t('Update balances'), balancesModal, 'sm'),
-          btn($t('Open the month'), () => App.go('months', { month: m.k }), 'sm'),
-          btn($t('Remove the correction'), () => Actions.clearFix(m.key), 'sm ghost'),
+          btn($t('Remove the correction'), () => Actions.clearFix(m.key), 'sm danger ghost'),
         )
-      : h('div', { class: 'acts', style: 'margin-top:10px' }, btn($t('Update balances'), balancesModal, 'sm')),
+      : null,
   );
   const cards = a.filter(x => x.type === 'credit');
   const noPay = cards.filter(c => c.owed > 0 && !plan.bills.some(b => b.payTo === c.id));

@@ -274,3 +274,19 @@ export function balancesModal() {
     f.select();
   }
 }
+
+/**
+ * The balance check status for a month, as a chip that opens "Update balances":
+ * "Checked 15 Nov" when the month was checked against real balances, "Not checked this month" otherwise.
+ * One status, one action, everywhere the month is shown.
+ */
+export function balanceChip(month) {
+  const checked = !!(month.fix && month.fix.d !== null);
+  return h('button', {
+    type: 'button',
+    class: 'chip balchip ' + (checked ? 'good' : 'warn'),
+    title: $t('Update balances'),
+    text: checked ? $t('Checked {0}', D.label(month.fix.d)) : $t('Not checked this month'),
+    onclick: balancesModal,
+  });
+}

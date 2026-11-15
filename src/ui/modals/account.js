@@ -7,6 +7,8 @@ import { uid } from '../../core/util.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { NOTE, formModal } from '../components/form.js';
+import { confirmModal } from '../components/modal.js';
+import { curK, monthAt } from '../state.js';
 import { find, need, remove, upsert } from '../helpers.js';
 
 export const ACC_TYPES = [
@@ -17,6 +19,35 @@ export const ACC_TYPES = [
 ];
 export const spendable = accounts =>
   accounts.filter(a => a.type === 'debit' || a.type === 'cash').reduce((s, a) => s + a.balance, 0);
+/**
+ * Account balances and the month planner are two views of the same money. When the money you can spend changes
+ * while today is inside the current month, offer to work the month out from the new balance (the difference becomes
+ * a balance correction, exactly as in "Update balances"), so "You have now" and the accounts agree.
+ */
+function offerMonthUpdate(before, after) {
+  const spends = type => type === 'debit' || type === 'cash';
+  const oldValue = before && spends(before.type) ? before.balance : 0;
+  const newValue = spends(after.type) ? after.balance || 0 : 0;
+  const month = monthAt(curK());
+  const today = Store.day;
+  if (Math.abs(newValue - oldValue) < 0.005 || !month || today < month.start || today > month.end) {
+    return;
+  }
+  // after the edit window has closed
+  setTimeout(() => {
+    const accounts = Store.plan.accounts;
+    confirmModal(
+      $t('Update this month too?'),
+      $t(
+        '“You have now” becomes {0}, the money in your bank accounts and cash. The difference is saved as a balance correction.',
+        money(spendable(accounts)),
+      ),
+      $t('Update the month'),
+      () => Actions.reconcile(accounts, month.key, spendable(accounts), [], {}),
+      'primary',
+    );
+  }, 0);
+}
 export function accountModal(id) {
   const current = id && find('accounts', id);
   formModal({
@@ -104,6 +135,7 @@ export function accountModal(id) {
           }),
           v.main && Actions.setMain(v.id),
           (Store.tag = null),
+          offerMonthUpdate(current, v),
           '')),
     onDelete: current && (() => remove('accounts', id)),
   });

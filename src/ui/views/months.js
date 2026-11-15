@@ -19,7 +19,9 @@ import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
 import { accName, remove } from '../helpers.js';
 import { icon } from '../icons.js';
-import { balancesModal } from '../modals/balances.js';
+import { balanceChip, balancesModal } from '../modals/balances.js';
+import { monthEquation } from '../components/monthEquation.js';
+import { monthPosition } from '../../logic/position.js';
 import { entryModal } from '../modals/entry.js';
 import { itemModal, logPurchase, logSpend } from '../modals/item.js';
 import { loanModal } from '../modals/loan.js';
@@ -400,8 +402,7 @@ V.months = () => {
   const sumIf = f => r2(m.entries.reduce((x, e) => x + (f(e) ? e.amount : 0), 0));
   const paidIn = sumIf(e => e.paid && e.amount > 0 && !e.fix);
   const paidOut = -sumIf(e => e.paid && e.amount < 0 && !e.fix);
-  const toIn = sumIf(e => !e.paid && e.amount > 0);
-  const toPay = -sumIf(e => !e.paid && e.amount < 0);
+  const position = monthPosition(m, Store.day);
   const fl = (l, v, className) =>
     h('div', null, h('div', { class: 'l', text: l }), h('div', { class: 'v ' + (className || ''), text: v }));
   const endCls = m.status === 'neg' ? 'bad' : m.status === 'tight' ? 'warn' : '';
@@ -416,7 +417,8 @@ V.months = () => {
   // only reserved budgets hold money back; tracked ones just show what you spent against a limit
   const reservedBudgets = budgets.filter(e => e.budget.reserve);
   const trackedBudgets = budgets.filter(e => !e.budget.reserve);
-  const budgetLeft = reservedBudgets.reduce((a, e) => a + Math.max(0, e.budget.left), 0);
+  // the same "budgets left" as the sum above and the Overview (a closed budget holds nothing back)
+  const budgetLeft = position.budgetsLeft;
   const trackedSpent = trackedBudgets.reduce((a, e) => a + e.budget.spent, 0);
   const budgetsNote = () => {
     const parts = [];
@@ -533,14 +535,15 @@ V.months = () => {
         btn($t('Add to this month'), addMenu, 'primary sm', 'plus'),
         coverNote(m),
         inMonth
-          ? h(
-              'div',
-              { class: 'flow' },
-              fl($t('You have now'), money(m.now), m.now < 0 ? 'bad' : ''),
-              toIn ? fl($t('Still to come in'), signed(toIn), 'good') : null,
-              fl($t('Still to pay'), money(-toPay)),
-              fl(endLabel, money(m.close), endCls),
-            )
+          ? monthEquation(position, {
+              endLabel,
+              endClass: endCls,
+              status: balanceChip(m),
+              perDayText:
+                position.budgetsLeft > 0 && position.daysLeft
+                  ? $t('{0}/day for {1}', money(position.perDay), plural(position.daysLeft, 'day'))
+                  : null,
+            })
           : h(
               'div',
               { class: 'flow' },
@@ -549,16 +552,18 @@ V.months = () => {
               fl($t('Money out'), money(-m.out)),
               fl(endLabel, money(m.close), endCls),
             ),
-        explainBox({
-          class: 'small muted',
-          style: 'margin-top:8px',
-          text: explainSentences().join(' '),
-        }),
+        // the equation shows the current month's sum; other months keep the sentence version
+        inMonth
+          ? null
+          : explainBox({
+              class: 'small muted',
+              style: 'margin-top:8px',
+              text: explainSentences().join(' '),
+            }),
         tickable.length || inMonth
           ? h(
               'div',
               { class: 'acts', style: 'margin-top:10px' },
-              inMonth && !UI.hideCheck ? btn($t('Update balances'), balancesModal, 'sm') : null,
               tickable.length
                 ? btn(
                     allPaid ? $t('Untick all') : $t('Mark all paid'),
@@ -628,7 +633,9 @@ V.months = () => {
               null,
               btn($t('Add a budget'), () => recModal('bills', null, { budget: true }), 'sm', 'plus'),
             ),
-        (inMonth || over) && !UI.hideCheck
+        // the current month's check lives in the status chip of the sum; this card is for a correction already made,
+        // and for entering where a finished month really ended
+        (over || (inMonth && m.fix)) && !UI.hideCheck
           ? card(
               $t('Balance check'),
               inMonth

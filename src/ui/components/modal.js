@@ -138,7 +138,8 @@ export function autosaver(save, allow = true, getState = null) {
   };
 }
 
-export function confirmModal(title, text, yes, fn) {
+/** A yes/no question. The yes button is red unless `yesClass` says otherwise (e.g. 'primary' for a harmless action). */
+export function confirmModal(title, text, yes, fn, yesClass = 'danger') {
   const d = modal({
     title,
     body: h('p', { class: 'muted', text }),
@@ -151,7 +152,7 @@ export function confirmModal(title, text, yes, fn) {
           d.close();
           fn();
         },
-        'danger',
+        yesClass,
       ),
     ],
   });

@@ -376,3 +376,61 @@ td .inp {
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* the month equation: now + coming in − to pay − budgets = left by payday */
+.meq-box {
+  container-type: inline-size;
+}
+.meq {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr auto 1.2fr;
+  align-items: stretch;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.meq-t {
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  min-width: 0;
+}
+.meq-t .l {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.meq-t .v {
+  font-size: 1.15rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.meq-t .s {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.meq-t.total {
+  background: var(--accent-soft);
+}
+.meq .op {
+  align-self: center;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+@container (max-width: 640px) {
+  /* two terms per row; each operator moves in front of its term's label */
+  .meq {
+    grid-template-columns: 1fr 1fr;
+  }
+  .meq .op {
+    display: none;
+  }
+  .meq-t .l[data-op]::before {
+    content: attr(data-op) ' ';
+    font-weight: 700;
+  }
+  .meq-t.total {
+    grid-column: 1 / -1;
+  }
+}
