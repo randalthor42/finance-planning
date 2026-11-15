@@ -10,6 +10,9 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
+import { calendar } from '../components/calendar.js';
+import { dayBalances, quiet } from '../../logic/calendar.js';
+import { planCalendar } from '../components/calendarData.js';
 import { info } from '../components/info.js';
 import { amt, bar, budgetText, card, chip, empty, page, row, segc } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
@@ -17,7 +20,7 @@ import { coverNote, fixNote } from '../components/monthNotes.js';
 import { ctxMenu } from '../components/popover.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
-import { accName, remove } from '../helpers.js';
+import { accName, remove, tickOf } from '../helpers.js';
 import { icon } from '../icons.js';
 import { balanceChip, balancesModal } from '../modals/balances.js';
 import { monthEquation } from '../components/monthEquation.js';
@@ -61,6 +64,7 @@ V.months = () => {
   const now = nowK();
   const monthKey = M.key(k);
   const days = UI.mview === 'days';
+  const calView = UI.mview === 'calendar';
   // a forecast chosen on the Forecast page can be shown here; it changes what is displayed, never the plan
   const overlay = forecastCloses(UI.overlay);
   const shownClose = month => (overlay && overlay.closes.has(month.k) ? overlay.closes.get(month.k) : month.close);
@@ -158,13 +162,6 @@ V.months = () => {
     if (element) {
       strip.scrollLeft = element.offsetLeft - strip.offsetLeft - strip.clientWidth / 2 + element.offsetWidth / 2;
     }
-  });
-  const tickOf = e => ({
-    key: e.key,
-    label: e.label,
-    amount: e.budget ? 0 : e.onCard ? -e.charged : e.amount,
-    payTo: e.payTo || e.cover || null,
-    account: e.account || null,
   });
   // a tick moves money between "You have now" and "Still to pay" / "Coming in": the two figures flash after the redraw
   const togglePaid = e => {
@@ -280,7 +277,6 @@ V.months = () => {
     });
   };
   // a tracked budget with nothing logged holds nothing back, so it stays out of the lines, the counts and "tick all"
-  const quiet = e => !!e.budget && !e.budget.reserve && !e.budget.spent;
   const shown = m.entries.filter(e => !quiet(e));
   const body = [];
   /**
@@ -317,7 +313,24 @@ V.months = () => {
     }
     return [toggle, [...spends].sort((a, c) => (a.date || 0) - (c.date || 0)).map(x => line(x, true, true))];
   };
-  if (!days) {
+  if (calView) {
+    // the month of the planner on a grid: the strip and ‹ This month › above move it, and paging in the grid moves them
+    const prefs = Store.db.calendar;
+    body.push(
+      calendar({
+        // the number on each day as set in Settings › Calendar; the density is the page's choice (audit 6.1, 6.4):
+        // the full grid on a wide screen, compact on a tablet or phone
+        ...planCalendar({ figure: prefs.plannerFigure }),
+        mode: matchMedia('(min-width: 768px)').matches ? 'full' : 'compact',
+        id: 'months',
+        month: k,
+        label: M.label(k, true),
+        header: false,
+        summary: false,
+        onNavigate: month => App.go('months', { month }),
+      }),
+    );
+  } else if (!days) {
     for (const [g, label] of [
       ['inc', $t('Income')],
       ['bill', $t('Bills and living costs')],
@@ -386,7 +399,8 @@ V.months = () => {
     const und = shown.filter(e => !inR(e));
     const by = {};
     shown.filter(inR).forEach(e => (by[e.date] = by[e.date] || []).push(e));
-    let bal = r2(m.open + und.reduce((a, e) => a + e.amount, 0));
+    // the same end-of-day balances as the calendar (logic/calendar.js dayBalances), so the two can never drift apart
+    const balances = dayBalances(m);
     let low = Infinity;
     let lowDay = null;
     if (und.length) {
@@ -407,7 +421,7 @@ V.months = () => {
     }
     for (let n = m.start; n <= m.end; n++) {
       const es = by[n] || [];
-      bal = r2(bal + es.reduce((a, e) => a + e.amount, 0));
+      const bal = balances.get(n);
       if (bal < low) {
         low = bal;
         lowDay = n;
@@ -574,6 +588,7 @@ V.months = () => {
         [
           ['list', $t('By type')],
           ['days', $t('Day by day')],
+          ['calendar', $t('Calendar')],
         ],
         UI.mview,
         v => {
@@ -587,7 +602,8 @@ V.months = () => {
     strip,
     h(
       'div',
-      { class: 'cols lead' },
+      // the calendar needs the width: its side cards move underneath
+      { class: 'cols lead' + (calView ? ' cal-view' : '') },
       card(
         M.label(k, true),
         [

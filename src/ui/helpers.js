@@ -24,6 +24,14 @@ export function remove(list, id) {
     () => Actions.remove(list, id),
   );
 }
+/** What Actions.setPaid needs to tick off (or untick) a line of a projected month. A budget ticks nothing: it closes. */
+export const tickOf = e => ({
+  key: e.key,
+  label: e.label,
+  amount: e.budget ? 0 : e.onCard ? -e.charged : e.amount,
+  payTo: e.payTo || e.cover || null,
+  account: e.account || null,
+});
 export const accName = id => (Store.plan.accounts.find(a => a.id === id) || {}).name || '';
 export const mainAcc = () => (Store.plan.accounts.find(a => a.main) || {}).id || null;
 export const find = (list, id) => Store.plan[list].find(x => x.id === id);

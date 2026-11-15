@@ -10,8 +10,11 @@ import { NOTE, formModal } from '../components/form.js';
 import { find, need, remove, upsert } from '../helpers.js';
 import { curK } from '../state.js';
 
-/** Savings goal. Target, monthly amount and target month are linked: change one and the others follow. */
-export function goalModal(id) {
+/**
+ * Savings goal. Target, monthly amount and target month are linked: change one and the others follow.
+ * `preset` fills in a new goal (for example the month it starts).
+ */
+export function goalModal(id, preset) {
   const current = id && find('goals', id);
   const s0 = Store.proj.summary.s0;
   const first = v => Math.max(M.parse(v.from) === null ? s0 : M.parse(v.from), curK());
@@ -45,6 +48,7 @@ export function goalModal(id) {
       by: null,
       rate: 0,
       release: null,
+      ...preset,
     },
     fields: [
       { k: 'name', type: 'text', label: $t('Name'), ph: $t('Emergency fund, new laptop, mortgage deposit…') },

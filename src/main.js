@@ -44,9 +44,11 @@ document.addEventListener('keydown', e => {
     key === 'y' || e.shiftKey ? Store.redo() : Store.undo();
     return;
   }
-  // ← / → change month in the month planner (not while typing, in a pop-up or with a modifier key)
+  // ← / → change month in the month planner (not while typing, in a pop-up, with a modifier key, or when a control
+  // such as the calendar grid already used the key to move between days)
   if (
     (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+    !e.defaultPrevented &&
     !e.ctrlKey &&
     !e.metaKey &&
     !e.altKey &&

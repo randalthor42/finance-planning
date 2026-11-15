@@ -15,6 +15,9 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
+import { calendar } from '../components/calendar.js';
+import { planCalendar } from '../components/calendarData.js';
+import { nextDays } from '../../logic/calendar.js';
 import { cashChart, netBars } from '../components/charts.js';
 import { amt, bar, budgetText, card, chip, designPage, prow, row } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
@@ -594,6 +597,45 @@ function setupCard(plan) {
     ),
   );
 }
+/**
+ * The calendar card of the Overview (audit 6.6): the mini month, what is ahead (income, bills, planned one-offs,
+ * loans and trips by default; Settings › Calendar can change the groups), and one line about the next 7 days.
+ * A day opens a short summary; "Open the month" in its menu goes to the planner. Null when it is switched off.
+ */
+function overviewCalendar() {
+  const prefs = Store.db.calendar;
+  if (!prefs.overview) {
+    return null;
+  }
+  const next = nextDays(Store.proj.months, Store.day);
+  return card(
+    $t('Calendar'),
+    nextDaysText(next),
+    null,
+    calendar({
+      ...planCalendar({ only: prefs.overviewGroups, figure: null, openPlanner: true, ahead: true }),
+      id: 'overview',
+      mode: 'mini',
+      // dots only: the legend of the planner calendar would be bigger than the month itself
+      legend: false,
+      // below the fold on most screens: the first time, the top of the Overview is painted before it is drawn
+      defer: true,
+      label: $t('Calendar'),
+      monthList: false,
+    }),
+  );
+}
+/** "Next 7 days: 4 payments · 610 € · lowest 54 € on Mon 30 Nov" (or that nothing is due). */
+function nextDaysText(next) {
+  const lowest = next.lowest
+    ? $t('lowest {0} on {1}', money(next.lowest.balance), D.label(next.lowest.day, { weekday: 'short' }))
+    : '';
+  if (!next.payments) {
+    return lowest ? $t('Next 7 days: nothing due · {0}', lowest) : $t('Next 7 days: nothing due');
+  }
+  return $t('Next 7 days: {0} · {1} · {2}', plural(next.payments, 'payment'), money(next.out), lowest);
+}
+
 V.overview = () => {
   const plan = Store.plan;
   const projection = Store.proj;
@@ -735,6 +777,7 @@ V.overview = () => {
       titled('now', M.label(currentMonth, true), nowCard(), { w: 8, minW: 4 }),
       titled('insights', $t('Insights'), insightsCard(), { cls: 'ov-side' }),
       titled('chart', chartTitle, card(chartTitle, null, null, cashChart()), { w: 12, minW: 4 }),
+      titled('calendar', $t('Calendar'), overviewCalendar(), { w: 4, minW: 3 }),
       titled(
         'due',
         $t('Next to pay'),

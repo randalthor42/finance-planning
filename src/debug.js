@@ -55,6 +55,10 @@ import * as m50 from './ui/views/settings.js';
 import * as m51 from './ui/views/tools.js';
 import * as m52 from './ui/views/trips.js';
 import * as m53 from './ui/components/designPages.js';
+import * as m54 from './logic/calendar.js';
+import * as m55 from './ui/components/calendar.js';
+import * as m56 from './ui/components/calendarData.js';
+import * as m57 from './models/calendarPrefs.js';
 
 export const expose = () =>
   Object.assign(
@@ -113,4 +117,8 @@ export const expose = () =>
     m51,
     m52,
     m53,
+    m54,
+    m55,
+    m56,
+    m57,
   );

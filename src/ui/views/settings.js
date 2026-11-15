@@ -18,6 +18,7 @@ import { h } from '../dom.js';
 import { exportModal, importFlow } from '../modals/backup.js';
 import { newPlanModal, renamePlanModal, rollModal, settingsModal } from '../modals/settings.js';
 import { UI, curK, monthAt } from '../state.js';
+import { calendarSettingsCards } from './calendarSettings.js';
 import { languageCard } from './language.js';
 import { V } from './registry.js';
 
@@ -40,6 +41,7 @@ export const STABS = [
   ['general', $t('This plan')],
   ['plans', $t('All plans')],
   ['look', $t('Appearance')],
+  ['calendar', $t('Calendar')],
   ['language', $t('Language')],
   ['backup', $t('Backup')],
   ['activity', $t('Activity')],
@@ -223,6 +225,7 @@ V.settings = () => {
       ),
     ],
     language: languageCard,
+    calendar: calendarSettingsCards,
     plans: () => [
       card(
         $t('Plans'),

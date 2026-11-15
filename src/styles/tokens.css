@@ -24,6 +24,8 @@
   --s-cash: #2a78d6;
   --s-save: #1baf7a;
   --s-debt: #eb6834;
+  --s-trip: #7a4fd0; /* calendar: trips and events */
+  --s-wish: #c03d86; /* calendar: wishlist */
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.06);
   --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.18);
   --r: 12px;
@@ -52,6 +54,8 @@
   --s-cash: #3987e5;
   --s-save: #199e70;
   --s-debt: #d95926;
+  --s-trip: #a68bff;
+  --s-wish: #f07ab8;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
   color-scheme: dark;

@@ -79,6 +79,10 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | Where data is stored | `src/services/storage.js` |
 | Export, import, encryption, CSV | `src/services/backup.js` |
 | Dates, pay periods | `src/core/dates.js` |
+| The calendar: grid, densities (full, compact, mini), keyboard, day panel | `src/ui/components/calendar.js` (the page passes `mode`) |
+| The plan on a calendar: events, day figure and markers, menus | `src/ui/components/calendarData.js` (`planCalendar`) |
+| Calendar arithmetic: weeks, spans, end-of-day balances, the next 7 days | `src/logic/calendar.js` (Day by day uses `dayBalances` too) |
+| Calendar settings (Settings › Calendar) | `src/models/calendarPrefs.js` (`normCalendar`) and `src/ui/views/calendarSettings.js` |
 | Money formatting and parsing | `src/core/format.js` |
 | The currency and formats a first plan starts with (from the browser language) | `src/core/locale.js` |
 | "New plan" in three steps, and the plan settings fields | `newPlanModal` and `planFields` in `src/ui/modals/settings.js` |

@@ -4,6 +4,7 @@
 import { APP } from '../config.js';
 import { GRID_COLS, GRID_MAX_H } from '../core/grid.js';
 import { clamp, isObj, uid } from '../core/util.js';
+import { normCalendar } from './calendarPrefs.js';
 import { normPlan } from './plan.js';
 
 /** Names of pages and cards in a saved layout: short, plain identifiers. */
@@ -67,6 +68,7 @@ export function normDB(raw) {
     /** Show the "Design mode" switch on the pages whose cards can be arranged. Off until the person turns it on. */
     designMode: raw.designMode === true,
     layouts: normLayouts(raw.layouts),
+    calendar: normCalendar(raw.calendar),
     log: Array.isArray(raw.log)
       ? raw.log
           .filter(isObj)

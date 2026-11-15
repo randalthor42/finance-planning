@@ -77,6 +77,23 @@
 .mpop.menu button.danger {
   color: var(--bad);
 }
+/* a section title and a dividing line inside a menu (ctxMenu: a string, or '-') */
+.mpop.menu .menu-h {
+  padding: 8px 10px 2px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.mpop.menu .menu-h:first-child {
+  padding-top: 4px;
+}
+.mpop.menu .menu-sep {
+  margin: 4px 6px;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
 .bar.warn > i {
   background: var(--warn);
 }

@@ -18,26 +18,40 @@ export function closePop() {
     document.removeEventListener('mousedown', popOutside, true);
   }
 }
-/** Right-click menu for list rows. items: [label, fn, cssClass] */
+/**
+ * Right-click menu for list rows. items: [label, fn, cssClass]; null is skipped.
+ * A plain string is a section title over the items that follow, and '-' is a dividing line.
+ */
 export function ctxMenu(e, items) {
   e.preventDefault();
   closePop();
-  const pop = h(
-    'div',
-    { class: 'mpop menu', role: 'menu' },
-    items.filter(Boolean).map(([l, fn, className]) =>
-      h('button', {
-        type: 'button',
-        role: 'menuitem',
-        class: className || '',
-        text: l,
-        onclick: () => {
-          closePop();
-          fn();
-        },
-      }),
-    ),
-  );
+  const pop = h('div', { class: 'mpop menu', role: 'menu' }, items.filter(Boolean).map(menuEntry));
+  finishMenu(e, pop);
+}
+/** One entry of a menu: a dividing line ('-'), a section title (a string), or an item ([label, action, class]). */
+function menuEntry(item) {
+  if (item === '-') {
+    return h('hr', { class: 'menu-sep', role: 'separator' });
+  }
+  if (typeof item === 'string') {
+    return h('div', { class: 'menu-h', role: 'presentation', text: item });
+  }
+  return menuItem(item);
+}
+function menuItem([l, fn, className]) {
+  return h('button', {
+    type: 'button',
+    role: 'menuitem',
+    class: className || '',
+    text: l,
+    onclick: () => {
+      closePop();
+      fn();
+    },
+  });
+}
+/** Places a menu at the pointer (or under the control, from the keyboard) and makes it the open pop-up. */
+function finishMenu(e, pop) {
   pop.anchor = pop;
   (e.target.closest('dialog') || document.body).append(pop);
   // Opened with the keyboard (Enter, Space, the menu key) the event has no pointer position: place it under the control.

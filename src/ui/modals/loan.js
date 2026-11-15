@@ -12,7 +12,8 @@ import { NOTE, formModal } from '../components/form.js';
 import { dayFields, find, need, remove, upsert } from '../helpers.js';
 import { nowK } from '../state.js';
 
-export function loanModal(id) {
+/** Add or edit a loan. `preset` fills in a new loan (for example the month and day of the first payment). */
+export function loanModal(id, preset) {
   const current = id && find('loans', id);
   const settings = Store.plan.settings;
   formModal({
@@ -37,6 +38,7 @@ export function loanModal(id) {
       extras: {},
       early1: 0,
       early2: 0,
+      ...preset,
     },
     fields: [
       { k: 'name', type: 'text', label: $t('Name'), ph: $t('Car loan, bank loan for dental work…') },

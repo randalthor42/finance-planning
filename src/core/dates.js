@@ -4,6 +4,24 @@
 import { FMT } from './format.js';
 import { clamp } from './util.js';
 
+/**
+ * Dates as text. toLocaleDateString builds a new Intl.DateTimeFormat on every call, which is slow (a calendar writes
+ * a hundred dates per redraw): keep one formatter per language and set of options. The text is exactly the same.
+ */
+const formats = new Map();
+function dateText(date, locale, options) {
+  const key = locale + '|' + JSON.stringify(options);
+  let format = formats.get(key);
+  if (!format) {
+    if (formats.size > 200) {
+      formats.clear(); // a handful are in use; this only guards against unbounded growth
+    }
+    format = new Intl.DateTimeFormat(locale, options);
+    formats.set(key, format);
+  }
+  return format.format(date);
+}
+
 /** Months are integers (year*12 + monthIndex) internally and 'YYYY-MM' strings in stored data. */
 export const M = {
   parse: s => {
@@ -20,8 +38,8 @@ export const M = {
     return d.getFullYear() * 12 + d.getMonth();
   },
   date: i => new Date(Math.floor(i / 12), i % 12, 1),
-  label: (i, long) => M.date(i).toLocaleDateString(FMT.dloc, { month: long ? 'long' : 'short', year: 'numeric' }),
-  short: i => M.date(i).toLocaleDateString(FMT.dloc, { month: 'short' }),
+  label: (i, long) => dateText(M.date(i), FMT.dloc, { month: long ? 'long' : 'short', year: 'numeric' }),
+  short: i => dateText(M.date(i), FMT.dloc, { month: 'short' }),
 };
 /** Days are integers (days since 1970-01-01, UTC so there are no timezone or DST surprises) and 'YYYY-MM-DD' in stored data. */
 export const D = {
@@ -67,8 +85,9 @@ export const D = {
     }
     return n;
   },
-  label: (n, o) =>
-    D.js(n).toLocaleDateString(FMT.dloc, Object.assign({ timeZone: 'UTC', day: 'numeric', month: 'short' }, o)),
+  label: (n, o) => D.fmt(n, Object.assign({ day: 'numeric', month: 'short' }, o)),
+  /** Day n as text with exactly these Intl options (for example { weekday: 'long' }), in the app's language. */
+  fmt: (n, o) => dateText(D.js(n), FMT.dloc, Object.assign({ timeZone: 'UTC' }, o)),
 };
 /**
  * BUDGET PERIODS ("months" in the UI). A period always ends the day before the next salary.
