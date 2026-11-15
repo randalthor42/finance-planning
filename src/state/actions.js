@@ -22,6 +22,21 @@ const KIND = {
   wishes: $t('wish'),
   accounts: $t('account'),
 };
+/**
+ * What a tick did, in one sentence for the notification and the activity log: ticking moves the amount between
+ * "You have now" and "Still to pay" / "Coming in" (the month end does not change), so the sentence says where it went.
+ */
+function tickLabel(entry, on, monthName) {
+  const amount = money(Math.abs(entry.amount || 0));
+  if (entry.amount > 0) {
+    return on
+      ? $t('“{0}” received in {1} · {2} moved to “You have now”', entry.label, monthName, amount)
+      : $t('“{0}” unticked in {1} · {2} back in “Coming in”', entry.label, monthName, amount);
+  }
+  return on
+    ? $t('“{0}” paid in {1} · {2} moved to “You have now”', entry.label, monthName, amount)
+    : $t('“{0}” unticked in {1} · {2} back in “Still to pay”', entry.label, monthName, amount);
+}
 export const Actions = {
   save(list, obj) {
     const isNew = !Store.plan[list].some(x => x.id === obj.id);
@@ -136,7 +151,8 @@ export const Actions = {
         const o = p.paid[monthKey] || (p.paid[monthKey] = {});
         Actions._tick(p, o, e, on, accountId, moves);
       },
-      `${on ? $t('Ticked off') : $t('Unticked')} “${e.label}” in ${M.label(monthIndex)}`,
+      tickLabel(e, on, M.label(monthIndex)),
+      { undo: true },
     );
   },
   _tick(p, o, e, on, accountId, moves) {
@@ -182,7 +198,10 @@ export const Actions = {
           Actions._tick(p, o, e, on, null, false);
         }
       },
-      $t('{0} everything in {1}', on ? $t('Ticked off') : $t('Unticked'), M.label(monthIndex)),
+      on
+        ? $t('Marked everything paid in {0}', M.label(monthIndex))
+        : $t('Unticked everything in {0}', M.label(monthIndex)),
+      { undo: true },
     );
   },
   /**

@@ -492,3 +492,22 @@ td .inp {
 .listfilter-o:hover {
   background: var(--surface-2);
 }
+/* a figure of the month sum that just changed (after a tick) flashes once */
+@keyframes meq-pulse {
+  0% {
+    box-shadow: 0 0 0 2px var(--accent);
+    background: var(--accent-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.meq-t.pulse {
+  animation: meq-pulse 1.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .meq-t.pulse {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}

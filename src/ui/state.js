@@ -54,6 +54,8 @@ export const UI = {
   accountView: 'cards',
   /** The page whose cards are being arranged (Design mode, components/designGrid.js), or null. Ends on leaving it. */
   design: null,
+  /** Month planner: the figures of the month sum to flash once after a tick ({ month, terms }), or null. */
+  pulse: null,
 };
 export const nowK = () => (Store.plan ? Period.now(Store.plan.settings) : M.now());
 export const curK = () => {

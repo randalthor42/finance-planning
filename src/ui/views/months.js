@@ -45,6 +45,12 @@ function monthNav(k, summary) {
     next,
   );
 }
+/** The figures to flash once after a tick in month `monthKey` (then forgotten, so a later redraw does not flash again). */
+function takePulse(monthKey) {
+  const pulse = UI.pulse;
+  UI.pulse = null;
+  return pulse && pulse.month === monthKey ? pulse.terms : [];
+}
 V.months = () => {
   const plan = Store.plan;
   const settings = plan.settings;
@@ -160,7 +166,11 @@ V.months = () => {
     payTo: e.payTo || e.cover || null,
     account: e.account || null,
   });
-  const togglePaid = e => Actions.setPaid(m.key, tickOf(e), !e.paid);
+  // a tick moves money between "You have now" and "Still to pay" / "Coming in": the two figures flash after the redraw
+  const togglePaid = e => {
+    UI.pulse = { month: m.key, terms: ['now', e.amount > 0 ? 'comingIn' : 'toPay'] };
+    Actions.setPaid(m.key, tickOf(e), !e.paid);
+  };
   /** Row actions of a budget: log a spend, change it for this month, close it (or reopen it). */
   const budgetActions = e => [
     e.budget.done || e.budget.closed ? null : [$t('Log a spend'), () => logSpend(e.id, m)],
@@ -590,6 +600,7 @@ V.months = () => {
         coverNote(m),
         inMonth
           ? monthEquation(position, {
+              pulse: takePulse(m.key),
               endLabel,
               endClass: endCls,
               status: balanceChip(m),
