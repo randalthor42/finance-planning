@@ -185,8 +185,8 @@ export function project(plan, opts) {
           const reserveOver = !!ro && has(ro, entryKey);
           const reserve = reserveOver ? ro[entryKey] : r.reserve !== false;
           // A limit ("tracked" budget) sets nothing aside in any month: only the spends you logged take money, and they
-          // take it from what is free. (The v0.9 audit's B1 suggested counting the limit in future months; the owner
-          // chose to keep "only once logged".)
+          // take it from what is free. This holds for future months too (product decision, v0.9: the audit's B1,
+          // counting the limit in months that have not started, was tried and dropped).
           e.budget = { planned: amount, spent: sp, left: r2(amount - sp), closed: over2, done, reserve, reserveOver };
           e.amount = !reserve || over2 ? 0 : -Math.max(0, amount - sp);
           e.date = null;
