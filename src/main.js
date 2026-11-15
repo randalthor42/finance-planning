@@ -11,6 +11,7 @@ import { POP, closePop } from './ui/components/popover.js';
 import { toast } from './ui/components/toast.js';
 import { searchModal } from './ui/modals/search.js';
 import { $ } from './ui/dom.js';
+import { UI, selK } from './ui/state.js';
 import './ui/views/index.js';
 import { expose } from './debug.js';
 
@@ -41,11 +42,34 @@ document.addEventListener('keydown', e => {
   ) {
     e.preventDefault();
     key === 'y' || e.shiftKey ? Store.redo() : Store.undo();
+    return;
+  }
+  // ← / → change month in the month planner (not while typing, in a pop-up or with a modifier key)
+  if (
+    (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+    !e.ctrlKey &&
+    !e.metaKey &&
+    !e.altKey &&
+    !e.shiftKey &&
+    UI.view === 'months' &&
+    Store.plan &&
+    !document.querySelector('dialog[open]') &&
+    !POP &&
+    !/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) &&
+    !e.target.isContentEditable
+  ) {
+    const summary = Store.proj.summary;
+    const next = selK() + (e.key === 'ArrowLeft' ? -1 : 1);
+    if (next >= summary.s0 && next < summary.s0 + summary.n) {
+      e.preventDefault();
+      App.go('months', { month: next });
+    }
   }
 });
 addEventListener('storage', e => {
   if (e.key === APP.key) {
     Store.undoS = [];
+    Store.undoChars = 0;
     Store.redoS = [];
     Store.init();
     App.render();
@@ -55,10 +79,13 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => App.
 addEventListener('resize', closePop);
 $('#scrim').addEventListener('click', () => App.menu(false));
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
+  if (document.hidden) {
+    Store.flush(); // saves are coalesced (Store.save): write before the tab may be closed or frozen
+  } else {
     App.tick();
   }
 });
+addEventListener('pagehide', () => Store.flush());
 setInterval(() => App.tick(), 60000);
 Store.onChange = () => App.render();
 Store.onNotify = (text, o) => toast(text, o);

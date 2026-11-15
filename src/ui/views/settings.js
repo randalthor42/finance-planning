@@ -38,11 +38,23 @@ const logRow = e =>
 export const STABS = [
   ['general', $t('This plan')],
   ['plans', $t('All plans')],
-  ['look', $t('Look and behaviour')],
+  ['look', $t('Appearance')],
   ['language', $t('Language')],
-  ['backup', $t('Backup and transfer')],
+  ['backup', $t('Backup')],
   ['activity', $t('Activity')],
 ];
+/** "on the 26th, or the next working day": when the salary arrives, as one translatable sentence. */
+function paydayText(settings) {
+  const day = ordinal(settings.payDay);
+  if (settings.payShift === 'next') {
+    return $t('on the {0}, or the next working day', day);
+  }
+  if (settings.payShift === 'prev') {
+    return $t('on the {0}, or the working day before', day);
+  }
+  return $t('on the {0}', day);
+}
+
 V.settings = () => {
   const plan = Store.plan;
   const settings = plan.settings;
@@ -82,19 +94,9 @@ V.settings = () => {
           kv($t('Name'), plan.name),
           kv($t('First month'), M.label(M.parse(settings.startMonth), true)),
           kv($t('Months planned'), String(settings.horizon)),
-          kv($t('Cash at the start'), money(settings.opening)),
+          kv($t('Starting balance'), money(settings.opening)),
           kv($t('Safety cushion'), settings.cushion ? money(settings.cushion) : $t('Not set')),
-          kv(
-            $t('Salary arrives'),
-            settings.payDay
-              ? $t('on the {0}', ordinal(settings.payDay)) +
-                  (settings.payShift === 'next'
-                    ? $t(', or the next working day')
-                    : settings.payShift === 'prev'
-                      ? $t(', or the working day before')
-                      : '')
-              : $t('Not set (calendar months)'),
-          ),
+          kv($t('Salary arrives'), settings.payDay ? paydayText(settings) : $t('Not set (calendar months)')),
           kv(
             $t('A month runs'),
             settings.payDay
@@ -119,7 +121,7 @@ V.settings = () => {
     ],
     look: () => [
       card(
-        $t('Look and behaviour'),
+        $t('Appearance'),
         null,
         null,
         h(
@@ -209,7 +211,10 @@ V.settings = () => {
                   $t('Copy'),
                   () => {
                     if (
-                      !Store.addPlan({ ...JSON.parse(JSON.stringify(x)), id: null, name: x.name + $t(' copy') }, false)
+                      !Store.addPlan(
+                        { ...JSON.parse(JSON.stringify(x)), id: null, name: $t('{0} copy', x.name) },
+                        false,
+                      )
                     ) {
                       toast($t('Plan limit reached'), { kind: 'bad' });
                     }
@@ -262,7 +267,7 @@ V.settings = () => {
     ],
     backup: () => [
       card(
-        $t('Backup and transfer'),
+        $t('Backup'),
         $t('Your data lives in this browser. Export a backup to keep it safe or move it to another device.'),
         null,
         h(

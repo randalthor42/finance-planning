@@ -28,7 +28,7 @@ function accountCard(account, plan, projection, monthPosition, allAccounts) {
   const isCredit = account.type === 'credit';
   const canBeMain = account.type === 'debit' || account.type === 'cash';
   const usedBy = [
-    ...plan.incomes.filter(income => income.account === account.id).map(income => income.name + $t(' comes in')),
+    ...plan.incomes.filter(income => income.account === account.id).map(income => $t('{0} comes in', income.name)),
     ...plan.bills.filter(bill => bill.account === account.id).map(bill => bill.name),
     ...plan.bills
       .filter(bill => bill.payTo === account.id)
@@ -76,7 +76,7 @@ function accountCard(account, plan, projection, monthPosition, allAccounts) {
       h(
         'div',
         { class: 'alines' },
-        line($t('Counted in'), spends ? $t('To spend now') : $t('Emergency money')),
+        line($t('Counted in'), spends ? $t('To spend now') : $t('Available if needed')),
         spends && share > 0
           ? line($t('Share of your spending money'), fmtNum(Math.round((account.balance / share) * 100)) + '%')
           : null,
@@ -190,46 +190,37 @@ V.accounts = () => {
   );
   const owed = a.reduce((s, x) => s + x.owed, 0);
   const checkCard = card(
-    $t('This month from what you really have'),
+    $t('Balance check'),
     null,
     null,
-    fixNote(m) ||
-      h('p', {
-        class: 'muted',
-        text: $t(
-          'Not checked this month. Press “What I have today”: you enter your balances, tick what is already paid, and the planner matches your real money.',
-        ),
-      }),
+    fixNote(m) || h('p', { class: 'muted', text: $t('Not checked this month.') }),
     m.fix
       ? h(
           'div',
           { class: 'acts', style: 'margin-top:10px' },
-          btn($t('Check again'), balancesModal, 'sm'),
+          btn($t('Update balances'), balancesModal, 'sm'),
           btn($t('Open the month'), () => App.go('months', { month: m.k }), 'sm'),
           btn($t('Remove the correction'), () => Actions.clearFix(m.key), 'sm ghost'),
         )
-      : null,
+      : h('div', { class: 'acts', style: 'margin-top:10px' }, btn($t('Update balances'), balancesModal, 'sm')),
   );
   const cards = a.filter(x => x.type === 'credit');
   const noPay = cards.filter(c => c.owed > 0 && !plan.bills.some(b => b.payTo === c.id));
   const payCard = noPay.length
     ? card(
-        $t('Paying off ') + noPay[0].name,
+        $t('Paying off {0}', noPay[0].name),
         null,
         null,
         h('p', {
           class: 'muted',
-          text: $t(
-            'You owe {0} on it, and no bill pays it off yet. Open the bill you pay the card with and set “Pays off” to this card. Each payment then lowers what you owe and frees the same amount again.',
-            money(noPay[0].owed),
-          ),
+          text: $t('Nothing pays this card down yet.'),
         }),
         h(
           'div',
           { class: 'acts', style: 'margin-top:10px' },
           btn(
-            $t('Add a card payment bill'),
-            () => recModal('bills', null, { name: noPay[0].name + $t(' payment'), cat: 'debt', payTo: noPay[0].id }),
+            $t('Add card payment'),
+            () => recModal('bills', null, { name: $t('{0} payment', noPay[0].name), cat: 'debt', payTo: noPay[0].id }),
             'sm',
             'plus',
           ),
@@ -238,7 +229,7 @@ V.accounts = () => {
     : null;
   return page(
     $t('Accounts'),
-    $t('Where your money is. Tell the planner what you have today and it works out the rest of the month from that.'),
+    $t('Your balances. Update them and the month recalculates.'),
     [
       segc(
         [
@@ -252,7 +243,7 @@ V.accounts = () => {
         },
       ),
       btn($t('Add an account'), () => accountModal(), '', 'plus'),
-      btn($t('What I have today'), balancesModal, 'primary', 'edit'),
+      btn($t('Update balances'), balancesModal, 'primary', 'edit'),
     ],
     h(
       'div',
@@ -273,22 +264,13 @@ V.accounts = () => {
         h('div', { class: 'v ' + (spend < 0 ? 'bad' : ''), text: money(spend) }),
         h('div', {
           class: 's',
-          text: m.fix && m.fix.d !== null ? $t('checked on ') + D.label(m.fix.d) : $t('not checked this month yet'),
+          text: m.fix && m.fix.d !== null ? $t('checked on {0}', D.label(m.fix.d)) : $t('not checked this month yet'),
         }),
       ),
       h(
         'div',
         { class: 'kpi' },
-        h(
-          'div',
-          { class: 'l' },
-          $t('Emergency money'),
-          info(
-            $t(
-              'Savings accounts plus the credit that is really free: the limit, minus what you owe, minus what this month still puts on the card. Never counted as money to spend.',
-            ),
-          ),
-        ),
+        h('div', { class: 'l' }, $t('Available if needed'), info($t('Savings + unused credit after this month.'))),
         h('div', { class: 'v', text: money(emergency) }),
         h('div', {
           class: 's',
@@ -300,7 +282,7 @@ V.accounts = () => {
         { class: 'kpi' },
         h('div', { class: 'l', text: $t('{0} ends at', M.label(m.k)) }),
         h('div', { class: 'v ' + (m.close < 0 ? 'bad' : ''), text: money(m.close) }),
-        h('div', { class: 's', text: m.fix ? $t('from what you really have') : $t('from the plan only') }),
+        h('div', { class: 's', text: m.fix ? $t('after your balance check') : $t('from the plan only') }),
       ),
     ),
     a.length
@@ -318,7 +300,7 @@ V.accounts = () => {
           empty(
             $t('No accounts yet'),
             $t(
-              'Add your bank account, your cash and your credit card. You can also skip this and enter one total with “What I have today”.',
+              'Add your bank account, your cash and your credit card. You can also skip this and enter one total with “Update balances”.',
             ),
             $t('Add an account'),
             () => accountModal(),

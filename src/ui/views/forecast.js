@@ -13,6 +13,7 @@ import { dataTable } from '../components/dataTable.js';
 import { info } from '../components/info.js';
 import { card, page, segc } from '../components/layout.js';
 import { h } from '../dom.js';
+import { memo } from '../memo.js';
 import { UI, nowK } from '../state.js';
 import { V } from './registry.js';
 
@@ -229,11 +230,25 @@ export const FTABS = [
 ];
 const forecastName = type => (FTABS.find(tab => tab[0] === type) || FTABS[0])[1];
 
-/** Runs one forecast with the settings chosen on the Forecast page. Shared with the month planner overlay. */
+/**
+ * Runs one forecast with the settings chosen on the Forecast page. Shared with the month planner overlay.
+ * The result only depends on the plan and these inputs (the Monte Carlo range is seeded), so it is cached:
+ * redraws that change nothing (sorting, folding, opening a menu) reuse it.
+ */
 function runForecast(type) {
   const projection = Store.proj;
   const settings = UI.forecast;
   const currentPosition = Math.min(projection.months.length - 1, Math.max(0, nowK() - projection.summary.s0));
+  const inputs = [
+    currentPosition,
+    settings.sampleMonths,
+    settings.percent,
+    settings.incomePercent,
+    settings.alphaPercent,
+  ];
+  return memo('forecast:' + type, inputs, () => computeForecast(type, projection, currentPosition, settings));
+}
+function computeForecast(type, projection, currentPosition, settings) {
   if (type === 'range') {
     return { range: forecastRange(projection, currentPosition, { sampleMonths: settings.sampleMonths }) };
   }

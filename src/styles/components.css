@@ -10,6 +10,11 @@
   padding: 18px;
   min-width: 0;
 }
+/* cards below the fold skip layout and paint until they scroll into view (long pages on phones) */
+main .card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 400px;
+}
 .card-h {
   display: flex;
   align-items: center;
@@ -173,8 +178,8 @@
 .row.off {
   opacity: 0.5;
 }
+/* a paid line is muted, not struck through: a struck-through salary reads as "cancelled" */
 .row.done .t {
-  text-decoration: line-through;
   color: var(--muted);
 }
 .grp-h {
@@ -274,11 +279,15 @@
 }
 .catrow {
   display: grid;
-  grid-template-columns: minmax(90px, 150px) 1fr auto;
+  /* a fixed value column so every bar track has the same length */
+  grid-template-columns: minmax(90px, 150px) 1fr 17ch;
   gap: 10px;
   align-items: center;
   padding: 5px 0;
   font-size: 0.9rem;
+}
+.catrow > .num {
+  text-align: right;
 }
 
 .tblw {

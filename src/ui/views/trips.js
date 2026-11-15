@@ -17,15 +17,22 @@ import { dataTable } from '../components/dataTable.js';
 import { h } from '../dom.js';
 import { tripModal } from '../modals/trip.js';
 import { curK, monthAt } from '../state.js';
+import { memo } from '../memo.js';
 import { V } from './registry.js';
 
-/** How the plan copes with one trip: compares the plan with and without it. */
+/**
+ * How the plan copes with one trip: compares the plan with and without it.
+ * One projection per trip, cached until the plan changes (switching Cards/List or folding a card reuses it).
+ */
 function tripFit(t) {
-  const plan = Store.plan;
-  const projection = Store.proj;
   if (!t.on) {
     return null;
   }
+  return memo('tripFit:' + t.id, [], () => computeTripFit(t));
+}
+function computeTripFit(t) {
+  const plan = Store.plan;
+  const projection = Store.proj;
   const base = project({ ...plan, trips: plan.trips.filter(x => x.id !== t.id) }, { today: Store.day });
   const newNeg = projection.months.filter((m, i) => m.status === 'neg' && base.months[i].status !== 'neg');
   const newTight = projection.months.filter((m, i) => m.status === 'tight' && base.months[i].status === 'ok');

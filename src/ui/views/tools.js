@@ -46,7 +46,7 @@ V.tools = () => {
     const mm = Math.round((x - hh) * 60);
     return rate > 0 ? $t('{0} h {1} min', hh, mm) : '–';
   };
-  const days = v => (rate > 0 ? fmtNum(Math.round((v / rate / 8) * 10) / 10) + $t(' working days') : '');
+  const days = v => (rate > 0 ? $t('{0} working days', fmtNum(Math.round((v / rate / 8) * 10) / 10)) : '');
   const out = h('div', { class: 'preview' });
   const two = (...x) => h('div', { class: 'form', style: 'margin-bottom:10px' }, x);
   const fld = (label, k, ph, o) =>
@@ -75,7 +75,7 @@ V.tools = () => {
           .map(e => [e.label, -e.amount, $t('Bought this month')]),
         ...plan.bills
           .filter(b => b.cat === 'subs')
-          .map(b => [b.name + $t(' (a year)'), (b.amount / b.every) * 12, $t('Subscription')]),
+          .map(b => [$t('{0} (a year)', b.name), (b.amount / b.every) * 12, $t('Subscription')]),
       ].filter(x => x[1] > 0);
       const hm = h('input', {
         class: 'inp num',
@@ -106,13 +106,7 @@ V.tools = () => {
       };
       return card(
         $t('What does it cost in hours of work?'),
-        $t(
-          'Your income is {0} a month. At {1} hours that is {2} {3} an hour.',
-          money(inc),
-          fmtNum(plan.settings.hoursMonth),
-          fmtNum(rate),
-          FMT.cur,
-        ),
+        $t('{0} a month ÷ {1} hours = {2} an hour.', money(inc), fmtNum(plan.settings.hoursMonth), money(rate)),
         h(
           'label',
           { class: 'fld', style: 'width:120px' },
@@ -295,7 +289,7 @@ V.tools = () => {
                 '{0} {1} each for {2}. Total with tip: {3} {4}.',
                 fmtNum(tot / n),
                 FMT.cur,
-                plural(n, 'person').replace('persons', 'people'),
+                plural(n, 'person'),
                 fmtNum(tot),
                 FMT.cur,
               )

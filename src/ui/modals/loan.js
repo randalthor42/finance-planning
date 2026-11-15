@@ -105,16 +105,26 @@ export function loanModal(id) {
     ],
     preview: v => {
       const c = loanCalc(normPlan({ settings: settings, loans: [v] }).loans[0]);
-      return c
-        ? $t(
-            'Monthly payment {0} · you borrow {1}{2} · total interest {3} · paid off {4}',
-            money(c.pay),
-            money(c.P),
-            c.fee > 0 ? $t(' (fee ') + money(c.fee) + ')' : '',
-            money(c.int),
-            M.label(c.end),
-          )
-        : $t('Enter an amount to see the monthly payment.');
+      if (!c) {
+        return $t('Enter an amount to see the monthly payment.');
+      }
+      if (c.fee > 0) {
+        return $t(
+          'Monthly payment {0} · you borrow {1} (fee {2}) · total interest {3} · paid off {4}',
+          money(c.pay),
+          money(c.P),
+          money(c.fee),
+          money(c.int),
+          M.label(c.end),
+        );
+      }
+      return $t(
+        'Monthly payment {0} · you borrow {1} · total interest {2} · paid off {3}',
+        money(c.pay),
+        money(c.P),
+        money(c.int),
+        M.label(c.end),
+      );
     },
     onSave: v =>
       need(v) ||

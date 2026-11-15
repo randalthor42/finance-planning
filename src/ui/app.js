@@ -187,6 +187,7 @@ function renderSide() {
       { type: 'button', class: 'searchbtn', title: $t('Search your plan (Ctrl K)'), onclick: searchModal },
       icon('list'),
       h('span', { class: 'grow', text: $t('Search…') }),
+      h('kbd', { text: /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K' }),
     ),
     h(
       'nav',

@@ -96,7 +96,7 @@ export function row({ title, desc: description, right, onclick, cls: className, 
           {
             type: 'button',
             class: 'rowdel',
-            'aria-label': $t('Delete ') + title,
+            'aria-label': $t('Delete {0}', typeof title === 'string' ? title : ''),
             title: $t('Delete'),
             onclick: e => {
               e.stopPropagation();

@@ -91,7 +91,7 @@ V.wishes = () => {
           title: HOW[how],
           cls: 'wrap',
           desc: description,
-          chips: chip(k === null ? $t('not yet') : $t('possible'), k === null ? 'warn' : 'good'),
+          chips: chip(k === null ? $t('not yet') : $t('fits'), k === null ? 'warn' : 'good'),
           right:
             k === null
               ? null
@@ -132,7 +132,7 @@ V.wishes = () => {
           $t('{0} would end at {1} instead of {2}.', M.label(bk), money(mb.close), money(at(base, bk).close)) +
           (v[0] !== 'good' ? $t(' Tightest month: {0} at {1}.', M.label(R.summary.minK), money(R.summary.min)) : '');
         return row({
-          title: HOW[how] + (how === 'save' && c.how !== 'save' ? $t(' (no months left to save)') : ''),
+          title: how === 'save' && c.how !== 'save' ? $t('{0} (no months left to save)', HOW[how]) : HOW[how],
           cls: 'wrap' + (how === Wd.how ? ' chosen' : ''),
           desc: description,
           chips: chip(v[1], v[0]),
@@ -240,9 +240,7 @@ V.wishes = () => {
     });
   return page(
     $t('Wishlist'),
-    $t(
-      'Things you want to buy. Not sure when? Leave the date open and the wishlist finds the earliest month your plan can pay for it. Nothing changes in your plan until you choose.',
-    ),
+    $t('Things you want, and the best month to buy them. Nothing counts until you switch it on.'),
     [
       segc(
         [
@@ -276,12 +274,12 @@ V.wishes = () => {
             h(
               'div',
               { class: 'kpi' },
-              h('div', { class: 'l', text: $t('Spare money right now') }),
+              h('div', { class: 'l', text: $t('Safe to spend now') }),
               h('div', {
                 class: 'v',
                 text: money(Math.max(0, roomSeries(projection, cush)[currentMonth - summary.s0])),
               }),
-              h('div', { class: 's', text: $t('what you could spend without breaking a later month') }),
+              h('div', { class: 's', text: $t('without any later month going under your cushion') }),
             ),
           ),
           list ? card(null, null, null, table()) : h('div', { class: 'cols' }, cards),

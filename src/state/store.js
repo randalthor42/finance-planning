@@ -11,6 +11,14 @@ import { normDB } from '../models/db.js';
 import { normPlan } from '../models/plan.js';
 import { LocalStorageAdapter } from '../services/storage.js';
 
+/** Undo keeps at most this many steps… */
+const UNDO_STEPS = 60;
+/** …and at most this many characters of plan snapshots (about 2 MB in memory: JS strings are UTF-16). */
+const UNDO_CHARS = 1e6;
+/** The purchase log keeps at most MAX_ITEMS entries per plan (normPlan); a warning comes ITEMS_WARN entries before. */
+const MAX_ITEMS = 5000;
+const ITEMS_WARN = 4500;
+
 /** Holds the state, is the single place it changes, and keeps undo/redo and the activity log. Knows nothing about the page. */
 export class PlanStore {
   constructor(adapter) {
@@ -20,6 +28,12 @@ export class PlanStore {
     this.undoS = [];
     this.redoS = [];
     this.saveOk = true;
+    /** Goes up every time the projection is recalculated: derived data cached for one revision is then stale (ui/memo.js). */
+    this.rev = 0;
+    /** A write to storage is waiting for the end of the current task (see save). */
+    this.savePending = false;
+    /** Total length of the undo snapshots, kept so the stack can be bounded by size. */
+    this.undoChars = 0;
     this.day = null;
     this.tag = null;
     this.lastTag = null; // set by an autosaving pop-up so its saves count as one step
@@ -35,6 +49,7 @@ export class PlanStore {
   }
   recalc() {
     const p = this.plan;
+    this.rev++;
     this.day = D.today();
     if (p) {
       setFmt(p.settings);
@@ -44,8 +59,41 @@ export class PlanStore {
       this.proj = null;
     }
   }
+  /**
+   * Saves the database. Several changes in one task (Mark all paid, an autosaving pop-up) are written once:
+   * the write waits until the current task ends. flush() writes at once; main.js calls it when the page is hidden.
+   */
   save() {
+    if (this.savePending) {
+      return;
+    }
+    this.savePending = true;
+    setTimeout(() => this.flush(), 0);
+  }
+  /** Writes a pending save now. If the result differs from the last one, the page is told (the "Saved" badge). */
+  flush() {
+    if (!this.savePending) {
+      return;
+    }
+    this.savePending = false;
+    const wasOk = this.saveOk;
     this.saveOk = this.adapter.write(this.db);
+    if (wasOk !== this.saveOk) {
+      this.onChange();
+    }
+  }
+  /** Size of the stored database, in characters, and its share of a typical 5 MB browser quota (UTF-16: 2 bytes each). */
+  storageUse() {
+    const chars = JSON.stringify(this.db).length + this.adapter.key.length;
+    return { chars, share: (chars * 2) / (5 * 1024 * 1024) };
+  }
+  /** Adds an undo step and drops the oldest ones beyond the step and size limits. */
+  pushUndo(entry) {
+    this.undoS.push(entry);
+    this.undoChars += entry.snap.length;
+    while (this.undoS.length > 1 && (this.undoS.length > UNDO_STEPS || this.undoChars > UNDO_CHARS)) {
+      this.undoChars -= this.undoS.shift().snap.length;
+    }
   }
   /** Adds a line to the activity log (what changed, when). `merge` replaces the last line instead (one line per autosaving pop-up). */
   log(text, merge) {
@@ -66,7 +114,16 @@ export class PlanStore {
   commit(fn, label, opts) {
     const prev = JSON.stringify(this.plan);
     const draft = JSON.parse(prev);
+    const itemsBefore = this.plan.items.length;
     fn(draft);
+    // normPlan keeps only the first MAX_ITEMS log entries: refuse the change instead of dropping a new entry silently
+    if (Array.isArray(draft.items) && draft.items.length > MAX_ITEMS && draft.items.length > itemsBefore) {
+      this.onNotify(
+        $t('The purchase log is full ({0} entries). Export a backup, then delete old entries.', MAX_ITEMS),
+        { kind: 'bad' },
+      );
+      return false;
+    }
     const clean = normPlan(draft);
     clean.id = this.db.active;
     if (JSON.stringify(clean) === prev) {
@@ -74,10 +131,7 @@ export class PlanStore {
     }
     const merge = !!this.tag && this.tag === this.lastTag;
     if (!merge) {
-      this.undoS.push({ snap: prev, label: label || $t('Change') });
-      if (this.undoS.length > 60) {
-        this.undoS.shift();
-      }
+      this.pushUndo({ snap: prev, label: label || $t('Change') });
     } else if (label) {
       this.undoS[this.undoS.length - 1].label = label;
     }
@@ -89,6 +143,16 @@ export class PlanStore {
     this._set(clean);
     if (label && !merge) {
       this.onNotify(label, opts || {});
+    }
+    if (itemsBefore < ITEMS_WARN && clean.items.length >= ITEMS_WARN) {
+      this.onNotify(
+        $t(
+          'The purchase log has {0} of {1} entries. Export a backup and delete old ones soon.',
+          clean.items.length,
+          MAX_ITEMS,
+        ),
+        { kind: 'bad' },
+      );
     }
     return true;
   }
@@ -103,8 +167,16 @@ export class PlanStore {
       return;
     }
     const u = from.pop();
+    if (from === this.undoS) {
+      this.undoChars -= u.snap.length;
+    }
     this.lastTag = null;
-    to.push({ snap: JSON.stringify(this.plan), label: u.label });
+    const entry = { snap: JSON.stringify(this.plan), label: u.label };
+    if (to === this.undoS) {
+      this.pushUndo(entry);
+    } else {
+      to.push(entry);
+    }
     this.log(`${word}: ${u.label}`);
     this._set(normPlan(JSON.parse(u.snap)));
     this.onNotify(`${word}: ${u.label}`, { kind: 'undo' });
@@ -141,6 +213,7 @@ export class PlanStore {
   }
   reset() {
     this.undoS = [];
+    this.undoChars = 0;
     this.redoS = [];
     this.lastTag = null;
     this.recalc();

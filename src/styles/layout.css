@@ -98,9 +98,15 @@
 }
 main {
   padding: 26px 28px 80px;
-  max-width: 1180px;
+  /* grows with wide screens instead of leaving 300-600 px empty on each side */
+  max-width: clamp(1180px, 88vw, 1480px);
   width: 100%;
   margin: 0 auto;
+}
+/* wide tables (forecast, audit ledger) use the whole width */
+main[data-view='forecast'],
+main[data-view='audit'] {
+  max-width: none;
 }
 .head {
   display: flex;
@@ -176,7 +182,7 @@ main {
 }
 .searchbtn:hover {
   border-color: var(--accent);
-  color: var(--ink);
+  color: var(--text);
 }
 .searchbtn svg {
   width: 15px;

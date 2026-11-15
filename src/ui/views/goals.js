@@ -121,7 +121,7 @@ V.goals = () => {
         'div',
         { class: 'tiles' },
         tile($t('Saved now'), money(now)),
-        G.target ? tile($t('Target'), money(G.target), '', by !== null ? $t('by ') + M.label(by) : null) : null,
+        G.target ? tile($t('Target'), money(G.target), '', by !== null ? $t('by {0}', M.label(by)) : null) : null,
         G.target
           ? tile(
               $t('Reached'),
@@ -159,9 +159,7 @@ V.goals = () => {
   });
   return page(
     $t('Savings goals'),
-    $t(
-      'Money you set aside each month. It leaves your cash, builds a pot, and shows up in every month, the overview and the forecast.',
-    ),
+    $t('Money you set aside each month.'),
     [btn($t('Add a goal'), () => goalModal(), 'primary', 'plus')],
     cards.length
       ? [
@@ -173,7 +171,7 @@ V.goals = () => {
               { class: 'kpi' },
               h('div', { class: 'l', text: $t('Saved in total') }),
               h('div', { class: 'v', text: money(totalNow) }),
-              h('div', { class: 's', text: $t('as of ') + M.label(curK()) }),
+              h('div', { class: 's', text: $t('as of {0}', M.label(curK())) }),
             ),
             h(
               'div',

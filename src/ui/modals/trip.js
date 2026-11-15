@@ -23,6 +23,17 @@ const TRIP_KINDS = [
   ['event', $t('Event or day out')],
   ['idea', $t('Someday idea')],
 ];
+/** The window title when editing: one whole translatable string per kind. */
+function editTitle(kind) {
+  if (kind === 'event') {
+    return $t('Edit event');
+  }
+  if (kind === 'idea') {
+    return $t('Edit idea');
+  }
+  return $t('Edit trip');
+}
+
 export function tripModal(id, preset) {
   const current = id && find('trips', id);
   const settings = Store.plan.settings;
@@ -135,7 +146,7 @@ export function tripModal(id, preset) {
           rows: 2,
           maxlength: 400,
           placeholder: $t('Details: prices, opening times, a link…'),
-          'aria-label': $t('Details for ') + (item.name || $t('this cost')),
+          'aria-label': item.name ? $t('Details for {0}', item.name) : $t('Details for this cost'),
           hidden: !opened.has(item.id),
           oninput: () => {
             item.note = nt.value;
@@ -314,11 +325,7 @@ export function tripModal(id, preset) {
         'span',
         { class: 'fld-l' },
         $t('Budget month'),
-        info(
-          $t(
-            'The month whose money pays for it. It is set from the first day, and you can change it. Single costs can be paid in other months: set that per cost below. A trip whose days cross a payday stays one trip, and its costs are shared between the two salary months by days.',
-          ),
-        ),
+        info($t('Whose salary pays for it. Costs booked earlier can have their own month.')),
       ),
       monthF,
     ),
@@ -346,16 +353,7 @@ export function tripModal(id, preset) {
     h(
       'div',
       { class: 'fld' },
-      h(
-        'span',
-        { class: 'fld-l' },
-        $t('Costs'),
-        info(
-          $t(
-            'One line per cost. Pick the month a cost is really paid if you book it earlier (flights, tickets). The pencil opens a details box for prices and links. Drag the dots to reorder.',
-          ),
-        ),
-      ),
+      h('span', { class: 'fld-l' }, $t('Costs'), info($t('One line per cost. Set a month on costs you pay earlier.'))),
       rows,
       h(
         'div',
@@ -397,9 +395,7 @@ export function tripModal(id, preset) {
   );
   drawKind();
   const d = modal({
-    title: current
-      ? $t('Edit ') + (current.kind === 'event' ? 'event' : current.kind === 'idea' ? 'idea' : 'trip')
-      : $t('Plan a trip or event'),
+    title: current ? editTitle(current.kind) : $t('Plan a trip or event'),
     wide: true,
     body,
     err,

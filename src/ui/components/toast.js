@@ -39,5 +39,33 @@ export function toast(text, o) {
       box.showPopover();
     }
   } catch (x) {}
-  setTimeout(() => t.remove(), o.undo ? 7000 : 3600);
+  autoDismiss(t, o.undo ? 7000 : 3600);
+}
+/** Removes a toast after `ms`. The countdown pauses while the pointer or keyboard focus is on it (time to read, or to reach Undo). */
+function autoDismiss(toastBox, ms) {
+  let remaining = ms;
+  let startedAt = 0;
+  let timer = 0;
+  let running = false;
+  const start = () => {
+    if (running || toastBox.matches(':hover, :focus-within')) {
+      return;
+    }
+    running = true;
+    startedAt = Date.now();
+    timer = setTimeout(() => toastBox.remove(), remaining);
+  };
+  const pause = () => {
+    if (!running) {
+      return;
+    }
+    running = false;
+    clearTimeout(timer);
+    remaining = Math.max(1200, remaining - (Date.now() - startedAt));
+  };
+  toastBox.addEventListener('mouseenter', pause);
+  toastBox.addEventListener('focusin', pause);
+  toastBox.addEventListener('mouseleave', start);
+  toastBox.addEventListener('focusout', start);
+  start();
 }

@@ -22,11 +22,9 @@ const planFields = () => [
     type: 'money',
     neg: true,
     blank: true,
-    label: $t('Cash at the start'),
+    label: $t('Starting balance'),
     half: true,
-    info: $t(
-      'What you had just before the first month of the plan began. It can be negative if you were overdrawn. To correct the plan to what you have today, use “What I have today” instead.',
-    ),
+    info: $t('Balance the day before the plan starts.'),
   },
   {
     k: 'cushion',
@@ -46,21 +44,19 @@ const planFields = () => [
     step: 1,
     ph: $t('Calendar months'),
     label: $t('Payday'),
-    info: $t(
-      'The day of the month your salary arrives. With a payday, each budget month runs from one salary to the day before the next. Leave empty to plan by calendar month.',
-    ),
+    info: $t('Your months run payday to payday. Leave empty for calendar months.'),
   },
   { k: 'payShift', type: 'select', half: true, label: $t('If payday is on a weekend'), options: SHIFTS },
   {
     k: 'payFor',
     type: 'select',
-    label: $t('A salary pays for'),
+    label: $t('Salary covers'),
     options: [
-      ['next', $t('The month after it arrives')],
-      ['same', $t('The month it arrives in')],
+      ['next', $t('The following month (paid 26 Oct → November)')],
+      ['same', $t('The month it arrives')],
     ],
     info: $t(
-      'With “the month after”, a salary on 26 October is November’s money and November runs from 26 October to 25 November. Either way a month ends the day before the next salary.',
+      'With “the following month”, a salary on 26 October is November’s money and November runs from 26 October to 25 November. Either way a month ends the day before the next salary.',
     ),
   },
   { type: 'sec', label: $t('How things look and behave') },
@@ -135,7 +131,7 @@ export function rollModal() {
   const guess = now >= summary.s0 && now < summary.s0 + summary.n ? monthAt(now).open : Store.plan.settings.opening;
   formModal({
     title: $t('Roll the plan forward'),
-    saveLabel: $t('Start from ') + M.label(now),
+    saveLabel: $t('Start from {0}', M.label(now)),
     values: { opening: guess },
     fields: [
       {

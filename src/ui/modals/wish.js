@@ -78,9 +78,7 @@ export function wishModal(id, preset) {
         max: 60,
         step: 0.01,
         label: $t('Interest (% a year)'),
-        info: $t(
-          'Only used when financing. Use 0 for interest-free instalments. If the shop only quotes a monthly amount, the interest is already inside it: adjust this until the monthly amount shown matches their quote.',
-        ),
+        info: $t('Use 0 if interest-free. Only know the monthly quote? Adjust until it matches.'),
       },
       { k: 'link', type: 'text', max: 300, label: $t('Link'), ph: 'https://…' },
       NOTE,
@@ -98,23 +96,34 @@ export function wishModal(id, preset) {
         return '';
       }
       const c = wishCalc(normPlan({ wishes: [{ ...v, flex: false }] }).wishes[0], s0);
-      return c.how === 'cash' || !c.monthly
-        ? $t('{0} leaves your cash in {1}.', money(v.price), M.label(c.buyK))
-        : c.how === 'save'
-          ? $t(
-              '{0} a month for {1}, then you buy it in {2}.',
-              money(c.monthly),
-              plural(c.rows.length, 'month'),
-              M.label(c.buyK),
-            )
-          : $t(
-              '{0} a month for {1} from {2}. Total {3}{4}.',
-              money(c.monthly),
-              plural(c.rows.length, 'month'),
-              M.label(c.buyK),
-              money(c.total),
-              c.extraCost > 0.5 ? $t(', of which ') + money(c.extraCost) + $t(' is interest') : $t(', no interest'),
-            );
+      if (c.how === 'cash' || !c.monthly) {
+        return $t('{0} leaves your cash in {1}.', money(v.price), M.label(c.buyK));
+      }
+      if (c.how === 'save') {
+        return $t(
+          '{0} a month for {1}, then you buy it in {2}.',
+          money(c.monthly),
+          plural(c.rows.length, 'month'),
+          M.label(c.buyK),
+        );
+      }
+      if (c.extraCost > 0.5) {
+        return $t(
+          '{0} a month for {1} from {2}. Total {3}, of which {4} is interest.',
+          money(c.monthly),
+          plural(c.rows.length, 'month'),
+          M.label(c.buyK),
+          money(c.total),
+          money(c.extraCost),
+        );
+      }
+      return $t(
+        '{0} a month for {1} from {2}. Total {3}, no interest.',
+        money(c.monthly),
+        plural(c.rows.length, 'month'),
+        M.label(c.buyK),
+        money(c.total),
+      );
     },
     onSave: v =>
       need(v) ||

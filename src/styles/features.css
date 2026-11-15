@@ -39,8 +39,15 @@
   opacity: 0.45;
 }
 .row:hover .rowdel,
+.row:focus-within .rowdel,
 .rowdel:focus-visible {
   opacity: 1;
+}
+/* with a mouse, the trash icon only appears on the row being pointed at or focused: fewer misclicks next to the amount */
+@media (hover: hover) and (pointer: fine) {
+  .rowdel {
+    opacity: 0;
+  }
 }
 .rowdel:hover {
   color: var(--bad);
@@ -554,7 +561,7 @@ tr.dim td {
     min-width: 78px;
   }
   .catrow {
-    grid-template-columns: minmax(70px, 110px) 1fr auto;
+    grid-template-columns: minmax(70px, 110px) 1fr 15ch;
   }
 }
 @media (prefers-reduced-motion: reduce) {

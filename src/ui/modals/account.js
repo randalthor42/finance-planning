@@ -49,10 +49,10 @@ export function accountModal(id) {
         hint: v =>
           v.type === 'credit'
             ? $t(
-                'Money you can borrow and pay back. What is still available counts as emergency money, not as money to spend.',
+                'Money you can borrow and pay back. Unused credit counts as available if needed, not as money to spend.',
               )
             : v.type === 'savings'
-              ? $t('Counts as emergency money, not as money to spend.')
+              ? $t('Counts as available if needed, not as money to spend.')
               : $t('Counts as money you can spend.'),
       },
       {
@@ -60,7 +60,7 @@ export function accountModal(id) {
         type: 'money',
         neg: true,
         blank: true,
-        label: $t('In it right now'),
+        label: $t('Balance today'),
         show: v => v.type !== 'credit',
       },
       { k: 'limit', type: 'money', half: true, label: $t('Card limit'), show: v => v.type === 'credit' },
@@ -70,9 +70,7 @@ export function accountModal(id) {
         half: true,
         label: $t('Still available'),
         show: v => v.type === 'credit',
-        info: $t(
-          'What you could still spend on the card today. What you owe is worked out for you: the limit minus what is still available.',
-        ),
+        info: $t('As shown in your bank app. We work out what you owe.'),
       },
       {
         k: 'apr',
@@ -82,9 +80,7 @@ export function accountModal(id) {
         step: 0.01,
         label: $t('Interest (% a year)'),
         show: v => v.type === 'credit',
-        info: $t(
-          'Optional. With a rate set, what you owe grows by one twelfth of it every month. To pay the card off, add a bill and set “Pays off” to this card: each payment lowers what you owe and frees the same amount again.',
-        ),
+        info: $t('Optional. Interest is added monthly.'),
       },
       {
         k: 'main',

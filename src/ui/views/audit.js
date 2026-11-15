@@ -38,7 +38,7 @@ const groupName = group =>
     loan: $t('Loans'),
     wish: $t('Wishlist'),
     goal: $t('Savings'),
-    adjust: $t('Correction'),
+    adjust: $t('Balance correction'),
   })[group] || group;
 
 V.audit = () => {

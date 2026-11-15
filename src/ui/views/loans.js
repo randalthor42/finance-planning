@@ -65,8 +65,8 @@ function payoffCard() {
             ln($t('As planned'), $t('Normal payments only'), base),
             base.count > 1
               ? [
-                  ln($t('Highest interest first'), $t('Extra goes to ') + a.order.join($t(', then ')), a),
-                  ln($t('Smallest debt first'), $t('Extra goes to ') + sn.order.join($t(', then ')), sn),
+                  ln($t('Highest interest first'), $t('Extra goes to {0}', a.order.join($t(', then '))), a),
+                  ln($t('Smallest debt first'), $t('Extra goes to {0}', sn.order.join($t(', then '))), sn),
                 ]
               : ln($t('With {0} extra a month', money(x)), '', a),
           ),
@@ -150,7 +150,7 @@ V.loans = () => {
                 value: val,
                 blank: true,
                 ph: fmtNum(L.extra),
-                label: $t('Extra payment in ') + M.label(r.k),
+                label: $t('Extra payment in {0}', M.label(r.k)),
                 onInput: n => {
                   val = n;
                 },
@@ -235,14 +235,22 @@ V.loans = () => {
             !L.on ? chip($t('not counted in the plan'), 'warn') : done ? chip($t('paid off'), 'good') : null,
           ),
           h('p', {
-            text: $t(
-              '{0} at {1}% over {2} months · first payment {3}{4}',
-              money(c.P),
-              fmtNum(L.rate),
-              L.term,
-              M.label(c.f0),
-              L.day ? $t(' · paid on the ') + ordinal(L.day) : '',
-            ),
+            text: L.day
+              ? $t(
+                  '{0} at {1}% over {2} · first payment {3} · paid on the {4}',
+                  money(c.P),
+                  fmtNum(L.rate),
+                  plural(L.term, 'month'),
+                  M.label(c.f0),
+                  ordinal(L.day),
+                )
+              : $t(
+                  '{0} at {1}% over {2} · first payment {3}',
+                  money(c.P),
+                  fmtNum(L.rate),
+                  plural(L.term, 'month'),
+                  M.label(c.f0),
+                ),
           }),
         ),
         h(
@@ -283,10 +291,10 @@ V.loans = () => {
         ? h('p', {
             class: 'small muted',
             style: 'margin-top:10px',
-            text:
-              $t('Replaces: ') +
-              linked.map(b => `${b.name} (${money(b.amount)})`).join(', ') +
-              '. These bills stop when the first payment is due.',
+            text: $t(
+              'Replaces: {0}. These bills stop when the first payment is due.',
+              linked.map(b => `${b.name} (${money(b.amount)})`).join(', '),
+            ),
           })
         : null,
       h(
@@ -307,9 +315,7 @@ V.loans = () => {
   });
   return page(
     $t('Loans'),
-    $t(
-      'New loans you are considering and debts you already have. Every payment shows up in its month and on its day. Switch one off to see your plan without it.',
-    ),
+    $t('Loans you have or are considering. Switch one off to compare.'),
     [btn($t('Add a loan'), () => loanModal(), 'primary', 'plus')],
     cards.filter(Boolean).length
       ? h('div', { class: 'stack' }, cards, payoffCard())

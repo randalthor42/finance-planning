@@ -2,7 +2,7 @@
  * @file Editing window for a savings goal. Target, monthly amount and target date fill each other in.
  */
 import { M } from '../../core/dates.js';
-import { money } from '../../core/format.js';
+import { fmtNum, money } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { uid } from '../../core/util.js';
 import { Store } from '../../state/store.js';
@@ -107,15 +107,15 @@ export function goalModal(id) {
         return gap(v) > 0 ? $t('Enter a monthly amount or a date.') : '';
       }
       const n = gap(v) > 0 ? Math.ceil(gap(v) / v.monthly) : 0;
-      return (
-        $t('{0} a month comes out of every month from {1}', money(v.monthly), M.label(first(v))) +
-        (n
-          ? $t(
-              ', for about {0} ({1} years). It shows in your overview, month planner and forecast.',
-              plural(n, 'month'),
-              (n / 12).toFixed(1),
-            )
-          : '.')
+      if (!n) {
+        return $t('{0} a month comes out of every month from {1}.', money(v.monthly), M.label(first(v)));
+      }
+      return $t(
+        '{0} a month comes out of every month from {1}, for about {2} ({3} years). It shows in your overview, month planner and forecast.',
+        money(v.monthly),
+        M.label(first(v)),
+        plural(n, 'month'),
+        fmtNum(Math.round((n / 12) * 10) / 10),
       );
     },
     onSave: v =>

@@ -20,7 +20,7 @@ V.welcome = () =>
       class: 'muted',
       style: 'margin-bottom:18px',
       text: $t(
-        'Bills, budgets, one-offs, trips, loans and savings in one plan, so you can see what every decision does to your cash in the months ahead. Everything is stored in this browser only. Nothing is sent anywhere.',
+        'See what every bill, trip and purchase does to the months ahead. Private: nothing leaves this browser.',
       ),
     }),
     h(
@@ -30,9 +30,7 @@ V.welcome = () =>
       h('p', {
         class: 'muted',
         style: 'margin:6px 0 12px',
-        text: $t(
-          'Name it, choose the first month and how many months to plan, say how much money you start with, and set your payday, currency and formats. You can add your income and bills right away, or later.',
-        ),
+        text: $t('Takes about two minutes. Income and bills can come later.'),
       }),
       btn($t('Create my plan'), newPlanModal, 'primary', 'plus'),
     ),
