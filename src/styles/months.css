@@ -206,3 +206,19 @@
 .spendfold.open .ico {
   transform: rotate(90deg);
 }
+/* a budget in the side card: the whole row logs a spend, the ⋯ button holds the rest */
+.prow.click {
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  padding: 6px;
+  margin: 0 -6px;
+}
+.prow.click:hover,
+.prow.click:focus-visible {
+  background: var(--surface-2);
+}
+.prow-r {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

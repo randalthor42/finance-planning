@@ -161,44 +161,58 @@ V.months = () => {
     account: e.account || null,
   });
   const togglePaid = e => Actions.setPaid(m.key, tickOf(e), !e.paid);
+  /** Row actions of a budget: log a spend, change it for this month, close it (or reopen it). */
+  const budgetActions = e => [
+    e.budget.done || e.budget.closed ? null : [$t('Log a spend'), () => logSpend(e.id, m)],
+    [$t('Adjust this month'), () => entryModal(e, m)],
+    e.budget.done ? [$t('Reopen budget'), () => togglePaid(e)] : null,
+    !e.budget.done && !e.budget.closed ? [$t('Close budget'), () => togglePaid(e)] : null,
+  ];
+  const budgetMenuButton = e =>
+    h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn icon ghost sm',
+        'aria-label': $t('Actions for {0}', e.label),
+        'aria-haspopup': 'menu',
+        title: $t('More actions'),
+        onclick: event => {
+          event.stopPropagation();
+          ctxMenu(event, budgetActions(e));
+        },
+      },
+      icon('menu'),
+    );
   /** One ledger line. Budgets show a progress bar; spends logged against a budget are always "paid". */
   const line = (e, showDate, sub) => {
     const adj = e.group === 'adjust';
     const b = e.budget;
-    const box = adj
-      ? null
-      : h('input', {
-          type: 'checkbox',
-          class: 'check',
-          checked: e.paid,
-          disabled: !!e.of,
-          'aria-label': b
-            ? $t('Done for this month: {0}', e.label)
-            : e.amount > 0
-              ? $t('Received: {0}', e.label)
-              : $t('Paid: {0}', e.label),
-          onchange: () => togglePaid(e),
-        });
+    // a budget has no tick box: closing it ("done for this month, release the rest") is a row action of its own
+    const box =
+      adj || b
+        ? null
+        : h('input', {
+            type: 'checkbox',
+            class: 'check',
+            checked: e.paid,
+            disabled: !!e.of,
+            'aria-label': e.amount > 0 ? $t('Received: {0}', e.label) : $t('Paid: {0}', e.label),
+            onchange: () => togglePaid(e),
+          });
     // the tick box sits in a larger click area of its own, so ticking never opens the row
-    const cb = adj
-      ? h('span', { style: 'width:34px' })
-      : h(
-          'label',
-          {
-            class: 'ck',
-            title: e.of
-              ? $t('Logged spends are always counted as paid')
-              : b
-                ? b.reserve
-                  ? $t('Done with this budget for the month')
-                  : $t('Nothing is set aside for this budget, so only logged spends count')
-                : e.amount > 0
-                  ? $t('Received')
-                  : $t('Paid'),
-            onclick: ev => ev.stopPropagation(),
-          },
-          box,
-        );
+    const cb =
+      adj || b
+        ? h('span', { style: 'width:34px' })
+        : h(
+            'label',
+            {
+              class: 'ck',
+              title: e.of ? $t('Logged spends are always counted as paid') : e.amount > 0 ? $t('Received') : $t('Paid'),
+              onclick: ev => ev.stopPropagation(),
+            },
+            box,
+          );
     const description = [
       showDate && e.date !== null ? D.label(e.date, { weekday: 'short' }) : '',
       // inside its budget a spend does not repeat "From “budget”"
@@ -223,7 +237,7 @@ V.months = () => {
         e.vary && !e.over ? chip($t('estimate')) : null,
         b
           ? chip(
-              !b.reserve ? $t('limit') : b.closed ? $t('closed') : b.done ? $t('done') : $t('budget'),
+              b.closed || b.done ? $t('closed') : !b.reserve ? $t('limit') : $t('budget'),
               b.left < 0 ? 'bad' : 'acc',
             )
           : null,
@@ -237,7 +251,7 @@ V.months = () => {
         ? h('div', { class: 'mini' }, bar(b.planned ? (b.spent / b.planned) * 100 : 100, b.left < 0 ? 'over' : 'good'))
         : null,
       right: [
-        b && !b.closed
+        b && !b.closed && !b.done
           ? btn(
               $t('Log'),
               ev => {
@@ -248,9 +262,11 @@ V.months = () => {
               'plus',
             )
           : null,
+        b ? budgetMenuButton(e) : null,
         amt(b ? -(b.closed || !b.reserve ? b.spent : Math.max(b.planned, b.spent)) : e.onCard ? -e.charged : e.amount),
       ],
       onclick: !adj && e.key !== 'whatif' ? () => entryModal(e, m) : null,
+      menu: b ? budgetActions(e) : null,
     });
   };
   // a tracked budget with nothing logged holds nothing back, so it stays out of the lines, the counts and "tick all"
@@ -420,7 +436,8 @@ V.months = () => {
     );
   }
   let actualVal = null;
-  const tickable = shown.filter(e => e.group !== 'adjust' && !e.of && e.key !== 'whatif').map(e => e.key);
+  // "Mark all paid" ticks bills and income; budgets are closed one by one with their own action
+  const tickable = shown.filter(e => e.group !== 'adjust' && !e.of && !e.budget && e.key !== 'whatif').map(e => e.key);
   const allPaid = tickable.length > 0 && m.entries.filter(e => tickable.includes(e.key)).every(e => e.paid);
   const inMonth = Store.day >= m.start && Store.day <= m.end;
   const budgets = m.entries.filter(e => e.budget);
@@ -636,15 +653,42 @@ V.months = () => {
                   ? budgetsNote()
                   : $t('Log what you spend and see what is left.'),
               null,
-              budgets.map(e =>
-                h(
+              // the whole row logs a spend; "Adjust this month" and "Close budget" are in its menu
+              budgets.map(e => {
+                const open = !e.budget.done && !e.budget.closed;
+                const logHere = () => (open ? logSpend(e.id, m) : entryModal(e, m));
+                return h(
                   'div',
-                  { class: 'prow' },
+                  {
+                    class: 'prow click',
+                    role: 'button',
+                    tabindex: 0,
+                    title: open ? $t('Log a spend') : $t('Adjust this month'),
+                    onclick: logHere,
+                    onkeydown: event => {
+                      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        logHere();
+                      }
+                    },
+                    oncontextmenu: event => ctxMenu(event, budgetActions(e)),
+                  },
                   h(
                     'div',
                     { class: 'top' },
-                    h('span', null, e.label, e.budget.reserve ? null : [' ', chip($t('limit'), 'acc')]),
-                    h('span', { text: quiet(e) ? $t('nothing logged, not counted') : budgetText(e.budget) }),
+                    h(
+                      'span',
+                      null,
+                      e.label,
+                      e.budget.reserve ? null : [' ', chip($t('limit'), 'acc')],
+                      open ? null : [' ', chip($t('closed'))],
+                    ),
+                    h(
+                      'span',
+                      { class: 'prow-r' },
+                      h('span', { text: quiet(e) ? $t('nothing logged, not counted') : budgetText(e.budget) }),
+                      budgetMenuButton(e),
+                    ),
                   ),
                   quiet(e)
                     ? null
@@ -652,14 +696,8 @@ V.months = () => {
                         e.budget.planned ? (e.budget.spent / e.budget.planned) * 100 : 100,
                         e.budget.left < 0 ? 'over' : 'good',
                       ),
-                  h(
-                    'div',
-                    { class: 'acts', style: 'margin-top:6px' },
-                    btn($t('Log a spend'), () => logSpend(e.id, m), 'sm', 'plus'),
-                    btn($t('Adjust this month'), () => entryModal(e, m), 'sm ghost'),
-                  ),
-                ),
-              ),
+                );
+              }),
               h(
                 'div',
                 { class: 'acts', style: 'margin-top:8px' },

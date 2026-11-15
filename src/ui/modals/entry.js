@@ -76,7 +76,7 @@ export function entryModal(e, m) {
               {
                 k: 'reserveMode',
                 type: 'seg',
-                label: $t('Money this month'),
+                label: $t('Type this month'),
                 options: RESERVE_MODES,
                 hint: v => RESERVE_HINT[v.reserveMode],
               },
