@@ -1,5 +1,7 @@
 /**
  * @file Popovers and context menus. Only one is open at a time; closePop() removes it and its outside-click listener.
+ * While one is open nothing behind it scrolls (wheel, touch, keys, the scroll bar): the pop-up is placed where it was
+ * opened and would otherwise float away from what it belongs to. A list inside the pop-up still scrolls.
  */
 import { clamp } from '../../core/util.js';
 import { h } from '../dom.js';
@@ -16,7 +18,51 @@ export function closePop() {
     POP.remove();
     POP = null;
     document.removeEventListener('mousedown', popOutside, true);
+    lockScroll(false);
   }
+}
+/** Keys that scroll the page when the focus is not in a text box. */
+const SCROLL_KEYS = new Set([
+  ' ',
+  'PageUp',
+  'PageDown',
+  'Home',
+  'End',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]);
+/** True when a wheel or touch over `target` can scroll something inside the open pop-up (a long menu, a list). */
+function scrollsInPop(target) {
+  for (let el = target instanceof Element ? target : null; el && POP && POP.contains(el); el = el.parentElement) {
+    if (el.scrollHeight > el.clientHeight + 1) {
+      return true;
+    }
+  }
+  return false;
+}
+const stopScroll = e => {
+  if (!scrollsInPop(e.target)) {
+    e.preventDefault();
+  }
+};
+const stopKeys = e => {
+  const target = e.target instanceof Element ? e.target : null;
+  const typing = target && target.closest('input, textarea, select, [contenteditable]');
+  if (SCROLL_KEYS.has(e.key) && !typing && !(target && POP && POP.contains(target))) {
+    e.preventDefault();
+  }
+};
+const LOCK = { passive: false, capture: true };
+/** Stops (or lets again) every way of scrolling the page and the panels behind the open pop-up. */
+function lockScroll(on) {
+  const method = on ? 'addEventListener' : 'removeEventListener';
+  document[method]('wheel', stopScroll, LOCK);
+  document[method]('touchmove', stopScroll, LOCK);
+  document[method]('keydown', stopKeys, true);
+  // the scroll bar of the page cannot be dragged either; its gutter stays so nothing shifts
+  document.documentElement.classList.toggle('pop-lock', on);
 }
 /**
  * Right-click menu for list rows. items: [label, fn, cssClass]; null is skipped.
@@ -71,6 +117,7 @@ function finishMenu(e, pop) {
   }
   POP = pop;
   document.addEventListener('mousedown', popOutside, true);
+  lockScroll(true);
 }
 export function popover(anchor, label, setup) {
   closePop();
@@ -84,4 +131,5 @@ export function popover(anchor, label, setup) {
   pop.style.left = clamp(r.left, 8, Math.max(8, innerWidth - pop.offsetWidth - 8)) + 'px';
   POP = pop;
   document.addEventListener('mousedown', popOutside, true);
+  lockScroll(true);
 }

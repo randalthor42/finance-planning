@@ -890,6 +890,9 @@ tr.dim td {
     break-inside: avoid;
     margin-bottom: 16px;
   }
+  .settings-cols.one {
+    columns: 1;
+  }
 }
 /* Tools: one sub-navigation at a time, the menu's sub-items on wide screens and the tab bar on phones (where the menu
    is a drawer). Settings shows both: the tab bar and the menu's sub-items mark the same section. */

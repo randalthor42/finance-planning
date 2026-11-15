@@ -83,7 +83,7 @@ import { icon } from '../icons.js';
 import { UI } from '../state.js';
 import { btn, ibtn } from './button.js';
 import { amt, row } from './layout.js';
-import { ctxMenu } from './popover.js';
+import { closePop, ctxMenu, popover } from './popover.js';
 
 /** The densities a page can choose (audit 6.3), in the order of the switch. */
 export const CAL_MODES = ['full', 'compact', 'mini'];
@@ -645,6 +645,44 @@ export function calendar(options) {
         content,
       );
     };
+    /* "+2 more": every line of the day in a pop-up next to the day, where the grid had no room for them */
+    const dayPop = (anchor, n) =>
+      popover(anchor, longDay(n), pop => {
+        pop.classList.add('cal-pop');
+        // a line opens its window: the pop-up goes first (capture, before the line's own click)
+        pop.addEventListener(
+          'click',
+          ev => {
+            if (ev.target instanceof Element && ev.target.closest('.cal-e')) {
+              closePop();
+            }
+          },
+          true,
+        );
+        pop.append(
+          h('div', { class: 'mpop-h' }, h('b', { text: longDay(n) })),
+          h(
+            'div',
+            { class: 'cal-pop-l' },
+            eventsOn(layout, n).map(ev => chipOf(ev, n)),
+          ),
+          h('button', {
+            type: 'button',
+            class: 'btn sm ghost',
+            text: $t('Show this day'),
+            onclick: () => {
+              closePop();
+              if (state.sel !== n) {
+                select(n);
+              }
+              const panel = root.querySelector('.cal-panel');
+              if (panel) {
+                panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+              }
+            },
+          }),
+        );
+      });
     /* a day of a multi-day event: a bar that joins the days; the name shows where it starts and on each new week */
     const spanOf = (lane, n) => {
       const ev = lane.event;
@@ -702,11 +740,10 @@ export function calendar(options) {
               tabindex: -1,
               class: 'cal-more',
               text: $t('+{0} more', items.length - cap),
+              'aria-haspopup': 'dialog',
               onclick: e => {
                 e.stopPropagation();
-                if (state.sel !== n) {
-                  select(n);
-                }
+                dayPop(e.currentTarget, n);
               },
             }),
           );

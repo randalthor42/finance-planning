@@ -639,3 +639,20 @@
 .cal[data-mode='mobile'] .cal-d {
   min-height: 44px;
 }
+
+/* "+2 more": the day's lines in a pop-up */
+.mpop.cal-pop {
+  width: 300px;
+}
+.cal-pop-l {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 50vh;
+  margin: 8px 0 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.cal-pop .cal-e {
+  flex: none;
+}

@@ -23,6 +23,11 @@
   padding: 5px 8px;
   font-size: 0.88rem;
 }
+/* a pop-up is open: the page does not scroll (components/popover.js), and keeps its scroll bar's room */
+html.pop-lock {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
 .mpop {
   position: fixed;
   z-index: 1000;

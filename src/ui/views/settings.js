@@ -37,6 +37,8 @@ const logRow = e =>
       ),
     }),
   );
+/** Settings sections whose cards each take a whole row on wide screens too. */
+const ONE_COLUMN = new Set(['language']);
 export const STABS = [
   ['general', $t('This plan')],
   ['plans', $t('All plans')],
@@ -389,7 +391,8 @@ V.settings = () => {
         }),
       ),
     ),
-    // one column on narrow screens; on wide ones the cards of a section sit in two columns (settings-cols)
-    h('div', { class: 'settings-cols' }, pages[tab]()),
+    // one column on narrow screens; on wide ones the cards of a section sit in two columns (settings-cols), except
+    // the sections listed in ONE_COLUMN, where each card takes a whole row
+    h('div', { class: 'settings-cols' + (ONE_COLUMN.has(tab) ? ' one' : '') }, pages[tab]()),
   );
 };
