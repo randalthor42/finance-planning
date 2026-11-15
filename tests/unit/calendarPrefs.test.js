@@ -31,7 +31,12 @@ test('the defaults are a fresh copy each time', () => {
 });
 
 test('old layout and figure choices are dropped: the page chooses the layout', () => {
-  const prefs = normCalendar({ overviewLayout: 'tablet', plannerLayout: 'auto', overviewFigure: 'spent', plannerFigure: 'none' });
+  const prefs = normCalendar({
+    overviewLayout: 'tablet',
+    plannerLayout: 'auto',
+    overviewFigure: 'spent',
+    plannerFigure: 'none',
+  });
   assert.equal('overviewLayout' in prefs, false);
   assert.equal('plannerLayout' in prefs, false);
   assert.equal('overviewFigure' in prefs, false);
