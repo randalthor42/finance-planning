@@ -1,5 +1,5 @@
 /**
- * @file Editing window for income and bills: Fixed, Estimate, Budget or Limit.
+ * @file Editing window for income and bills: Fixed, Estimate or Budget, and a budget is Reserved or Tracked.
  */
 import { M } from '../../core/dates.js';
 import { money } from '../../core/format.js';
@@ -12,48 +12,47 @@ import { dayFields, find, mainAcc, need, remove, upsert } from '../helpers.js';
 import { changeModal } from './change.js';
 
 /**
- * One control for the four kinds of bill (v0.9 audit, C3). They map onto the stored fields without a migration:
- *   Fixed    -> budget false, vary false
- *   Estimate -> budget false, vary true
- *   Budget   -> budget true,  reserve true   (held back in full)
- *   Limit    -> budget true,  reserve false  (only logged spends count this month)
+ * The three kinds of bill (v0.9 audit, C3), and for a budget how it counts. They map onto the stored fields without
+ * a migration:
+ *   Fixed              -> budget false, vary false
+ *   Estimate           -> budget false, vary true
+ *   Budget, Reserved   -> budget true,  reserve true   (held back in full)
+ *   Budget, Tracked    -> budget true,  reserve false  (only logged spends count)
  */
 const BILL_KINDS = [
   ['fixed', $t('Fixed')],
   ['vary', $t('Estimate')],
   ['budget', $t('Budget')],
-  ['limit', $t('Limit')],
 ];
 const KIND_HINT = {
   fixed: $t('Same amount every time (rent, internet).'),
   vary: $t('Changes each time (water, power). Enter the real amount when it arrives.'),
-  budget: $t('Held back in full every month (groceries). Logging spends is optional.'),
-  limit: $t('Nothing held back; only logged spends count.'),
+  budget: $t('A monthly amount for groceries, fuel, eating out… Logging spends is optional.'),
 };
-/** The same two budget behaviours for a single month ("Adjust this month"). */
+/** Reserved or Tracked: for a budget in the bill window, and for one month ("Adjust this month"). */
 export const RESERVE_MODES = [
-  ['reserved', $t('Budget')],
-  ['tracked', $t('Limit')],
+  ['reserved', $t('Reserved')],
+  ['tracked', $t('Tracked')],
 ];
 export const RESERVE_HINT = {
-  reserved: KIND_HINT.budget,
-  tracked: KIND_HINT.limit,
+  reserved: $t('Held back in full every month, whether you log spends or not.'),
+  tracked: $t('Nothing held back: only the spends you log count.'),
 };
 /** The kind shown in the window for a stored bill. */
 function billKind(bill) {
   if (bill.budget) {
-    return bill.reserve === false ? 'limit' : 'budget';
+    return 'budget';
   }
   return bill.vary ? 'vary' : 'fixed';
 }
-const isBudgetKind = kind => kind === 'budget' || kind === 'limit';
+const isBudgetKind = kind => kind === 'budget';
 /** One sentence on how the chosen bill type is planned (each sentence translated whole). */
 function kindPreview(v) {
   if (v.kind === 'vary') {
     return $t('Planned as an estimate.');
   }
-  if (v.kind === 'limit') {
-    return $t('A limit to watch: nothing is set aside until you spend.');
+  if (v.kind === 'budget' && v.reserveMode === 'tracked') {
+    return $t('Tracked: nothing is set aside until you log a spend.');
   }
   if (v.kind === 'budget') {
     return $t('Planned as the most you would spend in a month.');
@@ -102,12 +101,23 @@ export function recModal(list, id, preset) {
     values: {
       ...start,
       kind: billKind(start),
+      reserveMode: start.reserve === false ? 'tracked' : 'reserved',
     },
     fields: [
       { k: 'name', type: 'text', label: $t('Name'), ph: inc ? $t('Salary') : $t('Rent, groceries, phone…') },
       ...(inc
         ? []
-        : [{ k: 'kind', type: 'seg', label: $t('Type'), options: BILL_KINDS, hint: v => KIND_HINT[v.kind] }]),
+        : [
+            { k: 'kind', type: 'seg', label: $t('Type'), options: BILL_KINDS, hint: v => KIND_HINT[v.kind] },
+            {
+              k: 'reserveMode',
+              type: 'seg',
+              label: $t('How the budget counts'),
+              options: RESERVE_MODES,
+              show: v => isBudgetKind(v.kind),
+              hint: v => RESERVE_HINT[v.reserveMode],
+            },
+          ]),
       { k: 'amount', type: 'money', label: $t('Amount'), half: true },
       { k: 'every', type: 'select', numeric: true, label: $t('How often'), options: EVERY, half: true, live: true },
       { k: 'cat', type: 'select', label: $t('Category'), options: inc ? INCATS : CATS, half: true, live: true },
@@ -189,7 +199,7 @@ export function recModal(list, id, preset) {
           : (upsert(list, {
               ...v,
               budget: isBudgetKind(v.kind),
-              reserve: v.kind !== 'limit',
+              reserve: !isBudgetKind(v.kind) || v.reserveMode !== 'tracked',
               vary: v.kind === 'vary',
               payTo: v.kind === 'fixed' && v.payTo ? v.payTo : null,
               untilLoan: !inc && debtLike(v) && v.untilLoan ? v.untilLoan : null,

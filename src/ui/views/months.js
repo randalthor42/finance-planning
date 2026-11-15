@@ -244,7 +244,7 @@ V.months = () => {
         e.vary && !e.over ? chip($t('estimate')) : null,
         b
           ? chip(
-              b.closed || b.done ? $t('closed') : !b.reserve ? $t('limit') : $t('budget'),
+              b.closed || b.done ? $t('closed') : !b.reserve ? $t('tracked budget') : $t('budget'),
               b.left < 0 ? 'bad' : 'acc',
             )
           : null,
@@ -519,8 +519,11 @@ V.months = () => {
     if (trackedBudgets.length) {
       parts.push(
         trackedSpent
-          ? $t('Limits set nothing aside: the {0} you spent on them comes out of your free money.', money(trackedSpent))
-          : $t('Limits set nothing aside and count only once you log a spend on them.'),
+          ? $t(
+              'Tracked budgets set nothing aside: the {0} you spent on them comes out of your free money.',
+              money(trackedSpent),
+            )
+          : $t('Tracked budgets set nothing aside and count only once you log a spend on them.'),
       );
     }
     return parts.join(' ');
@@ -706,7 +709,7 @@ V.months = () => {
                       'span',
                       null,
                       e.label,
-                      e.budget.reserve ? null : [' ', chip($t('limit'), 'acc')],
+                      e.budget.reserve ? null : [' ', chip($t('tracked'), 'acc')],
                       open ? null : [' ', chip($t('closed'))],
                     ),
                     h(

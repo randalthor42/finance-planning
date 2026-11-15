@@ -179,8 +179,8 @@ export const keep = (key, summary, build) => {
 };
 export const budgetText = b =>
   b.reserve === false
-    ? // a tracked budget sets nothing aside: its amount is only a limit to watch
-      $t('{0} spent · limit {1} · ', money(b.spent), money(b.planned)) +
+    ? // a tracked budget sets nothing aside: its amount is only a line to stay under
+      $t('{0} spent of {1} tracked · ', money(b.spent), money(b.planned)) +
       (b.left >= 0 ? $t('{0} under', money(b.left)) : $t('{0} over', money(-b.left)))
     : $t('{0} spent of {1} · ', money(b.spent), money(b.planned)) +
       (b.left >= 0 ? $t('{0} left', money(b.left)) : $t('{0} over', money(-b.left)));

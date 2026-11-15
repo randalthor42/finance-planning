@@ -178,7 +178,7 @@ const FILE=PAGE;
  await pg.locator('dialog textarea').fill('<img src=x onerror=alert(1)> see https://example.com/x');await pg.locator('dialog input[inputmode=decimal]').first().pressSequentially('9');await pg.locator('dialog').getByRole('button',{name:'Save'}).click();
  ok(await pg.evaluate(()=>Store.plan.items.some(i=>i.name==='No amount'&&i.note.includes('<img'))&&!document.querySelector('main img')),'notes are stored as text and never run');
  // bill types and a note with info icon
- await pg.locator('.nav button[title="Income and bills"]').click();await pg.getByRole('button',{name:'Add a bill'}).first().click();await pg.getByPlaceholder('Rent, groceries, phone…').fill('Cigars');await pg.locator('dialog .seg button',{hasText:'Up to'}).click();await pg.locator('dialog input[inputmode=decimal]').first().pressSequentially('150');await pg.locator('dialog textarea').fill('Mum buys these, about 5 a pack');await pg.screenshot({path:'v4-bill.png'});await pg.locator('dialog').getByRole('button',{name:'Save'}).click();
+ await pg.locator('.nav button[title="Income and bills"]').click();await pg.getByRole('button',{name:'Add a bill'}).first().click();await pg.getByPlaceholder('Rent, groceries, phone…').fill('Cigars');await pg.locator('dialog .seg button',{hasText:'Budget'}).click();await pg.locator('dialog input[inputmode=decimal]').first().pressSequentially('150');await pg.locator('dialog textarea').fill('Mum buys these, about 5 a pack');await pg.screenshot({path:'v4-bill.png'});await pg.locator('dialog').getByRole('button',{name:'Save'}).click();
  ok(await pg.evaluate(()=>{const b=Store.plan.bills.find(b=>b.name==='Cigars');return b.budget&&b.note.startsWith('Mum')&&monthAt(curK()).entries.some(e=>e.budget&&e.label==='Cigars')}),'any bill can be a budget, with a note');
  await pg.locator('.srow',{hasText:'Cigars'}).locator('.tipbtn').click();ok(await pg.locator('.tipbox',{hasText:'Mum buys these'}).count()===1,'info pop-up');await pg.keyboard.press('Escape');
  // trips: dates, someday idea with advice, equal cards
@@ -284,12 +284,12 @@ const FILE=PAGE;
   ok(await fresh.evaluate(()=>Store.plan.name==='My plan'&&Store.plan.settings.horizon===12&&Store.plan.settings.opening===800)&&await fresh.locator('.welcome').count()===0&&await fresh.locator('h1',{hasText:'Overview'}).count()===1,'creating the first plan from the welcome page opens the overview');await fresh.close();}
  // a budget can be tracked only: the modal offers the choice and the plan remembers it
  await pg.locator('.nav button[title="Income and bills"]').click();await pg.getByRole('button',{name:'Add a bill'}).first().click();
- await pg.getByPlaceholder('Rent, groceries, phone…').fill('Eating out test');await pg.locator('dialog .seg button',{hasText:'Up to'}).click();
+ await pg.getByPlaceholder('Rent, groceries, phone…').fill('Eating out test');await pg.locator('dialog .seg button',{hasText:'Budget'}).click();
  ok(await pg.locator('dialog .seg button',{hasText:'Tracked'}).count()===1,'a budget offers Reserved and Tracked');
  await pg.locator('dialog .seg button',{hasText:'Tracked'}).click();await pg.locator('dialog input[inputmode=decimal]').first().pressSequentially('120');await pg.getByRole('button',{name:'Save'}).click();await pg.waitForTimeout(120);
  ok(await pg.evaluate(()=>{const b=Store.plan.bills.find(x=>x.name==='Eating out test');return b&&b.budget&&b.reserve===false&&monthAt(curK()).entries.find(e=>e.label==='Eating out test').amount===0}),'a tracked budget is saved and sets nothing aside');
  await pg.locator('.nav button[title="Income and bills"]').click();await pg.waitForTimeout(100);
- ok(await pg.locator('.row',{hasText:'Eating out test'}).getByText('a limit, not counted').count()===1&&await pg.locator('.row',{hasText:'Total bills per month'}).getByText('without tracked budgets').count()===1,'a tracked budget is not counted in the regular bills total');
+ ok(await pg.locator('.row',{hasText:'Eating out test'}).getByText('tracked, not counted').count()===1&&await pg.locator('.row',{hasText:'Total bills per month'}).getByText('without tracked budgets').count()===1,'a tracked budget is not counted in the regular bills total');
  // the month planner says clearly that a tracked budget holds nothing back
  await pg.evaluate(()=>App.go('months'));await pg.waitForTimeout(150);
  const trow=pg.locator('.prow',{hasText:'Eating out test'});
@@ -307,7 +307,7 @@ const FILE=PAGE;
  ok(await pg.evaluate(b=>Math.abs(monthAt(curK()).close-b)<0.01,before1),'back to usual makes the budget tracked again');
  // once money is logged on a tracked budget it shows, against its limit
  await pg.evaluate(()=>{const b=Store.plan.bills.find(x=>x.name==='Eating out test');Store.commit(p=>{p.items.push({id:'trk0000001',name:'Pizza',amount:20,kind:'out',month:M.key(curK()),date:null,cat:'food',budget:b.id,account:null,cover:null,note:''})},'x')});await pg.waitForTimeout(150);
- ok(await pg.locator('.row',{hasText:'Eating out test'}).locator('.chip',{hasText:'tracked, nothing set aside'}).count()===1&&/limit/.test(await pg.locator('.prow',{hasText:'Eating out test'}).innerText()),'a tracked budget with a spend logged shows against its limit');
+ ok(await pg.locator('.row',{hasText:'Eating out test'}).locator('.chip',{hasText:'tracked, nothing set aside'}).count()===1&&/tracked/.test(await pg.locator('.prow',{hasText:'Eating out test'}).innerText()),'a tracked budget with a spend logged shows what is tracked');
  await pg.evaluate(()=>Store.commit(p=>{p.items=p.items.filter(i=>i.id!=='trk0000001')},'x'));
  // purchase log: one card per month that folds and opens
  await pg.locator('.nav button[title="Purchase log"]').click();await pg.waitForTimeout(100);

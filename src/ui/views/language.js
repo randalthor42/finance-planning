@@ -6,7 +6,7 @@ import { has } from '../../core/util.js';
 import { IO } from '../../services/backup.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
-import { card, chip, row } from '../components/layout.js';
+import { card, chip } from '../components/layout.js';
 import { confirmModal } from '../components/modal.js';
 import { POP, closePop, popover } from '../components/popover.js';
 import { toast } from '../components/toast.js';
@@ -166,21 +166,31 @@ export function languageCard() {
       $t('Language'),
       $t('The planner is written in English. Other languages are files you can make yourself and add here.'),
       null,
+      // one card per language, two to a row
       h(
         'div',
-        { class: 'rows' },
+        { class: 'lang-grid' },
         all.map(l => {
           const done =
             l.code === 'en'
               ? total
               : I18N.KEYS.filter(k => has(l.strings, k) && l.strings[k] && l.strings[k] !== k).length;
-          return row({
-            left: flag(l.flag),
-            title: l.name,
-            cls: 'wrap',
-            chips: [l.code === I18N.lang ? chip($t('in use'), 'acc') : null],
-            desc: l.code === 'en' ? $t('Built in') : $t('{0} · {1} of {2} texts translated', l.code, done, total),
-            right: h(
+          const used = l.code === I18N.lang;
+          return h(
+            'div',
+            { class: 'lang-card' + (used ? ' on' : '') },
+            h(
+              'div',
+              { class: 'lang-h' },
+              flag(l.flag),
+              h('b', { text: l.name }),
+              used ? chip($t('in use'), 'acc') : null,
+            ),
+            h('div', {
+              class: 'small muted',
+              text: l.code === 'en' ? $t('Built in') : $t('{0} · {1} of {2} texts translated', l.code, done, total),
+            }),
+            h(
               'div',
               { class: 'acts' },
               l.code !== I18N.lang ? btn($t('Use'), () => I18N.setLang(l.code), 'sm') : null,
@@ -210,7 +220,7 @@ export function languageCard() {
                   )
                 : null,
             ),
-          });
+          );
         }),
       ),
       h(

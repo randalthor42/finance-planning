@@ -891,9 +891,9 @@ tr.dim td {
     margin-bottom: 16px;
   }
 }
-/* one sub-navigation at a time: the menu's sub-items on wide screens, the tab bar on phones (where the menu is a drawer) */
+/* Tools: one sub-navigation at a time, the menu's sub-items on wide screens and the tab bar on phones (where the menu
+   is a drawer). Settings shows both: the tab bar and the menu's sub-items mark the same section. */
 @media (min-width: 861px) {
-  main[data-view='settings'] .subnav,
   main[data-view='tools'] .subnav {
     display: none;
   }
@@ -906,4 +906,40 @@ tr.dim td {
   .nav .navi[data-view='forecast'] + .subitems {
     display: flex;
   }
+}
+
+/* Settings > Language: one card per language, two to a row (one on a phone) */
+.lang-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.lang-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.lang-card.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.lang-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lang-h b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lang-card .acts {
+  margin-top: auto;
 }

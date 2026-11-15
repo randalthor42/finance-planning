@@ -73,7 +73,7 @@ function copyInEditor(list, record) {
 /** The kind of a bill as the bill window names it. */
 const billKindName = r => {
   if (r.budget) {
-    return r.reserve === false ? $t('Limit') : $t('Budget');
+    return r.reserve === false ? $t('Tracked budget') : $t('Reserved budget');
   }
   return r.vary ? $t('Estimate') : $t('Fixed');
 };
@@ -137,7 +137,7 @@ V.recurring = () => {
         chips: [
           r.note ? info(r.note) : null,
           r.budget
-            ? chip(r.reserve === false ? $t('limit') : $t('budget'), 'acc')
+            ? chip(r.reserve === false ? $t('tracked budget') : $t('reserved budget'), 'acc')
             : r.vary
               ? chip($t('estimate'))
               : null,
@@ -163,7 +163,7 @@ V.recurring = () => {
           { class: 'amt' },
           money(r.amount),
           notCounted
-            ? h('div', { class: 'd', text: $t('a limit, not counted') })
+            ? h('div', { class: 'd', text: $t('tracked, not counted') })
             : r.every > 1
               ? h('div', { class: 'd', text: $t('≈ {0} a month', money(r.amount / r.every)) })
               : null,
@@ -206,7 +206,7 @@ V.recurring = () => {
               'div',
               { class: 'row', style: 'font-weight:650' },
               h('span', { class: 'grow', text: inc ? $t('Total income per month') : $t('Total bills per month') }),
-              tracked ? h('span', { class: 'muted', text: $t('without limits') }) : null,
+              tracked ? h('span', { class: 'muted', text: $t('without tracked budgets') }) : null,
               h('span', { class: 'amt', text: money(total) }),
             ),
           ]
