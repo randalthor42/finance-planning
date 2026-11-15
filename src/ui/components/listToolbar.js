@@ -1,5 +1,6 @@
 /**
- * @file The toolbar above a list or table: search, filter chips, sort, "12 of 64 · −431,20 €", Clear (v0.9 audit, C12).
+ * @file The toolbar above a list or table, on one compact line: search, filter chips, a sort button, and while the
+ * list is narrowed "12 of 64 · Clear" (v0.9 audit, C12).
  * The rows themselves are filtered and sorted by applyQuery in logic/listQuery.js; this file only draws the controls.
  *
  * Usage (one config object per list):
@@ -14,8 +15,7 @@ import { App } from '../app.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { UI } from '../state.js';
-import { btn } from './button.js';
-import { popover } from './popover.js';
+import { ctxMenu, popover } from './popover.js';
 
 /** The query of one list for this visit, created with `defaults` the first time. */
 export function listState(id, defaults = {}) {
@@ -85,7 +85,54 @@ function filterChip(id, query, field, values) {
   );
 }
 
+/** Lists shorter than this get no toolbar: searching or sorting a handful of lines only adds clutter. */
+const MIN_ROWS = 6;
+
+/** The sort button: shows the current order and opens a short menu of the others. */
+function sortButton(id, query, byKey, sorts, customSort) {
+  const options = [
+    ...(customSort ? [[null, customSort]] : []),
+    ...sorts
+      .filter(key => byKey[key])
+      .flatMap(key => [
+        [{ key, descending: false }, byKey[key].label + ' ↑'],
+        [{ key, descending: true }, byKey[key].label + ' ↓'],
+      ]),
+  ];
+  if (!options.length) {
+    return null;
+  }
+  const same = (a, b) => (!a && !b) || (a && b && a.key === b.key && !!a.descending === !!b.descending);
+  const current = options.find(([sort]) => same(sort, query.sort)) || options[0];
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'lbar-btn',
+      'data-focus': 'sort',
+      'aria-haspopup': 'menu',
+      title: $t('Sort'),
+      onclick: event =>
+        ctxMenu(
+          event,
+          options.map(([sort, label]) => [
+            (same(sort, query.sort) ? '✓ ' : '') + label,
+            () => {
+              query.sort = sort;
+              redraw(id, 'sort');
+            },
+          ]),
+        ),
+    },
+    icon('sort'),
+    h('span', { text: current[1] }),
+  );
+}
+
 /**
+ * The toolbar of a list: one compact line with a small search field, filter chips and a sort button. The count
+ * ("3 of 17 · Clear") only appears while the list is narrowed. Lists under MIN_ROWS lines get no toolbar, unless a
+ * search or filter is still on (so it can be cleared).
  * @param {object} options
  * @param {string} options.id list id (state in UI.lists[id])
  * @param {object} options.query from listState
@@ -94,7 +141,7 @@ function filterChip(id, query, field, values) {
  * @param {string[]} [options.filters] keys of enum fields to offer as filter chips
  * @param {string[]} [options.sorts] keys offered in the sort menu
  * @param {?string} [options.customSort] label of the "no sort" entry (e.g. "Custom (drag)"); omit when there is none
- * @param {?string} [options.sumKey] money field whose total of the shown rows is printed
+ * @param {?string} [options.sumKey] money field whose total of the shown rows is printed with the count
  * @param {any[]} [options.rows] all rows, to list the values of each filter
  */
 export function listToolbar({
@@ -108,13 +155,16 @@ export function listToolbar({
   sumKey = null,
   rows = [],
 }) {
+  const filtered = isFiltered(query);
+  if (result.total < MIN_ROWS && !filtered) {
+    return null;
+  }
   const byKey = Object.fromEntries(fields.map(field => [field.key, field]));
   let timer = 0;
   const search = h('input', {
     type: 'search',
-    class: 'inp',
     value: query.text,
-    placeholder: $t('Search…'),
+    placeholder: $t('Search'),
     'aria-label': $t('Search this list'),
     'data-focus': 'search',
     oninput: event => {
@@ -135,53 +185,28 @@ export function listToolbar({
         : [...new Set(rows.map(row => field.value(row)))].filter(value => value !== undefined);
       return values.length > 1 ? filterChip(id, query, field, values) : null;
     });
-  const sortOptions = [
-    ...(customSort ? [['', customSort]] : []),
-    ...sorts
-      .filter(key => byKey[key])
-      .flatMap(key => [
-        [key + ':asc', byKey[key].label + ' ↑'],
-        [key + ':desc', byKey[key].label + ' ↓'],
-      ]),
-  ];
-  const currentSort = query.sort ? query.sort.key + (query.sort.descending ? ':desc' : ':asc') : '';
-  const sortSelect = sortOptions.length
-    ? h(
-        'select',
-        {
-          class: 'inp',
-          'aria-label': $t('Sort'),
-          'data-focus': 'sort',
-          onchange: event => {
-            const [key, direction] = event.target.value.split(':');
-            query.sort = key ? { key, descending: direction === 'desc' } : null;
-            redraw(id, 'sort');
-          },
-        },
-        sortOptions.map(([value, label]) => h('option', { value, selected: value === currentSort, text: label })),
-      )
-    : null;
-  const filtered = isFiltered(query);
   const sum = sumKey && result.sums[sumKey] !== undefined ? ' · ' + signed(result.sums[sumKey]) : '';
   return h(
     'div',
-    { class: 'listbar', 'data-list': id },
-    search,
+    { class: 'lbar', 'data-list': id },
+    h('label', { class: 'lbar-search' }, icon('search'), search),
     chips,
-    sortSelect,
-    h('span', {
-      class: 'muted small listcount',
-      text: filtered ? $t('{0} of {1}', result.shown, result.total) + sum : String(result.total) + sum,
-    }),
+    sortButton(id, query, byKey, sorts, customSort),
     filtered
-      ? btn(
-          $t('Clear'),
-          () => {
-            query.text = '';
-            query.filters = {};
-            App.render();
-          },
-          'ghost sm',
+      ? h(
+          'span',
+          { class: 'lbar-count' },
+          $t('{0} of {1}', result.shown, result.total) + sum,
+          h('button', {
+            type: 'button',
+            class: 'lbar-clear',
+            text: $t('Clear'),
+            onclick: () => {
+              query.text = '';
+              query.filters = {};
+              App.render();
+            },
+          }),
         )
       : null,
   );

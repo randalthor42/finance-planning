@@ -20,6 +20,8 @@ const ICONS = {
   left: 'M15 5l-7 7 7 7',
   right: 'M9 5l7 7-7 7',
   check: 'M5 12l5 5 9-10',
+  search: 'M10.5 17a6.5 6.5 0 110-13 6.5 6.5 0 010 13zM20 20l-4.8-4.8',
+  sort: 'M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4',
   edit: 'M4 20h4L19 9l-4-4L4 16v4z',
   trash: 'M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13',
   download: 'M12 4v11M7 11l5 5 5-5M5 20h14',

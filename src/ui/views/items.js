@@ -50,9 +50,8 @@ function toolbar(filter, budgets, shownCount, totalCount, shownSum) {
   let timer = 0;
   const search = h('input', {
     type: 'search',
-    class: 'inp',
     value: filter.text,
-    placeholder: $t('Search transactions…'),
+    placeholder: $t('Search'),
     'aria-label': $t('Search transactions'),
     oninput: () => {
       clearTimeout(timer);
@@ -70,7 +69,7 @@ function toolbar(filter, budgets, shownCount, totalCount, shownSum) {
   const select = (label, value, options, onChange) =>
     h(
       'select',
-      { class: 'inp', 'aria-label': label, onchange: event => onChange(event.target.value) },
+      { class: 'lbar-btn lbar-select', 'aria-label': label, onchange: event => onChange(event.target.value) },
       options.map(([optionValue, text]) => h('option', { value: optionValue, selected: optionValue === value, text })),
     );
   const set = change => {
@@ -80,8 +79,8 @@ function toolbar(filter, budgets, shownCount, totalCount, shownSum) {
   const active = filter.text || filter.kind !== 'all' || filter.budget;
   return h(
     'div',
-    { class: 'logbar' },
-    search,
+    { class: 'lbar logbar' },
+    h('label', { class: 'lbar-search' }, icon('search'), search),
     select(
       $t('Type'),
       filter.kind,
@@ -109,13 +108,21 @@ function toolbar(filter, budgets, shownCount, totalCount, shownSum) {
       ],
       order => set({ order }),
     ),
-    h('span', {
-      class: 'muted small logcount',
-      text: active
+    h(
+      'span',
+      { class: 'lbar-count' },
+      active
         ? $t('{0} of {1} · {2}', shownCount, totalCount, signed(shownSum))
         : $t('{0} · {1}', plural(totalCount, 'entry'), signed(shownSum)),
-    }),
-    active ? btn($t('Clear'), () => set({ text: '', kind: 'all', budget: '' }), 'ghost sm') : null,
+      active
+        ? h('button', {
+            type: 'button',
+            class: 'lbar-clear',
+            text: $t('Clear'),
+            onclick: () => set({ text: '', kind: 'all', budget: '' }),
+          })
+        : null,
+    ),
   );
 }
 

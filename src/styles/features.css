@@ -814,24 +814,20 @@ tr.dim td {
     justify-self: start;
   }
 }
-/* Transactions: search, filters and the count of what is shown */
-.logbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.logbar input[type='search'] {
-  flex: 1 1 220px;
-  min-width: 0;
-}
-.logbar select {
-  flex: 0 1 auto;
-  width: auto;
-}
-.logbar .logcount {
-  margin-left: auto;
+/* Transactions: the shared compact bar (components.css .lbar); its three filters are small pill selects */
+.lbar-select {
+  appearance: none;
+  max-width: 150px;
+  text-overflow: ellipsis;
+  padding-right: 22px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 12px) 13px,
+    calc(100% - 8px) 13px;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
 }
 
 /* v0.9 S10: cards and navigation */
