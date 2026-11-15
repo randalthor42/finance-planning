@@ -13,6 +13,7 @@
  *     rowProps: trip => ({ class: trip.on ? '' : 'dim' }),
  *     foot: [...cells],                   // optional totals row
  *   })
+ * Cells are right-aligned (amounts) except the first column; `align: 'left'` on a column left-aligns a text column.
  */
 import { $t } from '../../core/i18n.js';
 import { App } from '../app.js';
@@ -53,9 +54,10 @@ export function dataTable({ id, rows, columns, rowProps, foot, maxHeight }) {
   const sort = UI.sort[id] || null;
   const sortedRows = sortRows(rows, columns, sort);
 
+  const alignClass = column => (column.align === 'left' ? 'tl' : null);
   const headerCell = (column, position) => {
     if (!column.value) {
-      return h('th', { text: column.label });
+      return h('th', { class: alignClass(column), text: column.label });
     }
     const isSorted = sort && sort.column === position;
     const arrow = isSorted ? (sort.descending ? ' ▼' : ' ▲') : '';
@@ -72,7 +74,7 @@ export function dataTable({ id, rows, columns, rowProps, foot, maxHeight }) {
     };
     return h(
       'th',
-      { 'aria-sort': isSorted ? (sort.descending ? 'descending' : 'ascending') : 'none' },
+      { class: alignClass(column), 'aria-sort': isSorted ? (sort.descending ? 'descending' : 'ascending') : 'none' },
       h(
         'button',
         {
@@ -90,7 +92,10 @@ export function dataTable({ id, rows, columns, rowProps, foot, maxHeight }) {
   const bodyRow = row => {
     const cells = columns.map(column => {
       const content = column.cell(row);
-      const props = column.cellProps ? column.cellProps(row) : null;
+      const props = { ...(column.cellProps ? column.cellProps(row) : null) };
+      if (column.align === 'left') {
+        props.class = ((props.class || '') + ' tl').trim();
+      }
       return typeof content === 'string' ? h('td', { ...props, text: content }) : h('td', props, content);
     });
     return h('tr', rowProps ? rowProps(row) : null, cells);

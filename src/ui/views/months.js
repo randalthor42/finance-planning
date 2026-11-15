@@ -52,7 +52,7 @@ V.months = () => {
           { class: 'grow' },
           h('div', {
             text: $t(
-              'Showing the forecast “{0}”. The amount under each month is where it would end: {1} at {2}, against {3} as planned. Your plan is not changed.',
+              'Forecast view: “{0}”. {1} ends at {2} (plan: {3}). Your plan is unchanged.',
               overlay.name,
               M.label(k),
               money(shownClose(m)),
@@ -120,13 +120,13 @@ V.months = () => {
           'button',
           {
             type: 'button',
-            title: $t('Plan one more month. This raises “Months to plan ahead” in Settings by one.'),
+            title: $t('Extends the plan by one month.'),
             onclick: () => {
               Actions.addMonth();
               App.go('months', { month: summary.s0 + summary.n });
             },
           },
-          h('b', { text: $t('+ Add month') }),
+          h('b', { text: $t('+ Month') }),
           h('span', { text: M.label(summary.s0 + summary.n) }),
         )
       : null,
@@ -206,13 +206,7 @@ V.months = () => {
         e.vary && !e.over ? chip($t('estimate')) : null,
         b
           ? chip(
-              !b.reserve
-                ? $t('tracked, nothing set aside')
-                : b.closed
-                  ? $t('closed, rest released')
-                  : b.done
-                    ? $t('done')
-                    : $t('budget'),
+              !b.reserve ? $t('limit') : b.closed ? $t('closed') : b.done ? $t('done') : $t('budget'),
               b.left < 0 ? 'bad' : 'acc',
             )
           : null,
@@ -255,7 +249,7 @@ V.months = () => {
       ['loan', $t('Loans')],
       ['wish', $t('Wishlist')],
       ['goal', $t('Savings')],
-      ['adjust', $t('Plan against reality')],
+      ['adjust', $t('Balance correction')],
     ]) {
       const es = shown.filter(e => e.group === g);
       if (!es.length) {
@@ -284,7 +278,8 @@ V.months = () => {
           },
           icon('right'),
           h('span', { text: label }),
-          h('span', { class: 'grp-n', text: $t('{0} of {1} paid', paidCount, es.length) }),
+          // a correction is always one paid line, so a count would only add noise there
+          g === 'adjust' ? null : h('span', { class: 'grp-n', text: $t('{0}/{1} paid', paidCount, es.length) }),
           h('span', { class: 'grow' }),
           h('span', { class: 'num', text: signed(es.reduce((a, e) => a + e.amount, 0)) }),
         ),
@@ -351,8 +346,10 @@ V.months = () => {
             h('b', { text: D.label(n, { weekday: 'short' }) }),
             n === Store.day ? chip($t('today'), 'acc') : null,
             n === m.start && settings.payDay ? chip($t('payday'), 'good') : null,
-            es.length || n === Store.day ? h('span', { class: 'bal', text: money(bal) }) : h('span', { class: 'bal' }),
-            ibtn($t('Add something on ') + D.label(n), () => itemModal(null, { date: D.key(n) }), 'ghost sm', 'plus'),
+            es.length || n === Store.day
+              ? h('span', { class: 'bal', title: $t('End-of-day balance'), text: money(bal) })
+              : h('span', { class: 'bal' }),
+            ibtn($t('Add something on {0}', D.label(n)), () => itemModal(null, { date: D.key(n) }), 'ghost sm', 'plus'),
           ),
           es.map(e => line(e, false)),
         ),
@@ -365,11 +362,7 @@ V.months = () => {
         icon(low < 0 ? 'alert' : 'info'),
         h('div', {
           class: 'grow',
-          text: $t(
-            'Lowest balance during this month: {0} on {1}. The amount on the right of each day is your balance at the end of that day.',
-            money(low),
-            D.label(lowDay, { weekday: 'short' }),
-          ),
+          text: $t('Lowest: {0} on {1}.', money(low), D.label(lowDay, { weekday: 'short' })),
         }),
       ),
     );
@@ -385,7 +378,7 @@ V.months = () => {
     blank: true,
     neg: true,
     ph: fmtNum(m.close),
-    label: $t('Real balance at month end'),
+    label: $t('Real balance on {0}', D.label(m.end)),
     onInput: n => {
       actualVal = n;
     },
@@ -433,35 +426,69 @@ V.months = () => {
     if (trackedBudgets.length) {
       parts.push(
         trackedSpent
-          ? $t(
-              'Tracked budgets set nothing aside: the {0} you spent on them comes out of your free money.',
-              money(trackedSpent),
-            )
-          : $t('Tracked budgets set nothing aside and count only once you log a spend on them.'),
+          ? $t('Limits set nothing aside: the {0} you spent on them comes out of your free money.', money(trackedSpent))
+          : $t('Limits set nothing aside and count only once you log a spend on them.'),
       );
     }
     return parts.join(' ');
   };
   const daysLeft = Store.day >= m.start && Store.day <= m.end ? m.end - Store.day + 1 : 0;
+  // one expense entry: in the current month it starts dated today (a purchase), otherwise undated in that month (planned)
+  const addExpense = () => {
+    if (inMonth) {
+      logPurchase(m);
+    } else {
+      itemModal(null, { month: monthKey });
+    }
+  };
   // one button, one menu: everything that can be added to this month
   const addMenu = event =>
     ctxMenu(event, [
-      [$t('Purchase'), () => logPurchase(m)],
-      [$t('Planned one-off'), () => itemModal(null, { month: monthKey })],
-      [$t('Money in'), () => itemModal(null, { month: monthKey, kind: 'in', cat: 'other' })],
+      [$t('Expense'), addExpense],
+      [$t('Income'), () => itemModal(null, { month: monthKey, kind: 'in', cat: 'other' })],
       [$t('Trip or event'), () => tripModal(null, { month: monthKey })],
-      [$t('New bill from this month'), () => recModal('bills', null, { from: monthKey })],
+      [$t('Recurring bill'), () => recModal('bills', null, { from: monthKey })],
       [$t('Budget'), () => recModal('bills', null, { budget: true })],
       [$t('Loan'), () => loanModal()],
     ]);
+  // with a payday the month ends the day before the next salary, so say so
+  const endLabel = settings.payDay ? $t('Left by payday') : $t('Month-end balance');
+  const correction = m.fix && m.fix.a ? $t('Balance correction: {0}.', signed(m.fix.a)) : null;
+  /** The sum behind the tiles, as whole sentences (each one translated on its own). */
+  const explainSentences = () => {
+    if (inMonth) {
+      return [
+        $t(
+          'The month started with {0}. Paid lines so far: {1} in, {2} out.',
+          money(m.open),
+          money(paidIn),
+          money(paidOut),
+        ),
+        correction,
+        $t('That makes {0} now.', money(m.now)),
+      ].filter(Boolean);
+    }
+    const opening =
+      k > summary.s0
+        ? $t('{0} ended at {1}, so this month starts with that.', M.label(k - 1), money(m.open))
+        : $t('The plan starts with {0} (set in Settings).', money(m.open));
+    return [
+      opening,
+      $t(
+        '{0} comes in and {1} goes out, which leaves {2}.',
+        money(m.inc),
+        money(m.out),
+        money(r2(m.open + m.inc - m.out)),
+      ),
+      correction,
+    ].filter(Boolean);
+  };
   // the sum behind the tiles, folded away until someone wants to see it
   const explainBox = props =>
     h('details', { class: 'more' }, h('summary', { text: $t('How this adds up') }), h('p', props));
   return page(
     $t('Month planner'),
-    $t(
-      'Everything that touches each month, from every part of your plan: bills, budgets, one-offs, trips, loans and savings.',
-    ),
+    null,
     [
       segc(
         [
@@ -505,7 +532,7 @@ V.months = () => {
               fl($t('You have now'), money(m.now), m.now < 0 ? 'bad' : ''),
               toIn ? fl($t('Still to come in'), signed(toIn), 'good') : null,
               fl($t('Still to pay'), money(-toPay)),
-              fl($t('Left at the end'), money(m.close), endCls),
+              fl(endLabel, money(m.close), endCls),
             )
           : h(
               'div',
@@ -513,55 +540,28 @@ V.months = () => {
               fl($t('Start of month'), money(m.open)),
               fl($t('Money in'), signed(m.inc), 'good'),
               fl($t('Money out'), money(-m.out)),
-              fl($t('End of month'), money(m.close), endCls),
+              fl(endLabel, money(m.close), endCls),
             ),
         explainBox({
           class: 'small muted',
           style: 'margin-top:8px',
-          text: inMonth
-            ? $t(
-                'The month started with {0}. Paid lines so far: {1} in, {2} out.',
-                money(m.open),
-                money(paidIn),
-                money(paidOut),
-              ) +
-              (m.fix && m.fix.a ? ' ' + $t('Correction from your real money: {0}.', signed(m.fix.a)) : '') +
-              ' ' +
-              $t(
-                'That makes {0} now. Tick a line when it is paid: its amount moves from “still to pay” into “you have now”. “Left at the end” only changes when an amount changes.',
-                money(m.now),
-              )
-            : (k > summary.s0
-                ? $t('{0} ended at {1}, so this month starts with that.', M.label(k - 1), money(m.open))
-                : $t('The plan starts with {0} (set in Settings).', money(m.open))) +
-              ' ' +
-              $t(
-                '{0} comes in and {1} goes out, which leaves {2}.',
-                money(m.inc),
-                money(m.out),
-                money(r2(m.open + m.inc - m.out)),
-              ) +
-              (m.fix && m.fix.a ? ' ' + $t('Corrected by {0} from your real money.', signed(m.fix.a)) : ''),
+          text: explainSentences().join(' '),
         }),
         tickable.length || inMonth
           ? h(
               'div',
               { class: 'acts', style: 'margin-top:10px' },
-              inMonth && !UI.hideCheck ? btn($t('I really have a different amount'), balancesModal, 'sm') : null,
+              inMonth && !UI.hideCheck ? btn($t('Update balances'), balancesModal, 'sm') : null,
               tickable.length
                 ? btn(
-                    allPaid ? $t('Untick all') : $t('Tick all as paid'),
+                    allPaid ? $t('Untick all') : $t('Mark all paid'),
                     () =>
                       Actions.setPaidAll(m.key, m.entries.filter(e => tickable.includes(e.key)).map(tickOf), !allPaid),
                     'sm ghost',
                     'check',
                   )
                 : null,
-              info(
-                $t(
-                  'A ticked line is paid: its amount is already inside what you have now. A line that is not ticked is still to come. Budgets work the same way through the spends you log.',
-                ),
-              ),
+              info($t('Ticked = already in your balance.')),
             )
           : null,
         body.length
@@ -592,7 +592,7 @@ V.months = () => {
                   h(
                     'div',
                     { class: 'top' },
-                    h('span', null, e.label, e.budget.reserve ? null : [' ', chip($t('tracked'), 'acc')]),
+                    h('span', null, e.label, e.budget.reserve ? null : [' ', chip($t('limit'), 'acc')]),
                     h('span', { text: quiet(e) ? $t('nothing logged, not counted') : budgetText(e.budget) }),
                   ),
                   quiet(e)
@@ -605,7 +605,7 @@ V.months = () => {
                     'div',
                     { class: 'acts', style: 'margin-top:6px' },
                     btn($t('Log a spend'), () => logSpend(e.id, m), 'sm', 'plus'),
-                    btn($t('Change this month’s budget'), () => entryModal(e, m), 'sm ghost'),
+                    btn($t('Adjust this month'), () => entryModal(e, m), 'sm ghost'),
                   ),
                 ),
               ),
@@ -617,15 +617,13 @@ V.months = () => {
             )
           : card(
               $t('Budgets'),
-              $t(
-                'For money you spend bit by bit: groceries, fuel, going out, pets, “everything else”. A reserved budget is counted in full even if you log nothing; a tracked one counts only what you log.',
-              ),
+              $t('For spending that happens bit by bit: groceries, fuel, eating out.'),
               null,
               btn($t('Add a budget'), () => recModal('bills', null, { budget: true }), 'sm', 'plus'),
             ),
         (inMonth || over) && !UI.hideCheck
           ? card(
-              $t('Check against reality'),
+              $t('Balance check'),
               inMonth
                 ? $t('Does “You have now” match your bank and cash?')
                 : $t('Did this month end where the plan says?'),
@@ -634,7 +632,7 @@ V.months = () => {
                 { class: 'acts' },
                 info(
                   $t(
-                    'You do not have to log every purchase. Now and then, compare “You have now” with what you really have. If it is different, enter the real amount: the planner asks what is already paid and counts the rest as spending that is not in the plan.',
+                    'No need to log every purchase. Update your balances now and then; any difference becomes a correction.',
                   ),
                 ),
                 ibtn(
@@ -654,7 +652,7 @@ V.months = () => {
                 ? h(
                     'div',
                     { class: 'acts', style: 'margin-top:8px' },
-                    btn(m.fix ? $t('Check again') : $t('Enter what I really have'), balancesModal, 'sm primary'),
+                    btn($t('Update balances'), balancesModal, 'sm primary'),
                     m.fix ? btn($t('Remove the correction'), () => Actions.clearFix(m.key), 'sm ghost') : null,
                   )
                 : h(

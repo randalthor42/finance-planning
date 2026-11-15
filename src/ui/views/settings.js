@@ -10,7 +10,7 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { info } from '../components/info.js';
-import { card, chip, page, row, segc } from '../components/layout.js';
+import { bar, card, chip, page, row, segc } from '../components/layout.js';
 import { confirmModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
@@ -55,6 +55,24 @@ function paydayText(settings) {
   return $t('on the {0}', day);
 }
 
+/** How full the browser storage is (estimated against a typical 5 MB quota), with a warning from 70%. */
+function storageMeter() {
+  const use = Store.storageUse();
+  const percent = Math.min(100, Math.round(use.share * 100));
+  const tone = percent >= 70 ? 'over' : 'good';
+  return h(
+    'div',
+    { style: 'margin-top:12px' },
+    h('div', {
+      class: 'small ' + (percent >= 70 ? 'bad' : 'muted'),
+      text:
+        percent >= 70
+          ? $t('Storage used: {0}% of about 5 MB. Export a backup and delete old plans or entries.', percent)
+          : $t('Storage used: {0}% of about 5 MB.', Math.max(1, percent)),
+    }),
+    bar(Math.max(1, percent), tone),
+  );
+}
 V.settings = () => {
   const plan = Store.plan;
   const settings = plan.settings;
@@ -283,6 +301,7 @@ V.settings = () => {
             'Importing adds the plans from the file next to the ones you have. It never overwrites anything. Clearing this browser’s site data deletes your plans, so export now and then.',
           ),
         }),
+        storageMeter(),
       ),
       card(
         $t('Privacy'),

@@ -13,36 +13,41 @@ import { changeModal } from './change.js';
 
 const BILL_KINDS = [
   ['fixed', $t('Fixed')],
-  ['vary', $t('Varies')],
-  ['budget', $t('Up to')],
+  ['vary', $t('Estimate')],
+  ['budget', $t('Budget')],
 ];
 const KIND_HINT = {
-  fixed: $t('The same amount every time, like rent or internet. Tick it off when it is paid.'),
-  vary: $t(
-    'An estimate, like water or electricity. When the real bill arrives, click it in the month planner and enter what it really was.',
-  ),
-  budget: $t(
-    'An upper limit you spend from during the month, like groceries, cigarettes or a haircut. You do not have to log anything: logging purchases is optional and only shows what is left.',
-  ),
+  fixed: $t('Same amount every time (rent, internet).'),
+  vary: $t('Changes each time (water, power). Enter the real amount when it arrives.'),
+  budget: $t('A monthly limit (groceries, fuel). Logging spends is optional.'),
 };
 export const RESERVE_MODES = [
   ['reserved', $t('Reserved')],
-  ['tracked', $t('Tracked')],
+  ['tracked', $t('Limit')],
 ];
 export const RESERVE_HINT = {
-  reserved: $t(
-    'The whole amount is set aside every month, and what you log uses it up. Best for money you will certainly spend, like groceries.',
-  ),
-  tracked: $t(
-    'Nothing is set aside. Only what you really log counts, and it comes out of your free money. Best for spending you want to watch but not plan for, like eating out or shopping.',
-  ),
+  reserved: $t('Held back in full every month.'),
+  tracked: $t('Nothing held back; only logged spends count.'),
 };
+/** One sentence on how the chosen bill type is planned (each sentence translated whole). */
+function kindPreview(v) {
+  if (v.kind === 'vary') {
+    return $t('Planned as an estimate.');
+  }
+  if (v.kind !== 'budget') {
+    return '';
+  }
+  if (v.reserveMode === 'tracked') {
+    return $t('A limit to watch: nothing is set aside until you spend.');
+  }
+  return $t('Planned as the most you would spend in a month.');
+}
 const accountOpts = none => [['', none], ...Store.plan.accounts.map(a => [a.id, a.name])];
 export function recModal(list, id, preset) {
   const inc = list === 'incomes';
   const current = id && find(list, id);
   const plan = Store.plan;
-  const loanOpts = [['', $t('No')], ...plan.loans.map(l => [l.id, $t('Yes, “') + l.name + '”'])];
+  const loanOpts = [['', $t('No')], ...plan.loans.map(l => [l.id, $t('Yes, “{0}”', l.name)])];
   // only debts can be taken over by a loan: instalments with an end month, the Debt category, or a card payment
   const debtLike = v => v.kind === 'fixed' && (v.cat === 'debt' || !!v.to || !!v.payTo);
   const start = current || {
@@ -120,13 +125,11 @@ export function recModal(list, id, preset) {
       {
         k: 'to',
         type: 'month',
-        label: $t('Ends after'),
+        label: $t('Last payment'),
         empty: $t('No end date'),
         half: true,
         live: true,
-        info: $t(
-          'For something you pay off in instalments, set the last month here. The list then shows how many payments and how much are left.',
-        ),
+        info: $t('For instalments.'),
       },
       ...(!inc && plan.accounts.some(a => a.type === 'credit')
         ? [
@@ -135,14 +138,12 @@ export function recModal(list, id, preset) {
               type: 'select',
               live: true,
               show: v => v.kind === 'fixed',
-              label: $t('Pays off'),
+              label: $t('Pays down card'),
               options: [
                 ['', $t('Nothing')],
                 ...plan.accounts.filter(a => a.type === 'credit').map(a => [a.id, a.name]),
               ],
-              info: $t(
-                'For the bill you pay your credit card with. Each payment lowers what you owe on the card and frees the same amount to use again.',
-              ),
+              info: $t('Each payment lowers what you owe on it.'),
             },
           ]
         : []),
@@ -152,7 +153,7 @@ export function recModal(list, id, preset) {
               k: 'untilLoan',
               type: 'select',
               show: debtLike,
-              label: $t('Paid off by a loan?'),
+              label: $t('Replaced by a loan'),
               options: loanOpts,
               info: $t(
                 'For a debt that a new loan takes over. If yes, this bill stops in the month the loan’s first payment is due.',
@@ -167,13 +168,9 @@ export function recModal(list, id, preset) {
         : f,
     ),
     preview: v =>
-      (v.kind === 'vary'
-        ? $t('Planned as an estimate. ')
-        : v.kind === 'budget'
-          ? v.reserveMode === 'tracked'
-            ? $t('A limit to watch: nothing is set aside until you spend. ')
-            : $t('Planned as the most you would spend in a month. ')
-          : '') + (v.every > 1 && v.amount ? $t('That is about {0} a month.', money(v.amount / v.every)) : ''),
+      [kindPreview(v), v.every > 1 && v.amount ? $t('That is about {0} a month.', money(v.amount / v.every)) : '']
+        .filter(Boolean)
+        .join(' '),
     onSave: v =>
       need(v) ||
       (!(v.amount > 0)

@@ -8,6 +8,7 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { btn } from '../components/button.js';
 import { sparkline } from '../components/charts.js';
+import { dataTable } from '../components/dataTable.js';
 import { bar, card, cardDel, chip, empty, keep, page, tile } from '../components/layout.js';
 import { h } from '../dom.js';
 import { icon } from '../icons.js';
@@ -41,39 +42,28 @@ V.goals = () => {
     const by = M.parse(G.by);
     const late = by !== null && G.target > 0 && (g.reached === null || g.reached > by);
     const needM = late ? Math.ceil(Math.max(0, G.target - now) / Math.max(1, by - curK() + 1)) : 0;
+    // every third month, the last one and the month the target is reached
+    const stepRows = () =>
+      g.series
+        .map((value, j) => ({ k: summary.s0 + j, value }))
+        .filter((row, j) => j % 3 === 0 || j === g.series.length - 1 || row.k === g.reached);
     const steps = () =>
-      h(
-        'div',
-        { class: 'tblw' },
-        h(
-          'table',
-          null,
-          h(
-            'thead',
-            null,
-            h(
-              'tr',
-              null,
-              [$t('Month'), $t('In the pot'), G.target ? $t('Of target') : ''].map(t => h('th', { text: t })),
-            ),
-          ),
-          h(
-            'tbody',
-            null,
-            g.series.map((v, j) =>
-              j % 3 === 0 || j === g.series.length - 1 || summary.s0 + j === g.reached
-                ? h(
-                    'tr',
-                    { class: summary.s0 + j === g.reached ? 'sel' : '' },
-                    h('td', { text: M.label(summary.s0 + j) }),
-                    h('td', { text: money(v) }),
-                    h('td', { text: G.target ? Math.round((v / G.target) * 100) + '%' : '' }),
-                  )
-                : null,
-            ),
-          ),
-        ),
-      );
+      dataTable({
+        id: 'goal-steps:' + G.id,
+        rows: stepRows(),
+        rowProps: row => ({ class: row.k === g.reached ? 'sel' : '' }),
+        columns: [
+          { label: $t('Month'), value: row => row.k, cell: row => M.label(row.k) },
+          { label: $t('In the pot'), value: row => row.value, cell: row => money(row.value) },
+          G.target
+            ? {
+                label: $t('Of target'),
+                value: row => row.value / G.target,
+                cell: row => Math.round((row.value / G.target) * 100) + '%',
+              }
+            : null,
+        ].filter(Boolean),
+      });
     return h(
       'section',
       { class: 'card' + (G.on ? '' : ' off') },

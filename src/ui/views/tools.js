@@ -10,6 +10,7 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
+import { dataTable } from '../components/dataTable.js';
 import { card, page } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { h } from '../dom.js';
@@ -121,34 +122,19 @@ V.tools = () => {
         things.length
           ? h(
               'div',
-              { class: 'tblw', style: 'margin-top:12px;max-height:340px' },
-              h(
-                'table',
-                null,
-                h(
-                  'thead',
-                  null,
-                  h(
-                    'tr',
-                    null,
-                    [$t('From your plan'), $t('Price'), $t('Work time'), ''].map(x => h('th', { text: x })),
-                  ),
-                ),
-                h(
-                  'tbody',
-                  null,
-                  things.map(([n, v, src]) =>
-                    h(
-                      'tr',
-                      null,
-                      h('td', null, n, h('div', { class: 'muted small', text: src })),
-                      h('td', { text: money(v) }),
-                      h('td', null, h('b', { text: hrs(v) })),
-                      h('td', { class: 'muted', text: days(v) }),
-                    ),
-                  ),
-                ),
-              ),
+              { style: 'margin-top:12px' },
+              dataTable({
+                id: 'tools-hours',
+                rows: things.map(([name, price, source]) => ({ name, price, source })),
+                maxHeight: '340px',
+                columns: [
+                  { label: $t('From your plan'), value: row => row.name, cell: row => row.name },
+                  { label: $t('Source'), align: 'left', value: row => row.source, cell: row => row.source },
+                  { label: $t('Price'), value: row => row.price, cell: row => money(row.price) },
+                  { label: $t('Work time'), value: row => row.price, cell: row => h('b', { text: hrs(row.price) }) },
+                  { label: '', cell: row => days(row.price), cellProps: () => ({ class: 'muted' }) },
+                ],
+              }),
             )
           : null,
       );

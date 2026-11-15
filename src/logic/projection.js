@@ -447,7 +447,7 @@ export function project(plan, opts) {
       m.entries.push({
         key: 'adjust',
         group: 'adjust',
-        label: fix.a < 0 ? $t('Spending that is not in the plan') : $t('Money that is not in the plan'),
+        label: fix.a < 0 ? $t('Unplanned spending') : $t('Unplanned income'),
         amount: fix.a,
         date: D.parse(fix.d),
         paid: true,

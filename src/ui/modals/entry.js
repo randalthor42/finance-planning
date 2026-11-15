@@ -54,7 +54,7 @@ export function entryModal(e, m) {
                   ...(Store.plan.accounts.length
                     ? Store.plan.accounts
                         .filter(a => a.type !== 'savings' && (e.amount < 0 || a.type !== 'credit'))
-                        .map(a => [a.id, (e.amount > 0 ? $t('Yes, into ') : $t('Yes, from ')) + a.name])
+                        .map(a => [a.id, e.amount > 0 ? $t('Yes, into {0}', a.name) : $t('Yes, from {0}', a.name)])
                     : [['yes', $t('Yes')]]),
                 ],
                 info: $t('Choose a credit card and the cost takes no cash: it is added to what you owe on the card.'),

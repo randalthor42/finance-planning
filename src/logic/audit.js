@@ -9,18 +9,29 @@ import { r2 } from '../core/util.js';
 /** Two amounts are "the same" within one cent, to allow for rounding along the way. */
 const same = (first, second) => Math.abs(first - second) < 0.011;
 
+/** Order of the ledger lines: by day; on the same day money in comes first; lines without a fixed day come last. */
+function ledgerOrder(a, b) {
+  const dayA = a.entry.date ?? Infinity;
+  const dayB = b.entry.date ?? Infinity;
+  if (dayA !== dayB) {
+    return dayA < dayB ? -1 : 1;
+  }
+  const inA = a.entry.amount > 0 ? 0 : 1;
+  const inB = b.entry.amount > 0 ? 0 : 1;
+  return inA - inB || a.position - b.position;
+}
+
 /**
  * Every line of every month in order, with the balance after it.
- * Lines without a fixed day are listed first in their month, in plan order.
+ * Lines are in day order, money in first on the same day, and lines without a fixed day last (so the running
+ * balance does not show an overdraft before the salary). The month still ends at the same balance.
  * @returns {{monthKey: string, monthIndex: number, date: ?number, group: string, label: string, detail: string, amount: number, paid: boolean, balance: number}[]}
  */
 export function ledgerRows(projection) {
   const rows = [];
   for (const month of projection.months) {
     let balance = month.open;
-    const entries = month.entries
-      .map((entry, position) => ({ entry, position }))
-      .sort((a, b) => (a.entry.date ?? -1) - (b.entry.date ?? -1) || a.position - b.position);
+    const entries = month.entries.map((entry, position) => ({ entry, position })).sort(ledgerOrder);
     for (const { entry } of entries) {
       balance = r2(balance + entry.amount);
       rows.push({
@@ -102,4 +113,30 @@ export function auditChecks(plan, projection) {
   }
 
   return Object.entries(rules).map(([id, failures]) => ({ id, ok: failures.length === 0, failures }));
+}
+
+/**
+ * Bills or incomes that look like the same thing entered twice: same name (ignoring "copy" and case), amount, day and
+ * account. Not an error in the maths, so it is not one of the checks; the Audit page and the Overview warn about it.
+ * @returns {{list: 'bills'|'incomes', names: string[], amount: number}[]}
+ */
+export function duplicateLines(plan) {
+  const found = [];
+  for (const list of ['incomes', 'bills']) {
+    const groups = new Map();
+    for (const record of plan[list]) {
+      const name = String(record.name)
+        .toLowerCase()
+        .replace(/\s*\bcopy\b\s*(\(\d+\))?\s*$/, '')
+        .trim();
+      const key = [name, record.amount, record.day, record.account, record.every, record.from, record.to].join('|');
+      groups.set(key, (groups.get(key) || []).concat(record));
+    }
+    for (const records of groups.values()) {
+      if (records.length > 1) {
+        found.push({ list, names: records.map(record => record.name), amount: records[0].amount });
+      }
+    }
+  }
+  return found;
 }

@@ -87,9 +87,7 @@ V.items = () => {
   }
   return page(
     $t('Purchase log'),
-    $t(
-      'Your purchase log: everything that happens once. Planned costs, things you bought, money that came in, and spends taken from a budget.',
-    ),
+    $t('Everything that happens once: spent, planned or received.'),
     [
       segc(
         [
@@ -102,8 +100,8 @@ V.items = () => {
           App.render();
         },
       ),
-      btn($t('Log a purchase'), () => logPurchase(monthAt(currentMonth)), '', 'plus'),
-      btn($t('Add to the log'), () => itemModal(null, { month: M.key(currentMonth) }), 'primary', 'plus'),
+      btn($t('Add transaction'), () => logPurchase(monthAt(currentMonth)), '', 'plus'),
+      btn($t('Add planned expense'), () => itemModal(null, { month: M.key(currentMonth) }), 'primary', 'plus'),
     ],
     cards.length
       ? h('div', { class: 'stack' }, cards)
@@ -116,7 +114,7 @@ V.items = () => {
             plan.items.length
               ? $t('Switch to All to see past items.')
               : $t('Add anything that happens once. It lands in the month you pick.'),
-            $t('Add to the log'),
+            $t('Add planned expense'),
             () => itemModal(null, { month: M.key(currentMonth) }),
           ),
         ),

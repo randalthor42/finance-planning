@@ -41,19 +41,19 @@ export function recStatus(r, k) {
   const L = r.untilLoan && find('loans', r.untilLoan);
   const takeover = L && L.on && Store.proj.loans[L.id];
   if (t !== null && t < k) {
-    return [$t('ended ') + M.label(t), '', true];
+    return [$t('ended {0}', M.label(t)), '', true];
   }
   if (takeover && takeover.f0 <= k) {
     return [$t('paid off by “{0}”', L.name), '', true];
   }
   if (f !== null && f > k) {
-    return [$t('starts ') + M.label(f), 'acc', false, true];
+    return [$t('starts {0}', M.label(f)), 'acc', false, true];
   }
   if (takeover) {
     return [$t('until “{0}” starts, {1}', L.name, M.label(takeover.f0)), 'acc', false];
   }
   if (t !== null) {
-    return [$t('until ') + M.label(t), 'acc', false];
+    return [$t('until {0}', M.label(t)), 'acc', false];
   }
   return null;
 }
@@ -84,9 +84,9 @@ V.recurring = () => {
         chips: [
           r.note ? info(r.note) : null,
           r.budget
-            ? chip(r.reserve === false ? $t('tracked budget') : $t('budget'), 'acc')
+            ? chip(r.reserve === false ? $t('limit') : $t('budget'), 'acc')
             : r.vary
-              ? chip($t('varies'))
+              ? chip($t('estimate'))
               : null,
           st ? chip(st[0], st[1]) : null,
         ],
@@ -98,7 +98,7 @@ V.recurring = () => {
               ? $t('counts only when spent')
               : $t('spent bit by bit')
             : r.day
-              ? $t('on the ') + ordinal(r.day)
+              ? $t('on the {0}', ordinal(r.day))
               : '',
           leftToPay(r),
           (plan.accounts.find(a => a.id === r.account) || {}).name,
@@ -137,7 +137,7 @@ V.recurring = () => {
               'div',
               { class: 'row', style: 'font-weight:650' },
               h('span', { class: 'grow', text: inc ? $t('Total income per month') : $t('Total bills per month') }),
-              tracked ? h('span', { class: 'muted', text: $t('without tracked budgets') }) : null,
+              tracked ? h('span', { class: 'muted', text: $t('without limits') }) : null,
               h('span', { class: 'amt', text: money(total) }),
             ),
           ]
@@ -161,9 +161,7 @@ V.recurring = () => {
   const left = totals.incomes - totals.bills;
   return page(
     $t('Income and bills'),
-    $t(
-      'What comes in and goes out on a regular basis. If an amount changes (a raise, a rent increase), right-click the line and choose “Amount changes from…”.',
-    ),
+    $t('Regular money in and out.'),
     null,
     h(
       'div',

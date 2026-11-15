@@ -89,9 +89,13 @@ export function fixNote(m) {
         : $t('The planner and your real money agree');
   const detail =
     f.a < 0
-      ? $t('Your real money was lower than the paid lines add up to.')
+      ? $t(
+          'Your real money was lower than the paid lines add up to. It is counted as one extra line, so the numbers here match what you really have.',
+        )
       : f.a > 0
-        ? $t('Your real money was higher than the paid lines add up to.')
+        ? $t(
+            'Your real money was higher than the paid lines add up to. It is counted as one extra line, so the numbers here match what you really have.',
+          )
         : null;
   return h(
     'div',
@@ -105,13 +109,7 @@ export function fixNote(m) {
         { class: 'grow' },
         h('div', { class: 'fix-when', text: $t('Checked on {0}', on) }),
         h('div', { class: 'fix-head', text: headline }),
-        detail
-          ? h('div', {
-              class: 'fix-detail',
-              text:
-                detail + ' ' + $t('It is counted as one extra line, so the numbers here match what you really have.'),
-            })
-          : null,
+        detail ? h('div', { class: 'fix-detail', text: detail }) : null,
       ),
     ),
   );

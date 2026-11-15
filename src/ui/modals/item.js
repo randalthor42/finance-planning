@@ -23,23 +23,14 @@ export function itemModal(id, preset, title) {
       }
       const k = Period.of(plan.settings, d);
       return $t(
-        '{0} belongs to {1}: that budget month runs from {2} to {3}, on the salary that arrives on {2}.',
-        D.label(d),
+        'Counts in {0} ({1}–{2}).',
         M.label(k, true),
         D.label(Period.start(plan.settings, k)),
         D.label(Period.end(plan.settings, k)),
       );
     },
     auto: true,
-    title:
-      title ||
-      (current
-        ? current.budget
-          ? $t('Edit spend')
-          : $t('Edit purchase')
-        : preset && preset.budget
-          ? $t('Log a spend')
-          : $t('Add to the purchase log')),
+    title: title || (current ? $t('Edit transaction') : $t('Add transaction')),
     values: current || {
       id: uid(),
       name: '',
@@ -69,15 +60,13 @@ export function itemModal(id, preset, title) {
               type: 'select',
               live: true,
               show: v => v.kind === 'out',
-              label: $t('Taken from a budget?'),
-              options: [['', $t('No, it is an extra cost')], ...budgets.map(b => [b.id, b.name])],
-              info: $t(
-                'A spend from a budget uses up that budget instead of adding to the month. Use the name to say what exactly it was (water, cat food), so the review can show how much goes on each.',
-              ),
+              label: $t('Budget'),
+              options: [['', $t('None (extra cost)')], ...budgets.map(b => [b.id, b.name])],
+              info: $t('Uses up that budget instead of adding a new cost.'),
             },
           ]
         : []),
-      { k: 'name', type: 'text', label: $t('What is it?'), ph: $t('Water, trousers, concert tickets…'), list: names() },
+      { k: 'name', type: 'text', label: $t('Description'), ph: $t('Water, trousers, concert tickets…'), list: names() },
       { k: 'amount', type: 'money', label: $t('Amount'), half: true },
       { k: 'date', type: 'date', label: $t('Day'), empty: $t('No exact day'), half: true, live: true },
       { k: 'month', type: 'month', label: $t('Month it belongs to'), show: v => !v.date },
@@ -92,7 +81,7 @@ export function itemModal(id, preset, title) {
                 ['', $t('My own money')],
                 ...plan.accounts.filter(a => a.type === 'credit').map(a => [a.id, a.name]),
               ],
-              info: $t('Paid with a credit card, it takes no cash: it is added to what you owe on the card.'),
+              info: $t('Card purchases add to what you owe, not to today’s spending.'),
             },
           ]
         : []),
@@ -127,4 +116,4 @@ export const logSpend = (billId, m) =>
   itemModal(null, { budget: billId, date: D.key(clamp(Store.day, m.start, m.end)) });
 /** Something you bought that was not planned (trousers, a repair, extra cat supplies): a dated one-off, optionally taken from a budget. */
 export const logPurchase = m =>
-  itemModal(null, { date: D.key(clamp(Store.day, m.start, m.end)), cat: 'shopping' }, $t('Log a purchase'));
+  itemModal(null, { date: D.key(clamp(Store.day, m.start, m.end)), cat: 'shopping' }, $t('Add transaction'));

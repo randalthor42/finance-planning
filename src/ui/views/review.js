@@ -199,22 +199,30 @@ V.review = () => {
     ],
   });
 
-  const biggestRows = review.biggest.map(line =>
-    h(
-      'button',
-      { type: 'button', class: 'row click searchrow', onclick: () => App.go('months', { month: line.monthIndex }) },
-      h(
-        'span',
-        { class: 'grow' },
-        h('span', { class: 't', text: line.label }),
-        h('span', {
-          class: 'd',
-          text: [yearly ? M.label(line.monthIndex) : '', line.detail].filter(Boolean).join(' · '),
-        }),
-      ),
-      h('span', { class: 'amt', text: money(-line.amount) }),
-    ),
-  );
+  const biggestTable = () =>
+    dataTable({
+      id: 'review-biggest',
+      rows: review.biggest,
+      rowProps: line => ({
+        class: 'click',
+        tabindex: 0,
+        onclick: () => App.go('months', { month: line.monthIndex }),
+        onkeydown: event => {
+          if (event.key === 'Enter') {
+            App.go('months', { month: line.monthIndex });
+          }
+        },
+      }),
+      columns: [
+        {
+          label: $t('Name'),
+          value: line => line.label,
+          cell: line => [line.label, line.detail ? h('div', { class: 'muted small', text: line.detail }) : null],
+        },
+        yearly ? { label: $t('Month'), value: line => line.monthIndex, cell: line => M.label(line.monthIndex) } : null,
+        { label: $t('Amount'), value: line => line.amount, cell: line => money(-line.amount) },
+      ].filter(Boolean),
+    });
 
   return page(
     $t('Review of {0}', periodName),
@@ -276,9 +284,7 @@ V.review = () => {
         $t('Biggest costs'),
         null,
         null,
-        biggestRows.length
-          ? h('div', { class: 'rows' }, biggestRows)
-          : h('p', { class: 'muted', text: $t('No costs in this period.') }),
+        review.biggest.length ? biggestTable() : h('p', { class: 'muted', text: $t('No costs in this period.') }),
       ),
       card(
         $t('Where this leads'),

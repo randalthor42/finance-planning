@@ -6,6 +6,7 @@ import { fmtNum, money, signed } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
 import { budgetTrend } from '../../logic/advice.js';
+import { duplicateLines } from '../../logic/audit.js';
 import { loanCalc } from '../../logic/loans.js';
 import { project } from '../../logic/projection.js';
 import { ctxMenu } from '../components/popover.js';
@@ -99,6 +100,17 @@ function insights() {
         act: [$t('Update balances'), balancesModal],
       });
     }
+  }
+  for (const duplicate of duplicateLines(plan)) {
+    out.push({
+      tone: 'warn',
+      text: $t(
+        'Possibly entered twice: {0} ({1} each). Both are counted.',
+        duplicate.names.join(' · '),
+        money(duplicate.amount),
+      ),
+      act: [$t('Open income and bills'), () => App.go('recurring')],
+    });
   }
   budgetTrend(plan, currentMonth)
     .slice(0, 2)

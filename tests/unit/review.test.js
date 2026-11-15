@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { normPlan } from '../../src/models/plan.js';
 import { project } from '../../src/logic/projection.js';
 import { reviewPeriod } from '../../src/logic/review.js';
-import { auditChecks, ledgerRows } from '../../src/logic/audit.js';
+import { auditChecks, duplicateLines, ledgerRows } from '../../src/logic/audit.js';
 import { D } from '../../src/core/dates.js';
 
 const reviewOf = (extra = {}) => {
@@ -98,4 +98,31 @@ test('audit: the rules hold and the ledger ends on the month end', () => {
   );
   const firstMonthRows = ledgerRows(projection).filter(row => row.monthKey === '2026-11');
   assert.equal(firstMonthRows[firstMonthRows.length - 1].balance, projection.months[0].close);
+});
+
+test('ledger: lines without a fixed day come last, money in first on the same day', () => {
+  const { projection } = reviewOf({
+    incomes: [{ id: 'salary01', name: 'Salary', amount: 1000, day: 5 }],
+    bills: [
+      { id: 'rent0001', name: 'Rent', amount: 400, day: 5 },
+      { id: 'food0001', name: 'Food', amount: 300, budget: true },
+    ],
+  });
+  const rows = ledgerRows(projection).filter(row => row.monthKey === '2026-11');
+  assert.deepEqual(
+    rows.map(row => row.label),
+    ['Salary', 'Rent', 'Food'],
+  );
+  assert.equal(rows[rows.length - 1].balance, projection.months[0].close);
+});
+
+test('duplicate bills are found, including a "copy"', () => {
+  const plan = normPlan({
+    bills: [
+      { id: 'prime001', name: 'Prime', amount: 4.99, day: 26 },
+      { id: 'prime002', name: 'Prime copy', amount: 4.99, day: 26 },
+      { id: 'rent0001', name: 'Rent', amount: 400 },
+    ],
+  });
+  assert.deepEqual(duplicateLines(plan), [{ list: 'bills', names: ['Prime', 'Prime copy'], amount: 4.99 }]);
 });

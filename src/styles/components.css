@@ -318,6 +318,8 @@ th {
   background: var(--surface);
   z-index: 1;
 }
+th.tl,
+td.tl,
 th:first-child,
 td:first-child {
   text-align: left;
@@ -357,13 +359,15 @@ td .inp {
   white-space: nowrap;
 }
 .thsort .tharrow {
-  opacity: 0.35;
+  /* the sort hint only shows on hover or focus: on every header it is noise */
+  opacity: 0;
   font-size: 0.8em;
 }
 .thsort.on .tharrow {
   opacity: 1;
   color: var(--accent);
 }
+.thsort:focus-visible .tharrow,
 .thsort:hover .tharrow {
   opacity: 0.8;
 }

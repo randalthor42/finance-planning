@@ -10,6 +10,7 @@ import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn } from '../components/button.js';
+import { dataTable } from '../components/dataTable.js';
 import { bar, card, cardDel, chip, empty, keep, page, tile } from '../components/layout.js';
 import { moneyInp } from '../components/moneyInput.js';
 import { h } from '../dom.js';
@@ -26,52 +27,61 @@ function payoffCard() {
     return null;
   }
   const res = h('div');
-  const th = [$t('Plan'), $t('Debt-free'), $t('Interest from now'), $t('You save')].map(t => h('th', { text: t }));
   const upd = () => {
     const x = UI.payExtra || 0;
     const a = payoffPlan(plan, currentMonth, x, 'avalanche');
     const sn = payoffPlan(plan, currentMonth, x, 'snowball');
-    const ln = (name, description, r) =>
-      h(
-        'tr',
-        null,
-        h(
-          'td',
-          null,
-          h('b', { text: name }),
-          description ? h('div', { class: 'muted small', text: description }) : null,
-        ),
-        h('td', { text: M.label(r.endK) }),
-        h('td', { text: money(r.interest) }),
-        h('td', {
-          class: r === base ? '' : 'good',
-          text:
-            r === base
-              ? '–'
-              : $t('{0} · {1} sooner', money(base.interest - r.interest), plural(base.endK - r.endK, 'month')),
-        }),
+    const rows = [{ name: $t('As planned'), description: $t('Normal payments only'), result: base }];
+    if (base.count > 1) {
+      rows.push(
+        {
+          name: $t('Highest interest first'),
+          description: $t('Extra goes to {0}', a.order.join($t(', then '))),
+          result: a,
+        },
+        {
+          name: $t('Smallest debt first'),
+          description: $t('Extra goes to {0}', sn.order.join($t(', then '))),
+          result: sn,
+        },
       );
+    } else {
+      rows.push({ name: $t('With {0} extra a month', money(x)), description: '', result: a });
+    }
     res.replaceChildren(
-      h(
-        'div',
-        { class: 'tblw' },
-        h(
-          'table',
-          null,
-          h('thead', null, h('tr', null, th)),
-          h(
-            'tbody',
-            null,
-            ln($t('As planned'), $t('Normal payments only'), base),
-            base.count > 1
-              ? [
-                  ln($t('Highest interest first'), $t('Extra goes to {0}', a.order.join($t(', then '))), a),
-                  ln($t('Smallest debt first'), $t('Extra goes to {0}', sn.order.join($t(', then '))), sn),
-                ]
-              : ln($t('With {0} extra a month', money(x)), '', a),
-          ),
-        ),
-      ),
+      dataTable({
+        id: 'loan-payoff',
+        rows,
+        columns: [
+          {
+            label: $t('Plan'),
+            value: row => row.name,
+            cell: row => [
+              h('b', { text: row.name }),
+              row.description ? h('div', { class: 'muted small', text: row.description }) : null,
+            ],
+          },
+          { label: $t('Debt-free'), value: row => row.result.endK, cell: row => M.label(row.result.endK) },
+          {
+            label: $t('Interest from now'),
+            value: row => row.result.interest,
+            cell: row => money(row.result.interest),
+          },
+          {
+            label: $t('You save'),
+            value: row => base.interest - row.result.interest,
+            cellProps: row => ({ class: row.result === base ? '' : 'good' }),
+            cell: row =>
+              row.result === base
+                ? '–'
+                : $t(
+                    '{0} · {1} sooner',
+                    money(base.interest - row.result.interest),
+                    plural(base.endK - row.result.endK, 'month'),
+                  ),
+          },
+        ],
+      }),
     );
   };
   upd();
@@ -122,102 +132,66 @@ V.loans = () => {
       onchange: () => Actions.toggle('loans', L.id, sw.checked),
     });
     const setExtra = (monthKey, val) => Actions.setLoanExtra(L.id, monthKey, val);
+    const extraInput = r => {
+      const monthKey = M.key(r.k);
+      let val = has(L.extras, monthKey) ? L.extras[monthKey] : null;
+      const input = moneyInp({
+        value: val,
+        blank: true,
+        ph: fmtNum(L.extra),
+        label: $t('Extra payment in {0}', M.label(r.k)),
+        onInput: n => {
+          val = n;
+        },
+      });
+      input.addEventListener('change', () => setExtra(monthKey, val));
+      return input;
+    };
     const schedule = () =>
-      h(
-        'div',
-        { class: 'tblw', style: 'max-height:420px' },
-        h(
-          'table',
-          null,
-          h(
-            'thead',
-            null,
-            h(
-              'tr',
-              null,
-              [$t('Month'), $t('Payment'), $t('Interest'), $t('Principal'), $t('Extra payment'), $t('Left to pay')].map(
-                t => h('th', { text: t }),
-              ),
-            ),
-          ),
-          h(
-            'tbody',
-            null,
-            c.sch.map(r => {
-              const monthKey = M.key(r.k);
-              let val = has(L.extras, monthKey) ? L.extras[monthKey] : null;
-              const input = moneyInp({
-                value: val,
-                blank: true,
-                ph: fmtNum(L.extra),
-                label: $t('Extra payment in {0}', M.label(r.k)),
-                onInput: n => {
-                  val = n;
-                },
-              });
-              input.addEventListener('change', () => setExtra(monthKey, val));
-              return h(
-                'tr',
-                { class: r.k === currentMonth ? 'sel' : '' },
-                h('td', { text: `${r.m}. ${M.label(r.k)}` }),
-                h('td', { text: money(r.pay) }),
-                h('td', { text: money(r.i) }),
-                h('td', { text: money(r.p) }),
-                h('td', null, input),
-                h('td', { text: money(r.b) }),
-              );
-            }),
-          ),
-        ),
-      );
+      dataTable({
+        id: 'loan-schedule:' + L.id,
+        rows: c.sch,
+        maxHeight: '420px',
+        rowProps: r => ({ class: r.k === currentMonth ? 'sel' : '' }),
+        columns: [
+          { label: $t('Month'), value: r => r.k, cell: r => $t('{0}. {1}', r.m, M.label(r.k)) },
+          { label: $t('Payment'), value: r => r.pay, cell: r => money(r.pay) },
+          { label: $t('Interest'), value: r => r.i, cell: r => money(r.i) },
+          { label: $t('Principal'), value: r => r.p, cell: r => money(r.p) },
+          { label: $t('Extra payment'), cell: extraInput },
+          { label: $t('Left to pay'), value: r => r.b, cell: r => money(r.b) },
+        ],
+      });
+    const lengths = () =>
+      [...new Set([12, 24, 36, 48, 60, 72, 84, 96, 120, L.term])]
+        .sort((a, b) => a - b)
+        .map(n => {
+          const pay = pmt(c.P, L.rate / 1200, n);
+          return { n, pay, interest: pay * n - c.P, total: pay * n };
+        });
     const compare = () =>
-      h(
-        'div',
-        { class: 'tblw' },
-        h(
-          'table',
-          null,
-          h(
-            'thead',
-            null,
-            h(
-              'tr',
-              null,
-              [$t('Length'), $t('Monthly'), $t('Total interest'), $t('Total repaid'), ''].map(t =>
-                h('th', { text: t }),
-              ),
-            ),
-          ),
-          h(
-            'tbody',
-            null,
-            [...new Set([12, 24, 36, 48, 60, 72, 84, 96, 120, L.term])]
-              .sort((a, b) => a - b)
-              .map(n => {
-                const pay = pmt(c.P, L.rate / 1200, n);
-                return h(
-                  'tr',
-                  { class: n === L.term ? 'sel' : '' },
-                  h('td', { text: plural(n, 'month') }),
-                  h('td', { text: money(pay) }),
-                  h('td', { text: money(pay * n - c.P) }),
-                  h('td', { text: money(pay * n) }),
-                  h(
-                    'td',
-                    null,
-                    n === L.term
-                      ? chip($t('current'), 'acc')
-                      : btn(
-                          $t('Use'),
-                          () => Actions.patch('loans', L.id, { term: n }, $t('“{0}” set to {1} months', L.name, n)),
-                          'sm',
-                        ),
+      dataTable({
+        id: 'loan-compare:' + L.id,
+        rows: lengths(),
+        rowProps: row => ({ class: row.n === L.term ? 'sel' : '' }),
+        columns: [
+          { label: $t('Length'), value: row => row.n, cell: row => plural(row.n, 'month') },
+          { label: $t('Monthly'), value: row => row.pay, cell: row => money(row.pay) },
+          { label: $t('Total interest'), value: row => row.interest, cell: row => money(row.interest) },
+          { label: $t('Total repaid'), value: row => row.total, cell: row => money(row.total) },
+          {
+            label: '',
+            cell: row =>
+              row.n === L.term
+                ? chip($t('current'), 'acc')
+                : btn(
+                    $t('Use'),
+                    () => Actions.patch('loans', L.id, { term: row.n }, $t('“{0}” set to {1} months', L.name, row.n)),
+                    'sm',
                   ),
-                );
-              }),
-          ),
-        ),
-      );
+          },
+        ],
+      });
     return h(
       'section',
       { class: 'card' },
