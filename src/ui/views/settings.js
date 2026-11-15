@@ -37,8 +37,8 @@ const logRow = e =>
       ),
     }),
   );
-/** Settings sections whose cards each take a whole row on wide screens too. */
-const ONE_COLUMN = new Set(['language']);
+/** Settings sections with one card per row, all as wide as the widest (settings-cols.one), on wide screens too. */
+const ONE_COLUMN = new Set(['look', 'language', 'backup']);
 export const STABS = [
   ['general', $t('This plan')],
   ['plans', $t('All plans')],
