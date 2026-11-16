@@ -47,14 +47,10 @@ export function project(plan, opts) {
   const n = settings.horizon;
   const months = [];
   const today = opts.today == null ? D.today() : opts.today;
-  for (let i = 0; i < n; i++) {
-    months.push({
-      k: s0 + i,
-      key: M.key(s0 + i),
-      start: Period.start(settings, s0 + i),
-      end: Period.end(settings, s0 + i),
-      entries: [],
-    });
+  for (let k = s0; k < s0 + n; k++) {
+    // the month as a "YYYY-MM" label, the name used by overrides and stored records
+    const label = M.key(k);
+    months.push({ k, key: label, start: Period.start(settings, k), end: Period.end(settings, k), entries: [] });
   }
   const put = (k, e) => {
     const i = k - s0;

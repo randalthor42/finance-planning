@@ -49,8 +49,8 @@ const FILE=PAGE;
  await pg.locator('.row.click',{hasText:'Rent'}).first().click();await pg.locator('dialog input').first().fill('0');await pg.locator('dialog').getByRole('button',{name:'Save'}).click();
  ok(await pg.locator('.chip',{hasText:'skipped this month'}).count()===1,'override skip');
  await pg.locator('.check').nth(1).check();ok(await pg.evaluate(()=>Object.keys(Store.plan.paid).length===1),'paid saved');
- await pg.evaluate(k=>Actions.setEnd(k,1234),tr.pay);
- ok(await pg.evaluate(k=>Store.proj.months.find(m=>m.key===k).close===1234,tr.pay),'check-in applied');
+ await pg.evaluate(k=>Actions.setEnd(k,2468),tr.pay);
+ ok(await pg.evaluate(k=>monthAt(M.parse(k)).close===2468,tr.pay),'check-in applied');
  await pg.screenshot({path:'s4-month.png',fullPage:true});
  // loans: schedule extra
  await pg.locator('.nav button[title="Loans"]').click();await pg.getByText('Payment schedule and extra payments').click();
