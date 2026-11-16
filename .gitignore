@@ -6,4 +6,6 @@ tests/regression/shots/
 # real backups used as test data: personal finances, never publish them
 tests/fixtures/real*.json
 tests/fixtures/alpha-*
+# written by the browser tests with a password made for that run
+tests/fixtures/enc.json
 .idea/

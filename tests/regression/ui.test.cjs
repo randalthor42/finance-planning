@@ -1,6 +1,6 @@
 // Browser tests (Playwright). Run with: npm run test:ui
 const FIX=require('path').join(__dirname,'../fixtures')+'/',PAGE='file://'+require('path').resolve(__dirname,'../../dist-test/index.html');require('fs').mkdirSync(__dirname+'/shots',{recursive:true});process.chdir(__dirname+'/shots');
-const {chromium}=require('playwright');const fs=require('fs');
+const {chromium}=require('playwright');const PW=require('crypto').randomUUID(),WRONG_PW=require('crypto').randomUUID();const fs=require('fs');
 const FILE=PAGE;
 (async()=>{
  const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:1360,height:900},acceptDownloads:true});const pg=await ctx.newPage();
@@ -206,13 +206,13 @@ const FILE=PAGE;
  ok(await pg.evaluate(()=>JSON.stringify(Store.plan))===snap,'state survives reload');
  // export encrypted -> wipe -> import
  await pg.evaluate(()=>App.go('settings',{stab:'backup'}));await pg.getByRole('button',{name:'Export backup'}).click();
- await pg.locator('dialog input[type=password]').first().fill('correct horse');await pg.locator('dialog input[type=password]').nth(1).fill('correct horse');
+ await pg.locator('dialog input[type=password]').first().fill(PW);await pg.locator('dialog input[type=password]').nth(1).fill(PW);
  const [dl]=await Promise.all([pg.waitForEvent('download'),pg.getByRole('button',{name:'Download'}).click()]);await dl.saveAs(FIX+'enc.json');
  const enc=fs.readFileSync(FIX+'enc.json','utf8');ok(enc.includes('"encrypted"')&&!enc.includes('Rome')&&!enc.includes('Rent'),'encrypted export hides data');
- for(const [file,pw,label] of [[FIX+'enc.json','correct horse','encrypted import'],[FIX+'real3.json',null,'real backup import']]){
+ for(const [file,pw,label] of [[FIX+'enc.json',PW,'encrypted import'],[FIX+'real3.json',null,'real backup import']]){
   const n0=await pg.evaluate(()=>Object.keys(Store.db.plans).length);
   const [fc]=await Promise.all([pg.waitForEvent('filechooser'),pg.getByRole('button',{name:'Import backup'}).click()]);await fc.setFiles(file);
-  if(pw){await pg.locator('dialog input[type=password]').fill('wrong pass');await pg.getByRole('button',{name:'Open',exact:true}).click();await pg.waitForTimeout(900);
+  if(pw){await pg.locator('dialog input[type=password]').fill(WRONG_PW);await pg.getByRole('button',{name:'Open',exact:true}).click();await pg.waitForTimeout(900);
    ok(await pg.evaluate(()=>Object.keys(Store.db.plans).length)===n0,'wrong password rejected');
    const [fc2]=await Promise.all([pg.waitForEvent('filechooser'),pg.getByRole('button',{name:'Import backup'}).click()]);await fc2.setFiles(file);
    await pg.locator('dialog input[type=password]').fill(pw);await pg.getByRole('button',{name:'Open',exact:true}).click();}

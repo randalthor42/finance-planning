@@ -14,7 +14,7 @@ import { find, need, remove, upsert } from '../helpers.js';
 import { h } from '../dom.js';
 import { UI, curK, selK } from '../state.js';
 
-/** One-tap picks from what you log most (Estanc 15,75…). Filling one only fills the form; nothing is saved yet. */
+/** One-tap picks from what you log most (Coffee 3,50…). Filling one only fills the form; nothing is saved yet. */
 function quickPickField(plan) {
   const picks = quickPicks(plan.items);
   const budgetIds = new Set(plan.bills.filter(b => b.budget).map(b => b.id));
