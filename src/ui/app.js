@@ -4,15 +4,18 @@
 import { APP } from '../config.js';
 import { D } from '../core/dates.js';
 import { $t } from '../core/i18n.js';
+import { Sync } from '../state/fileSync.js';
 import { Store } from '../state/store.js';
 import { POP, closePop } from './components/popover.js';
 import { $, h, sv } from './dom.js';
 import { icon } from './icons.js';
+import { themeColor } from './pwa.js';
 import { searchModal } from './modals/search.js';
 import { UI } from './state.js';
 import { FTABS } from './views/forecast.js';
 import { langPicker } from './views/language.js';
 import { V } from './views/registry.js';
+import { syncIcon } from './views/syncSettings.js';
 import { STABS } from './views/settings.js';
 import { TOOLS } from './views/tools.js';
 
@@ -56,9 +59,58 @@ const NAV = [
   ],
 ];
 const NAV_ALL = NAV.flatMap(g => g[1]);
+/**
+ * Where the changes went, at the foot of the menu: the browser storage and, when it is on, the data file
+ * (state/fileSync.js). When something needs the person (permission for the file, no file chosen, an error) it is a
+ * button that leads there.
+ */
+function saveState() {
+  const file = Sync.name;
+  const toStorage = () => App.go('settings', { stab: 'storage' });
+  const badge = (text, title, tone, onclick) =>
+    h(
+      onclick ? 'button' : 'div',
+      { type: onclick ? 'button' : null, class: 'save-state' + (tone ? ' ' + tone : ''), title, onclick },
+      h('i'),
+      h('span', { text }),
+    );
+  const status = Sync.status;
+  if (status === 'ok') {
+    return badge($t('Saved'), $t('Every change is saved to {0} and in this browser.', file), '', toStorage);
+  }
+  if (!Store.saveOk) {
+    return badge(
+      $t('Not saved!'),
+      $t('This browser is blocking storage (private mode?). Export a backup to keep your changes.'),
+      'err',
+      toStorage,
+    );
+  }
+  if (status === 'prompt') {
+    return badge(
+      $t('Reconnect file'),
+      $t('Runway needs your OK to keep saving to {0}. Until then, changes are saved in this browser.', file),
+      'warn',
+      () => Sync.reconnect(),
+    );
+  }
+  if (status === 'unlinked') {
+    return badge(
+      $t('Choose a file'),
+      $t('Changes are saved in this browser only. Choose where to keep your data file.'),
+      'warn',
+      toStorage,
+    );
+  }
+  if (status === 'error') {
+    return badge($t('File not saved'), Sync.error, 'err', toStorage);
+  }
+  return badge($t('Saved'), $t('Every change is saved in this browser straight away.'));
+}
 const SUBS = { settings: () => [STABS, 'stab'], tools: () => [TOOLS, 'ttab'], forecast: () => [FTABS, 'ftab'] };
 function renderSide() {
   const db = Store.db;
+  const toStorage = () => App.go('settings', { stab: 'storage' });
   const plans = Object.values(db.plans);
   const current = NAV_ALL.find(n => n[0] === UI.view);
   const logo = () =>
@@ -195,24 +247,7 @@ function renderSide() {
       { class: 'nav', 'aria-label': $t('Sections') },
       NAV.map(g => h('div', { class: 'navg' }, g[0] ? h('div', { class: 'navh', text: g[0] }) : null, g[1].map(item))),
     ),
-    h(
-      'div',
-      { class: 'side-foot' },
-      langPicker(),
-      h(
-        'div',
-        {
-          class: 'save-state' + (Store.saveOk ? '' : ' err'),
-          title: Store.saveOk
-            ? $t('Every change is saved in this browser straight away.')
-            : $t('This browser is blocking storage (private mode?). Export a backup to keep your changes.'),
-        },
-        h('i'),
-        h('span', { text: Store.saveOk ? $t('Saved') : $t('Not saved!') }),
-      ),
-      undo(),
-      redo(),
-    ),
+    h('div', { class: 'side-foot' }, langPicker(), saveState(), syncIcon(toStorage), undo(), redo()),
   );
   // phone and tablet: a top bar with the menu button; the side menu becomes a drawer
   $('#top').replaceChildren(
@@ -230,6 +265,7 @@ function renderSide() {
     home(),
     h('b', { text: current ? current[1] : APP.name }),
     h('span', { class: 'grow' }),
+    ...[syncIcon(toStorage)].filter(Boolean), // none while Drive sync is off
     undo(),
     redo(),
   );
@@ -242,6 +278,7 @@ export const App = {
     const t = Store.db.theme;
     document.documentElement.dataset.theme =
       t === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+    themeColor(document.documentElement.dataset.theme);
     $('#toasts').className = 'pos-' + Store.db.toastPos;
     const main = $('#main');
     const plan = Store.plan;
@@ -274,6 +311,17 @@ export const App = {
     main.replaceChildren(...[content].flat(Infinity).filter(Boolean));
     main.dataset.view = view;
     scrollTo(0, same ? y : 0);
+  },
+  /**
+   * The data file's status changed (state/fileSync.js): the badge in the menu is drawn again, not the whole page,
+   * unless the page shows the status itself (Settings, the welcome screen).
+   */
+  fileStatus() {
+    if (!Store.plan || UI.view === 'settings') {
+      App.render();
+    } else {
+      renderSide();
+    }
   },
   /** Fold or unfold the sub-sections of the open menu item. */
   toggleSub() {

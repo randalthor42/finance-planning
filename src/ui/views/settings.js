@@ -6,11 +6,13 @@ import { D, M } from '../../core/dates.js';
 import { FMT, money } from '../../core/format.js';
 import { $t, ordinal, plural } from '../../core/i18n.js';
 import { samplePlan } from '../../models/samplePlan.js';
+import { Drive } from '../../state/driveSync.js';
+import { Sync } from '../../state/fileSync.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { info } from '../components/info.js';
-import { bar, card, chip, page, row, segc } from '../components/layout.js';
+import { card, chip, page, row, segc } from '../components/layout.js';
 import { designPages } from '../components/designPages.js';
 import { confirmModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
@@ -20,6 +22,7 @@ import { newPlanModal, renamePlanModal, rollModal, settingsModal } from '../moda
 import { UI, curK, monthAt } from '../state.js';
 import { calendarSettingsCards } from './calendarSettings.js';
 import { languageCard } from './language.js';
+import { storageCards } from './storageSettings.js';
 import { V } from './registry.js';
 
 const logRow = e =>
@@ -38,13 +41,14 @@ const logRow = e =>
     }),
   );
 /** Settings sections with one card per row, all as wide as the widest (settings-cols.one), on wide screens too. */
-const ONE_COLUMN = new Set(['look', 'language', 'backup']);
+const ONE_COLUMN = new Set(['look', 'language', 'storage', 'backup']);
 export const STABS = [
   ['general', $t('This plan')],
   ['plans', $t('All plans')],
   ['look', $t('Appearance')],
   ['calendar', $t('Calendar')],
   ['language', $t('Language')],
+  ['storage', $t('Storage')],
   ['backup', $t('Backup')],
   ['activity', $t('Activity')],
 ];
@@ -60,24 +64,6 @@ function paydayText(settings) {
   return $t('on the {0}', day);
 }
 
-/** How full the browser storage is (estimated against a typical 5 MB quota), with a warning from 70%. */
-function storageMeter() {
-  const use = Store.storageUse();
-  const percent = Math.min(100, Math.round(use.share * 100));
-  const tone = percent >= 70 ? 'over' : 'good';
-  return h(
-    'div',
-    { style: 'margin-top:12px' },
-    h('div', {
-      class: 'small ' + (percent >= 70 ? 'bad' : 'muted'),
-      text:
-        percent >= 70
-          ? $t('Storage used: {0}% of about 5 MB. Export a backup and delete old plans or entries.', percent)
-          : $t('Storage used: {0}% of about 5 MB.', Math.max(1, percent)),
-    }),
-    bar(Math.max(1, percent), tone),
-  );
-}
 V.settings = () => {
   const plan = Store.plan;
   const settings = plan.settings;
@@ -228,6 +214,7 @@ V.settings = () => {
     ],
     language: languageCard,
     calendar: calendarSettingsCards,
+    storage: storageCards,
     plans: () => [
       card(
         $t('Plans'),
@@ -276,9 +263,18 @@ V.settings = () => {
                   () =>
                     confirmModal(
                       $t('Delete “{0}”?', x.name),
-                      $t(
-                        'This removes the plan and everything in it from this browser. Export a backup first if you might want it back.',
-                      ),
+                      Sync.status === 'ok'
+                        ? $t(
+                            'This removes the plan and everything in it from this browser and from {0}. Export a backup first if you might want it back.',
+                            Sync.name,
+                          )
+                        : Drive.enabled
+                          ? $t(
+                              'This removes the plan and everything in it from this browser and, through Google Drive sync, from your other devices. Export a backup first if you might want it back.',
+                            )
+                          : $t(
+                              'This removes the plan and everything in it from this browser. Export a backup first if you might want it back.',
+                            ),
                       $t('Delete plan'),
                       () => Store.removePlan(x.id),
                     ),
@@ -315,7 +311,12 @@ V.settings = () => {
     backup: () => [
       card(
         $t('Backup'),
-        $t('Your data lives in this browser. Export a backup to keep it safe or move it to another device.'),
+        Sync.status === 'ok'
+          ? $t(
+              'Your plans are saved in {0} and in this browser. Export a backup to keep a copy somewhere else.',
+              Sync.name,
+            )
+          : $t('Your data lives in this browser. Export a backup to keep it safe or move it to another device.'),
         null,
         h(
           'div',
@@ -327,10 +328,9 @@ V.settings = () => {
           class: 'small muted',
           style: 'margin-top:10px',
           text: $t(
-            'Importing adds the plans from the file next to the ones you have. It never overwrites anything. Clearing this browser’s site data deletes your plans, so export now and then.',
+            'Importing shows first what it would change: merge it with your plans (the newest version of each entry is kept), or add its plans as separate copies. Clearing this browser’s site data deletes your plans, so export now and then.',
           ),
         }),
-        storageMeter(),
       ),
       card(
         $t('Privacy'),
@@ -339,7 +339,7 @@ V.settings = () => {
         h('p', {
           class: 'muted small',
           text: $t(
-            'This file works offline and is blocked from making any network request. Nothing you type leaves this device unless you export it yourself.',
+            'Runway works offline. Nothing you type leaves this device unless you export it, save it to a file you choose, send it with QR codes, or turn on Google Drive sync (Settings › Storage), which keeps a copy in your own Google Drive. Apart from Google’s sign-in and Drive while sync is on, the page cannot contact any other site.',
           ),
         }),
         h(
@@ -350,10 +350,23 @@ V.settings = () => {
             () =>
               confirmModal(
                 $t('Delete all plans?'),
-                $t('Every plan stored in this browser will be removed. This cannot be undone.'),
+                Sync.name
+                  ? $t(
+                      'Every plan stored in this browser will be removed. This cannot be undone. {0} is disconnected and left as it is.',
+                      Sync.name,
+                    )
+                  : Drive.enabled
+                    ? $t(
+                        'Every plan stored in this browser will be removed. This cannot be undone. Google Drive sync is turned off here; your cloud copy is left as it is.',
+                      )
+                    : $t('Every plan stored in this browser will be removed. This cannot be undone.'),
                 $t('Delete everything'),
                 () => {
                   UI.view = 'overview';
+                  // the data file and Drive sync are let go first, so that emptying this browser does not empty them
+                  // (and Drive sync does not bring the plans back)
+                  Sync.unlink();
+                  Drive.turnOff();
                   Store.wipe();
                 },
               ),

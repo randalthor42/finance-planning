@@ -4,15 +4,18 @@ Guide for anyone (human or AI agent) working in this repository. Read this first
 
 ## What this is
 
-Runway is an offline personal finance planner. It is plain JavaScript (ES modules) and plain CSS, bundled by Vite into **one self-contained HTML file** that runs from disk with no network access. Data lives in the browser's `localStorage` and can be exported as a JSON backup, optionally encrypted with a password.
+Runway is an offline-first personal finance planner. It is plain JavaScript (ES modules) and plain CSS, bundled by Vite into **one self-contained HTML file** (`dist/runway-money-planner.html`) that runs from disk with no network access. Data lives in the browser's `localStorage` (the database) and IndexedDB (backups made before a migration, a record index, the device id, sync state). It can be exported as a JSON backup, optionally encrypted with a password, and moved between devices three ways, all opt-in: Google Drive sync, QR codes from screen to camera, and a data file in a synced folder (see `docs/sync.md`, `docs/qr-transfer.md`, `docs/data.md`, `docs/architecture.md`).
+
+The build writes two pages: `runway-money-planner.html`, the file to hand out, which needs nothing else; and `index.html`, the page to serve over https with the files built next to it (`qr-encode.js`, `qr-decode.js`, `i18n-texts.json`, `sw.js`, the manifest and icons), which loads the QR tools and the texts to translate only when they are needed. `index.html` opened from a disk cannot load those files and says so.
 
 ## Non-negotiable constraints
 
-1. **Zero runtime dependencies.** `package.json` has `devDependencies` only. Never add a runtime library.
-2. **One offline file.** `npm run build` must produce `dist/runway-money-planner.html` that works from `file://` under the strict Content-Security-Policy in `vite.config.js`. No fetch, no external fonts, no CDN.
-3. **Money maths and stored data stay compatible.** Every plan ever saved must still load through `normPlan` and give the same numbers. Backups are AES-GCM with PBKDF2; do not change the format without a migration.
-4. **All user text goes through `textContent`** (the `h()` helper does this). Never use `innerHTML` with user data. Links are only created for `http(s)` URLs.
-5. **Every user-facing string is wrapped in `$t('English text {0}', value)`.** The build collects these for translators.
+1. **Zero runtime dependencies from npm.** `package.json` has `devDependencies` only. Never add a runtime library. The one exception is `src/vendor/`: two QR libraries copied unchanged (qrcode-generator, MIT; jsQR, Apache-2.0; see `src/vendor/README.md`). They are bundled on their own and loaded only when a QR transfer starts, never into the main page's code. Do not add to `src/vendor/` without the same treatment (on demand, licence noted, unchanged copy).
+2. **One offline file.** `npm run build` must produce `dist/runway-money-planner.html` that works alone from `file://` under the Content-Security-Policy in `build/csp.js`. No external fonts, no CDN, no request to any other site. The only network use is Google Drive sync, which the person turns on, and only in a build made with a Google client ID (`VITE_GOOGLE_CLIENT_ID`); then the policy allows Google's sign-in and Drive API and nothing else. The served page also loads its own files (above) from its own site.
+3. **Money maths and stored data stay compatible.** Every plan ever saved must still load through `normPlan` and give the same numbers. Stored data has a format number (`APP.schema`, in `config.js`); a change to it needs a migration in `src/models/migrations.js`, which runs at start after a backup of the stored text is kept. Backups are AES-GCM with PBKDF2; do not change the format without a migration.
+4. **Offline first.** Every change is saved on the device first. Nothing the person does may wait on the network: Drive sync runs afterwards, in the background (`src/state/driveSync.js`).
+5. **All user text goes through `textContent`** (the `h()` helper does this). Never use `innerHTML` with user data. Links are only created for `http(s)` URLs.
+6. **Every user-facing string is wrapped in `$t('English text {0}', value)`.** The build collects these for translators.
 
 ## Commands
 
@@ -22,11 +25,12 @@ Runway is an offline personal finance planner. It is plain JavaScript (ES module
 | `npm run dev` | Dev server with hot reload. |
 | `npm run build` | Build the single HTML file into `dist/`. Tests are never part of the build. |
 | `npm test` | Unit tests for the core mechanics (plain Node, about a second). |
-| `npm run lint` | ESLint over `src` and the unit tests. |
-| `npm run format` | Prettier over `src` and the unit tests. |
+| `npm run lint` | ESLint over `src`, the unit tests and `build/`. |
+| `npm run format` | Prettier over `src`, the unit tests and `build/`. |
 | `npm run check` | Lint, unit tests and build. Run this before every commit. |
 | `npm run test:regression` | Larger engine regression suite. Needs the private fixtures (see Tests). |
-| `npm run test:ui` | Browser regression suite (Playwright; first run `npx playwright install chromium`). |
+| `npm run test:ui` | Every browser suite (Playwright; first run `npx playwright install chromium`). |
+| `npm run test:drive`, `test:qr`, `test:file`, `test:storage`, `test:pwa`, `test:overview` | One browser suite each: Drive sync against a fake Google, QR transfer between two pages, the data file, storage and migrations, the installable app, the Overview. |
 | `npm run perf` | Performance probe on the test build: real plan, CPU slowed 4x; fails when a budget is exceeded (needs Playwright's Chromium). |
 
 ## Architecture in one picture
@@ -37,15 +41,15 @@ ui  ──►  state  ──►  services
  └─────────┴──────────────────────────────────►
 ```
 
-Imports only point **down**. Nothing outside `src/ui/` touches the page (two documented exceptions: `services/backup.js` creates a download link, `core/i18n.js` reloads the page on a language change).
+Imports only point **down**. Nothing outside `src/ui/` touches the page (two documented exceptions: `services/backup.js` creates a download link, `core/i18n.js` reloads the page on a language change). One import points up: `core/i18n.js` reads and writes its language packs through `services/storage.js`, because the language must be known before any module makes a text. Only `services/storage.js` touches `localStorage` and IndexedDB (a unit test checks this).
 
 | Layer | Folder | Responsibility | May import |
 |---|---|---|---|
 | 1 Core | `src/core/` | Pure helpers: rounding, ids, dates, formatting, translations. | core |
-| 2 Models | `src/models/` | Shape of the data. `normPlan` validates and migrates every plan. | core, logic (only for migration) |
+| 2 Models | `src/models/` | Shape of the data. `normPlan` validates every plan; `migrations.js` upgrades stored data; `records.js` dates every record; `recordMerge.js` merges two copies of the data. | core, logic (only for migration) |
 | 3 Logic | `src/logic/` | Pure calculations: `project(plan)` and the loan, wishlist, trip and advice maths. | core |
-| 4 Services | `src/services/` | Storage adapter and backup files. | core, models |
-| 5 State | `src/state/` | `Store` (active plan, projection, undo, log) and `Actions` (every mutation). | core, models, logic, services |
+| 4 Services | `src/services/` | Storage (localStorage, IndexedDB), backup files, the data file, Google sign-in and the Drive API. | core, models |
+| 5 State | `src/state/` | `Store` (active plan, projection, undo, log), `Actions` (every mutation), Drive sync and the data file (when they run, what they merge). | core, models, logic, services |
 | 6 UI | `src/ui/` | Everything on screen. | all of the above |
 
 ## Where is…?
@@ -78,6 +82,14 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (two doc
 | Undo, redo, saving, the activity log | `src/state/store.js` |
 | Where data is stored | `src/services/storage.js` |
 | Export, import, encryption, CSV | `src/services/backup.js` |
+| The dates on every record (createdAt, updatedAt, deletedAt), deleted records, per-month change times | `src/models/records.js` (`stampPlan`, called by the store on every save) |
+| A change to the stored format | `src/models/migrations.js` and `APP.schema` in `src/config.js` |
+| How two copies of the data merge (Drive sync, QR, import) | `src/models/recordMerge.js` (rules at the top; `docs/sync.md`) |
+| Google Drive sync: when it runs, statuses, passphrase | `src/state/driveSync.js`; the API calls in `src/services/drive.js`, sign-in in `src/services/googleAuth.js`; the card in `src/ui/views/syncSettings.js` |
+| QR transfer | `src/logic/qrChunks.js` (frames), `src/ui/modals/qrTransfer.js` (screens), `src/ui/qr/` and `src/ui/qrLoader.js` (loaded on demand), `build/qr.js` (how they are built) |
+| The preview before an import is merged | `src/ui/modals/importPreview.js` |
+| The data file (save to a JSON file in a synced folder) | `src/state/fileSync.js`, `src/services/fileAccess.js`, `src/models/dataFile.js` (merged by `src/models/recordMerge.js`) |
+| The security policy, the installable app (service worker, manifest, icons) | `build/csp.js`, `build/pwa.js`, `src/ui/pwa.js` |
 | Dates, pay periods | `src/core/dates.js` |
 | The calendar: grid, densities (full, compact, mini), keyboard, day panel | `src/ui/components/calendar.js` (the page passes `mode`) |
 | The plan on a calendar: events, day figure and markers, menus | `src/ui/components/calendarData.js` (`planCalendar`) |
@@ -97,10 +109,18 @@ Every file starts with a `@file` comment that states its one responsibility.
 
 1. The user does something in a view or modal.
 2. The UI calls one function of `Actions` (for example `Actions.save('goals', goal)`).
-3. The action calls `Store.commit(mutator, label)`, which: copies the plan for undo, applies the change, passes the plan through `normPlan`, re-runs `project(plan)`, saves through the storage adapter, and notifies the UI.
+3. The action calls `Store.commit(mutator, label)`, which: copies the plan for undo, applies the change, passes the plan through `normPlan`, dates what changed (`stampPlan`: new and changed records get `updatedAt`, removed ones move to `plan.deleted`), re-runs `project(plan)`, saves through the storage adapter, and notifies the UI. Drive sync and the data file are told after the save and run later.
 4. `App.render()` redraws the current view from `Store.plan` (the data) and `Store.proj` (the projection).
 
-The UI never edits `Store.plan` directly and never calculates money itself.
+The UI never edits `Store.plan` directly and never calculates money itself. Plan objects are never changed in place: the store caches each plan's JSON text by object (`TEXT` in `store.js`), so a plan changed in place would be saved with its old text.
+
+## Sync rules (read before touching records, merging or Drive sync)
+
+- Every record (account, income, bill, item, trip, trip cost, loan, goal, wish, and the plan itself) has `id`, `createdAt`, `updatedAt` and `deletedAt` (epoch ms). Only `stampPlan` sets them.
+- A deleted record is kept in `plan.deleted`, never in the live lists, so totals and the projection never see it. The newest 500 per kind are kept in full; older ones, up to 5,000, as markers (id and dates). A marker is what stops another device from bringing the record back.
+- The plan's own fields merge one by one by `plan.fieldsUpdatedAt`; the month maps (`paid`, `fixes`, `overrides`, `reserveOver`, `notes`) merge month by month and line by line by `plan.keysUpdatedAt`, so ticks made on two devices are both kept.
+- Per record, the newer `updatedAt` wins; a tie with different content is settled by the content, so every device makes the same choice. Merging must be the same in both directions and idempotent (`tests/unit/recordMerge.test.js`).
+- Data rewritten by an older version of the app (which drops dates) is detected at start (`schemaSeen` in the storage adapter) and migrated with the oldest date, so it cannot beat newer edits from other devices.
 
 ## The money model (read before touching `logic/projection.js`)
 
@@ -242,8 +262,9 @@ Some short names are part of stored data or of APIs used everywhere. They are st
 
 ```
 tests/
-  unit/          simple, fast, no private data. Run on every change (npm test).
-  regression/    large suites kept from the single-file version.
+  unit/          simple, fast, no private data. Run on every change (npm test). helpers/ has a fake Google Drive,
+                 fake files and storage, and a fake service worker.
+  regression/    large suites: the engine against real backups, and the browser suites (Playwright).
   fixtures/      test data. real*.json are real backups: ignored by git, never publish them.
 ```
 
@@ -260,7 +281,7 @@ tests/
 - `npm run check` passes.
 - New behaviour has a unit test when it is logic; a manual check in `npm run dev` when it is UI.
 - New text is in `$t()`.
-- No new runtime dependency, no network access.
+- No new runtime dependency, no network access beyond Drive sync (constraints 1 and 2).
 - This file and `src/types.js` are updated when the structure or the data changes.
 
 ## Known debt (be honest about it)
@@ -270,3 +291,5 @@ tests/
 - **Views re-render fully.** Fine at today's sizes (see Performance).
 - **`logic/projection.js` is one long function.** It is the best-tested file; split it only with the regression suite at hand.
 - **Deleting a "from savings" cover line** does not put the money back in the savings account (undo does).
+- **Drive sync has only been tested against a fake Google** (`tests/unit/helpers/fakeDrive.js`). Check against the real API, in particular whether `If-Match` on an upload is honoured and whether the `ETag` header can be read cross-origin. Correctness does not depend on either (a replaced write is repaired by its device at its next sync), but conflicts cost an extra round when they are not.
+- **Clocks.** The newer edit wins by each device's own clock; a device whose clock runs far ahead wins conflicts it should not.

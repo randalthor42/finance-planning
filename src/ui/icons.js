@@ -35,6 +35,12 @@ const ICONS = {
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   clock: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2',
+  cloud: 'M7 19h10.5a4 4 0 00.6-7.95A6 6 0 006.3 9.6 4.7 4.7 0 007 19z',
+  cloudOff: 'M7 19h10.5a4 4 0 00.6-7.95A6 6 0 006.3 9.6 4.7 4.7 0 007 19zM3 3l18 18',
+  refresh: 'M20 11a8 8 0 00-14.9-3M4 4v4h4M4 13a8 8 0 0014.9 3M20 20v-4h-4',
+  lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3',
+  qr: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 19h2M19 14h1',
+  camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 10.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z',
 };
 export const icon = n =>
   sv(

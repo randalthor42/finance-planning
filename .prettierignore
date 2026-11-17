@@ -2,3 +2,4 @@ dist/
 dist-test/
 tests/regression/
 tests/fixtures/
+src/vendor/

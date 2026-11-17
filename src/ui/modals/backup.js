@@ -1,15 +1,16 @@
 /**
- * @file Export window (plain or password-encrypted) and the import flow.
+ * @file Export window (plain or password-encrypted) and the import flow (its preview: modals/importPreview.js).
  */
-import { $t, plural } from '../../core/i18n.js';
+import { $t } from '../../core/i18n.js';
 import { IO } from '../../services/backup.js';
 import { Store } from '../../state/store.js';
 import { formModal } from '../components/form.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
-import { UI } from '../state.js';
+import { importPreview } from './importPreview.js';
 
 export function exportModal() {
+  Store.cleanPlans(); // every plan goes through normPlan before it leaves (Store.init cleans only the open one)
   const many = Object.keys(Store.db.plans).length > 1;
   const can = IO.canEncrypt();
   formModal({
@@ -66,24 +67,6 @@ export function exportModal() {
 }
 export function importFlow() {
   const input = h('input', { type: 'file', accept: '.json,application/json' });
-  const finish = plans => {
-    let first = null;
-    let n = 0;
-    for (const p of plans) {
-      const c = Store.addPlan({ ...p, id: null }, false);
-      if (c) {
-        n++;
-        first = first || c;
-      }
-    }
-    if (first) {
-      Store.switchTo(first.id);
-      UI.month = null;
-      toast($t('Imported {0}. Your other plans were not changed.', plural(n, 'plan')));
-    } else {
-      toast($t('Nothing imported: plan limit reached'), { kind: 'bad' });
-    }
-  };
   const run = async (text, password) => {
     try {
       const r = await IO.read(text, password);
@@ -96,7 +79,7 @@ export function importFlow() {
           onSave: v => (v.pw ? (run(text, v.pw), '') : $t('Enter the password.')),
         });
       } else {
-        finish(r.plans);
+        importPreview(r); // merge, or add as copies: the person decides, seeing what changes
       }
     } catch (e) {
       toast(e.message || $t('Could not read that file'), { kind: 'bad' });

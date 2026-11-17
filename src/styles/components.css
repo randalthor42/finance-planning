@@ -279,8 +279,9 @@ main .card {
 }
 .catrow {
   display: grid;
-  /* a fixed value column so every bar track has the same length */
-  grid-template-columns: minmax(90px, 150px) 1fr 17ch;
+  /* a fixed value column so every bar track has the same length; in a narrow card every column may shrink (the
+     value then wraps) instead of running out of the card */
+  grid-template-columns: minmax(0, 150px) minmax(0, 1fr) minmax(0, 17ch);
   gap: 10px;
   align-items: center;
   padding: 5px 0;
@@ -288,6 +289,12 @@ main .card {
 }
 .catrow > .num {
   text-align: right;
+  overflow-wrap: anywhere;
+}
+.catrow > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tblw {

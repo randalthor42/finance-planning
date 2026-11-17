@@ -96,6 +96,37 @@
 .save-state.err i {
   background: var(--bad);
 }
+/* the badge is a button when the data file needs the person (reconnect, choose a file, an error) */
+button.save-state {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 4px 6px;
+  margin: -4px 0 -4px -6px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+button.save-state:hover,
+button.save-state:focus-visible {
+  background: var(--surface-2);
+}
+.save-state.warn {
+  color: var(--warn);
+}
+.save-state.warn i {
+  background: var(--warn);
+}
+.save-state.err {
+  color: var(--bad);
+}
+.save-state span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 main {
   padding: 26px 28px 80px;
   /* grows with wide screens instead of leaving 300-600 px empty on each side */

@@ -574,7 +574,7 @@ tr.dim td {
     min-width: 78px;
   }
   .catrow {
-    grid-template-columns: minmax(70px, 110px) 1fr 15ch;
+    grid-template-columns: minmax(0, 110px) minmax(0, 1fr) minmax(0, 15ch);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -878,6 +878,13 @@ tr.dim td {
   gap: 16px;
   align-items: start;
   grid-template-columns: minmax(0, 1fr);
+}
+/* a long value on the right of a settings row ("on the 26th, or the working day before") wraps on a phone instead of
+   running out of its card; amounts keep to one line where there is room */
+.settings-cols .row > .amt {
+  white-space: normal;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* two columns that each fill from the top (newspaper columns), so a short card never leaves a hole next to a tall one */
 @media (min-width: 1200px) {

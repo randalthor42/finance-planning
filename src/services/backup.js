@@ -1,5 +1,12 @@
 /**
- * @file Backup files: JSON export and import, optional AES-GCM encryption, CSV.
+ * @file Backup files: JSON export and import, optional AES-GCM encryption, CSV. The same format carries Drive sync's
+ * file (state/driveSync.js) and QR transfers (ui/modals/qrTransfer.js): see docs/sync.md.
+ *
+ *   { app: 'runway', kind: 'backup', v, exported, plans: [...], deletedPlans?: {...} }
+ *   encrypted: { app: 'runway', kind: 'encrypted', v: 1, kdf, cipher, iter, salt, iv, zip?: 'gzip', data }
+ *
+ * An encrypted file's text is compressed (gzip) before it is encrypted when the browser can (zip: 'gzip'); older
+ * files without `zip` open as before.
  */
 import { APP } from '../config.js';
 import { D } from '../core/dates.js';
@@ -20,6 +27,15 @@ export const IO = {
   },
   unb64: s => Uint8Array.from(atob(s), c => c.charCodeAt(0)),
   canEncrypt: () => typeof crypto !== 'undefined' && !!crypto.subtle,
+  /** The key of each passphrase in this visit ({salt, key}): sync encrypts often, PBKDF2 is slow on purpose. */
+  keys: new Map(),
+  canZip: () => typeof CompressionStream === 'function' && typeof DecompressionStream === 'function',
+  async zip(bytes, how) {
+    const stream = new Blob([bytes])
+      .stream()
+      .pipeThrough(how === 'gzip' ? new CompressionStream('gzip') : new DecompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  },
   async key(password, salt, iter) {
     const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [
       'deriveKey',
@@ -32,41 +48,84 @@ export const IO = {
       ['encrypt', 'decrypt'],
     );
   },
-  async encrypt(text, password) {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
+  /**
+   * Encrypts text with a passphrase: AES-256-GCM, the key from PBKDF2-SHA256 (ITER rounds, random salt), a new random
+   * IV every time. The key of a passphrase is made once per visit (keys). zip: compress first (default when able).
+   */
+  /**
+   * The encrypted envelope of a text. zip: compress before encrypting (Drive sync and QR transfers, where both ends
+   * are this version). Such an envelope says v: 2, so that it is told apart; an exported backup is not compressed
+   * (v: 1), so older versions of the app can still open it.
+   */
+  async encrypt(text, password, { zip = false } = {}) {
+    zip = zip && this.canZip();
+    let known = this.keys.get(password);
+    if (!known) {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      known = { salt, key: await this.key(password, salt, this.ITER) };
+      this.keys.set(password, known);
+    }
     const iv = crypto.getRandomValues(new Uint8Array(12));
+    const bytes = new TextEncoder().encode(text);
     const ct = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv },
-      await this.key(password, salt, this.ITER),
-      new TextEncoder().encode(text),
+      known.key,
+      zip ? await this.zip(bytes, 'gzip') : bytes,
     );
     return {
       app: 'runway',
       kind: 'encrypted',
-      v: 1,
+      v: zip ? 2 : 1,
       kdf: 'PBKDF2-SHA256',
       cipher: 'AES-256-GCM',
       iter: this.ITER,
-      salt: this.b64(salt),
+      salt: this.b64(known.salt),
       iv: this.b64(iv),
+      ...(zip ? { zip: 'gzip' } : {}),
       data: this.b64(new Uint8Array(ct)),
     };
   },
   async decrypt(f, password) {
     const iter = clamp(Math.round(+f.iter) || 0, 10000, 5000000);
-    const pt = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: this.unb64(f.iv) },
-      await this.key(password, this.unb64(f.salt), iter),
-      this.unb64(f.data),
-    );
-    return new TextDecoder().decode(pt);
+    const known = this.keys.get(password);
+    const key =
+      known && this.b64(known.salt) === f.salt && iter === this.ITER
+        ? known.key
+        : await this.key(password, this.unb64(f.salt), iter);
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: this.unb64(f.iv) }, key, this.unb64(f.data));
+    return new TextDecoder().decode(f.zip === 'gzip' ? await this.zip(new Uint8Array(pt), 'gunzip') : pt);
   },
-  async backup(plans, password) {
-    const body = { app: 'runway', kind: 'backup', v: APP.schema, exported: new Date().toISOString(), plans };
-    return JSON.stringify(password ? await this.encrypt(JSON.stringify(body), password) : body, null, password ? 0 : 1);
+  /**
+   * The backup text of these plans; extra: more fields (a QR transfer adds deletedPlans). zip: compress the encrypted
+   * text (see encrypt).
+   */
+  async backup(plans, password, extra = {}, { zip = false } = {}) {
+    const body = { app: 'runway', kind: 'backup', v: APP.schema, exported: new Date().toISOString(), ...extra, plans };
+    if (!password) {
+      return JSON.stringify(body, null, 1);
+    }
+    return JSON.stringify(await this.encrypt(JSON.stringify(body), password, { zip }));
   },
-  /** Parses backup text. Returns {plans} or {needsPassword:true} or throws a readable Error. */
-  async read(text, password) {
+  /**
+   * The same backup text (unencrypted, compact) from plan texts already made (PlanStore.planList): Drive sync writes
+   * it often, so plans are not serialised again. extra: fields before the plans.
+   */
+  backupText(planTexts, extra = {}) {
+    const head = JSON.stringify({
+      app: 'runway',
+      kind: 'backup',
+      v: APP.schema,
+      exported: new Date().toISOString(),
+      ...extra,
+    });
+    return head.slice(0, -1) + (head.length > 2 ? ',' : '') + '"plans":[' + planTexts.join(',') + ']}';
+  },
+  /**
+   * Parses backup text. Returns {plans, deletedPlans} or {needsPassword:true} or throws a readable Error.
+   * `allowEmpty`: a file with no plans is valid (the Drive sync file of an account whose plans were all deleted, or
+   * of a device that turned sync on before making one); an imported backup with none is refused.
+   */
+  async read(text, password, { allowEmpty = false } = {}) {
     let f;
     try {
       f = JSON.parse(text);
@@ -87,17 +146,21 @@ export const IO = {
       try {
         inner = await this.decrypt(f, password);
       } catch (e) {
-        throw new Error($t('Wrong password, or the file is damaged.'));
+        throw Object.assign(new Error($t('Wrong password, or the file is damaged.')), { code: 'password' });
       }
-      return this.read(inner);
+      return this.read(inner, '', { allowEmpty });
     }
-    if (f.kind !== 'backup' || !Array.isArray(f.plans) || !f.plans.length) {
+    // a data file (models/dataFile.js) has the same shape: it can be imported like a backup
+    if ((f.kind !== 'backup' && f.kind !== 'data') || !Array.isArray(f.plans) || (!f.plans.length && !allowEmpty)) {
       throw new Error($t('This backup has no plans in it.'));
     }
     if (+f.v > APP.schema) {
       throw new Error($t('This backup was made by a newer version of ') + APP.name + '.');
     }
-    return { plans: f.plans.slice(0, APP.maxPlans).filter(isObj) };
+    return {
+      plans: f.plans.slice(0, APP.maxPlans).filter(isObj),
+      deletedPlans: isObj(f.deletedPlans) ? f.deletedPlans : {},
+    };
   },
   download(name, text, type = 'application/json') {
     const a = document.createElement('a');

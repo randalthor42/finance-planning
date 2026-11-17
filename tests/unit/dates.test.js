@@ -100,3 +100,89 @@ test('a change of language gives text in the new language at once', async () => 
     FMT.dloc = before;
   }
 });
+
+/* The day helpers do calendar arithmetic without Date objects (they run tens of thousands of times per projection).
+   These compare them with the Date-based way they replaced, on every day from 1900 to 2300. */
+const ref = {
+  of: (y, m, d) => Math.round(Date.UTC(y, m, d) / 864e5),
+  key: n => new Date(n * 864e5).toISOString().slice(0, 10),
+  dow: n => new Date(n * 864e5).getUTCDay(),
+  month: n => {
+    const d = new Date(n * 864e5);
+    return d.getUTCFullYear() * 12 + d.getUTCMonth();
+  },
+};
+
+test('D.key, D.dow and D.month give exactly what Date gives, every day from 1900 to 2300', () => {
+  for (let n = ref.of(1900, 0, 1); n <= ref.of(2300, 11, 31); n++) {
+    if (D.key(n) !== ref.key(n) || D.dow(n) !== ref.dow(n) || D.month(n) !== ref.month(n)) {
+      assert.fail(`day ${n}: ${D.key(n)} ${D.dow(n)} ${D.month(n)} vs ${ref.key(n)} ${ref.dow(n)} ${ref.month(n)}`);
+    }
+  }
+});
+
+test('D.of gives exactly what Date.UTC gives, overflowing days and months included', () => {
+  for (let y = 1968; y <= 2203; y++) {
+    for (let m = -13; m <= 25; m++) {
+      for (const d of [-40, -1, 0, 1, 15, 28, 29, 30, 31, 32, 60, 400]) {
+        if (D.of(y, m, d) !== ref.of(y, m, d)) {
+          assert.fail(`D.of(${y}, ${m}, ${d}) = ${D.of(y, m, d)}, Date.UTC says ${ref.of(y, m, d)}`);
+        }
+      }
+    }
+  }
+});
+
+test('D.parse accepts real days only, as before', () => {
+  for (let n = ref.of(1970, 0, 1); n <= ref.of(2200, 11, 31); n += 7) {
+    assert.equal(D.parse(ref.key(n)), n);
+  }
+  for (const bad of [
+    '2026-02-29',
+    '2024-02-30',
+    '2026-04-31',
+    '2026-13-01',
+    '2026-00-10',
+    '2026-01-00',
+    '1969-12-31',
+    '2201-01-01',
+    '2026-1-01',
+    'x',
+    null,
+    5,
+  ]) {
+    assert.equal(D.parse(bad), null, String(bad));
+  }
+  assert.equal(D.parse('2024-02-29'), ref.of(2024, 1, 29), 'leap day');
+  assert.equal(D.parse('2100-02-29'), null, '2100 is not a leap year');
+  assert.equal(D.parse('2000-02-29'), ref.of(2000, 1, 29), '2000 is');
+});
+
+test('D.inMonth: a day clamped to the month and moved off weekends, as before', () => {
+  const refIn = (k, day, shift) => {
+    const y = Math.floor(k / 12);
+    const m = k % 12;
+    const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    let n = ref.of(y, m, Math.min(Math.max(day, 1), dim));
+    const weekend = x => [0, 6].includes(ref.dow(x));
+    while (shift === 'next' && weekend(n)) {
+      n++;
+    }
+    while (shift === 'prev' && weekend(n)) {
+      n--;
+    }
+    return n;
+  };
+  for (let k = 2020 * 12; k < 2032 * 12; k++) {
+    for (const day of [1, 15, 28, 29, 30, 31]) {
+      for (const shift of ['none', 'next', 'prev']) {
+        assert.equal(D.inMonth(k, day, shift), refIn(k, day, shift), `${M.key(k)} ${day} ${shift}`);
+      }
+    }
+  }
+});
+
+test('impossible days still fail the way they did', () => {
+  assert.throws(() => D.key(NaN));
+  assert.ok(Number.isNaN(D.of(NaN, 0, 1)));
+});

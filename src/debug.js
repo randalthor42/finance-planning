@@ -59,6 +59,25 @@ import * as m54 from './logic/calendar.js';
 import * as m55 from './ui/components/calendar.js';
 import * as m56 from './ui/components/calendarData.js';
 import * as m57 from './models/calendarPrefs.js';
+import * as m58 from './state/fileSync.js';
+import * as m59 from './services/fileAccess.js';
+import * as m60 from './services/handleStore.js';
+import * as m61 from './models/dataFile.js';
+import * as m63 from './ui/views/storageSettings.js';
+import * as m64 from './core/pwa.js';
+import * as m65 from './ui/pwa.js';
+import * as m66 from './models/records.js';
+import * as m67 from './models/migrations.js';
+import * as m68 from './services/storage.js';
+import * as m69 from './models/recordMerge.js';
+import * as m70 from './logic/qrChunks.js';
+import * as m71 from './services/drive.js';
+import * as m72 from './services/googleAuth.js';
+import * as m73 from './state/driveSync.js';
+import * as m74 from './ui/modals/importPreview.js';
+import * as m75 from './ui/modals/qrTransfer.js';
+import * as m76 from './ui/views/syncSettings.js';
+import * as m77 from './ui/qrLoader.js';
 
 export const expose = () =>
   Object.assign(
@@ -121,4 +140,23 @@ export const expose = () =>
     m55,
     m56,
     m57,
+    m58,
+    m59,
+    m60,
+    m61,
+    m63,
+    m64,
+    m65,
+    m66,
+    m67,
+    m68,
+    m69,
+    m70,
+    m71,
+    m72,
+    m73,
+    m74,
+    m75,
+    m76,
+    m77,
   );

@@ -1,0 +1,65 @@
+/* The installed app on phones with a notch, a status bar over the page or a home indicator. The viewport covers the
+   whole screen (viewport-fit=cover) and iOS draws the status bar over the page (black-translucent), so content keeps
+   clear of those areas. The insets are 0 in a browser tab and on a computer: nothing changes there. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* behind the status bar, whose text is white on iOS: the accent, or the top bar's colour in the dark theme */
+  --status-bar: var(--accent);
+}
+:root[data-theme='dark'] {
+  --status-bar: var(--surface);
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--safe-top);
+  background: var(--status-bar);
+  z-index: 3000;
+  pointer-events: none;
+}
+#app {
+  padding: var(--safe-top) var(--safe-right) 0 var(--safe-left);
+}
+main {
+  padding-bottom: calc(80px + var(--safe-bottom));
+}
+#toasts.pos-tr {
+  inset: calc(18px + var(--safe-top)) calc(18px + var(--safe-right)) auto auto;
+}
+#toasts.pos-br {
+  inset: auto calc(18px + var(--safe-right)) calc(18px + var(--safe-bottom)) auto;
+}
+#toasts.pos-tl {
+  inset: calc(18px + var(--safe-top)) auto auto calc(18px + var(--safe-left));
+}
+#toasts.pos-bl {
+  inset: auto auto calc(18px + var(--safe-bottom)) calc(18px + var(--safe-left));
+}
+dialog.modal {
+  max-height: calc(100vh - 32px - var(--safe-top) - var(--safe-bottom));
+}
+.modal-in {
+  max-height: calc(100vh - 34px - var(--safe-top) - var(--safe-bottom));
+}
+@media (min-width: 901px) {
+  .side {
+    top: var(--safe-top);
+    height: calc(100vh - var(--safe-top));
+    padding-bottom: calc(18px + var(--safe-bottom));
+  }
+}
+@media (max-width: 900px) {
+  .top {
+    top: var(--safe-top);
+  }
+  /* the menu drawer covers the screen's height: its content starts below the status bar */
+  .side {
+    padding-top: calc(18px + var(--safe-top));
+    padding-bottom: calc(18px + var(--safe-bottom));
+    padding-left: calc(12px + var(--safe-left));
+  }
+}

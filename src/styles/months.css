@@ -53,6 +53,7 @@
   margin-bottom: 6px;
 }
 .flow > div {
+  min-width: 0; /* a long amount wraps inside its box instead of pushing out of the card */
   padding: 10px 12px;
   border-radius: var(--r-sm);
   background: var(--surface-2);
@@ -62,6 +63,7 @@
   color: var(--muted);
 }
 .flow .v {
+  overflow-wrap: anywhere;
   font-weight: 680;
   font-size: 1.1rem;
   font-variant-numeric: tabular-nums;

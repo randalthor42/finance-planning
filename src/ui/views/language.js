@@ -11,6 +11,13 @@ import { confirmModal } from '../components/modal.js';
 import { POP, closePop, popover } from '../components/popover.js';
 import { toast } from '../components/toast.js';
 import { h, sv } from '../dom.js';
+import { servedOnly } from '../qrLoader.js';
+
+/** Why the texts to translate are missing: the served page opened from a disk, or no connection. */
+const textsMissing = () =>
+  location.protocol === 'file:'
+    ? servedOnly()
+    : $t('The texts to translate could not be loaded. Check your connection and try again.');
 
 /* --- languages: flags, picker, and the Language section of Settings --- */
 /*i18n:off*/
@@ -160,6 +167,10 @@ function importLanguage() {
 }
 export function languageCard() {
   const all = langList();
+  // the texts to translate are not in the page's code: loaded the first time this card is shown
+  if (!I18N.all && !I18N.loading) {
+    I18N.loadTexts().then(() => I18N.all && App.render());
+  }
   const total = I18N.KEYS.length;
   return [
     card(
@@ -188,7 +199,12 @@ export function languageCard() {
             ),
             h('div', {
               class: 'small muted',
-              text: l.code === 'en' ? $t('Built in') : $t('{0} · {1} of {2} texts translated', l.code, done, total),
+              text:
+                l.code === 'en'
+                  ? $t('Built in')
+                  : total
+                    ? $t('{0} · {1} of {2} texts translated', l.code, done, total)
+                    : l.code,
             }),
             h(
               'div',
@@ -196,7 +212,12 @@ export function languageCard() {
               l.code !== I18N.lang ? btn($t('Use'), () => I18N.setLang(l.code), 'sm') : null,
               btn(
                 $t('Export'),
-                () => IO.download(`runway-language-${l.code}.json`, I18N.exportPack(l.code)),
+                () =>
+                  I18N.loadTexts().then(texts =>
+                    texts.keys.length
+                      ? IO.download(`runway-language-${l.code}.json`, I18N.exportPack(l.code))
+                      : toast(textsMissing(), { kind: 'bad' }),
+                  ),
                 'sm ghost',
                 'download',
               ),

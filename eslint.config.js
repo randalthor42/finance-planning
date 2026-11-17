@@ -3,9 +3,10 @@ import globals from 'globals';
 
 /** Lint rules: catch real mistakes (undefined names, unused code), leave formatting to Prettier. */
 export default [
+  { ignores: ['src/vendor/**'] }, // libraries copied as they are (src/vendor/README.md)
   js.configs.recommended,
   {
-    files: ['src/**/*.js', 'tests/unit/**/*.js'],
+    files: ['src/**/*.js', 'tests/unit/**/*.js', 'build/**/*.js'],
     languageOptions: { ecmaVersion: 2022, sourceType: 'module', globals: { ...globals.browser, ...globals.node } },
     rules: {
       'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none' }],

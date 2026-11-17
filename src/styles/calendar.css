@@ -517,6 +517,10 @@
 }
 .cal[data-mode='mini'] .cal-d.out {
   background: none;
+}
+/* days of the months around: faded, but the number stays readable (--faint, 4.6:1), so only the marks fade */
+.cal[data-mode='mini'] .cal-d.out .cal-mark,
+.cal[data-mode='mini'] .cal-d.out .cal-dots {
   opacity: 0.5;
 }
 .cal[data-mode='mini'] .cal-n {

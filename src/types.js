@@ -39,6 +39,37 @@
  * @property {Object<string, Object<string, (true|{d: string, a: ?string, v: number, t: ?string})>>} paid Ticks: { "YYYY-MM": { entryKey: tick } }
  * @property {Object<string, {d: ?string, a: number}>} fixes One correction per month from real money.
  * @property {Object<string, string>} notes
+ * @property {{accounts: object[], incomes: object[], bills: object[], items: object[], trips: object[], loans: object[], goals: object[], wishes: object[], tripItems: object[]}} deleted
+ *   Deleted records, never read by totals or the projection: the newest 500 of each kind in full, older ones (up to
+ *   5,000) as markers `{ id, createdAt, updatedAt, deletedAt }`. A trip cost also has `tripId`.
+ * @property {Object<string, ?number>} fieldsUpdatedAt When each of the plan's own fields last changed (name, settings,
+ *   fixes, overrides, reserveOver, paid, notes), epoch ms.
+ * @property {Object<string, {base: number, at: Object<string, number>}>} keysUpdatedAt For the month maps (fixes,
+ *   notes, overrides, reserveOver, paid): when each month, or month and line ("2026-01 bill:ab12"), last changed. A
+ *   path not in `at` has the time `base`.
+ * @property {number} createdAt Epoch ms. Every record in the lists has createdAt, updatedAt and deletedAt too.
+ * @property {number} updatedAt Epoch ms: the last save that changed the plan or one of its records.
+ * @property {null} deletedAt A live plan; a deleted plan is a DeletedPlan in the database.
+ */
+
+/**
+ * Sync metadata every record carries (accounts, incomes, bills, items, trips, trip costs, loans, goals, wishes), set
+ * only by stampPlan (models/records.js).
+ * @typedef {object} RecordMeta
+ * @property {string} id
+ * @property {number} createdAt Epoch ms.
+ * @property {number} updatedAt Epoch ms: the last save that changed this record.
+ * @property {?number} deletedAt Epoch ms, or null while the record is live.
+ */
+
+/**
+ * The stored database (localStorage, normDB in models/db.js).
+ * @typedef {object} Database
+ * @property {number} schemaVersion The data format (APP.schema); older data is migrated at start (models/migrations.js).
+ * @property {Object<string, Plan>} plans
+ * @property {?string} active The open plan's id.
+ * @property {Object<string, {id: string, createdAt: number, updatedAt: number, deletedAt: number}>} deletedPlans
+ *   Deleted plans, as markers, so that a deletion reaches other devices (at most 100).
  */
 
 /**

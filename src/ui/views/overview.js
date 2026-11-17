@@ -688,44 +688,52 @@ V.overview = () => {
     ]);
   }
   // next things to pay: dated first (by day), then the ones without a fixed day
-  const due = [];
-  for (let k = currentMonth; k < Math.min(currentMonth + 2, summary.s0 + summary.n); k++) {
-    for (const e of monthAt(k).entries) {
-      if (
-        e.amount < 0 &&
-        !e.paid &&
-        !e.budget &&
-        e.group !== 'adjust' &&
-        (e.date === null ? k === currentMonth : e.date >= today)
-      ) {
-        due.push([k, e]);
+  const dueList = () => {
+    const due = [];
+    for (let k = currentMonth; k < Math.min(currentMonth + 2, summary.s0 + summary.n); k++) {
+      for (const e of monthAt(k).entries) {
+        if (
+          e.amount < 0 &&
+          !e.paid &&
+          !e.budget &&
+          e.group !== 'adjust' &&
+          (e.date === null ? k === currentMonth : e.date >= today)
+        ) {
+          due.push([k, e]);
+        }
       }
     }
-  }
-  due.sort((a, b) => (a[1].date === null ? Infinity : a[1].date) - (b[1].date === null ? Infinity : b[1].date));
-  const soon = [];
-  for (let k = currentMonth + 1; k < Math.min(currentMonth + 5, summary.s0 + summary.n); k++) {
-    for (const e of monthAt(k).entries) {
-      if (e.group === 'item' || e.group === 'trip') {
-        soon.push([k, e]);
+    due.sort((a, b) => (a[1].date === null ? Infinity : a[1].date) - (b[1].date === null ? Infinity : b[1].date));
+    return due;
+  };
+  const soonList = () => {
+    const soon = [];
+    for (let k = currentMonth + 1; k < Math.min(currentMonth + 5, summary.s0 + summary.n); k++) {
+      for (const e of monthAt(k).entries) {
+        if (e.group === 'item' || e.group === 'trip') {
+          soon.push([k, e]);
+        }
       }
     }
-  }
-  const cats = {};
-  let catTotal = 0;
-  for (let k = currentMonth; k < Math.min(currentMonth + 12, summary.s0 + summary.n); k++) {
-    for (const e of monthAt(k).entries) {
-      if (e.amount < 0 && e.group !== 'adjust') {
-        cats[e.cat] = (cats[e.cat] || 0) - e.amount;
-        catTotal -= e.amount;
+    return soon;
+  };
+  const catList = () => {
+    const cats = {};
+    let catTotal = 0;
+    for (let k = currentMonth; k < Math.min(currentMonth + 12, summary.s0 + summary.n); k++) {
+      for (const e of monthAt(k).entries) {
+        if (e.amount < 0 && e.group !== 'adjust') {
+          cats[e.cat] = (cats[e.cat] || 0) - e.amount;
+          catTotal -= e.amount;
+        }
       }
     }
-  }
-  const catRows = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  const catMax = catRows.length ? catRows[0][1] : 1;
+    const catRows = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+    return { catRows, catMax: catRows.length ? catRows[0][1] : 1, catTotal };
+  };
   const budgets = m.entries.filter(e => e.budget);
   const i0 = currentMonth - summary.s0;
-  const goalsLoans = [
+  const goalsLoansList = () => [
     ...plan.goals.map(G => {
       const now = projection.goals[G.id].series[i0];
       return prow(
@@ -757,6 +765,11 @@ V.overview = () => {
         );
       }),
   ];
+  /**
+   * A card below the first screen: on the first drawing of the Overview in this visit it is built just after the page
+   * is painted (designGrid, lazy), keeping `reserve` px meanwhile; later drawings build it at once.
+   */
+  const later = (id, title, build, size) => titled(id, title, build, { lazy: true, ...size });
   const chartTitle = $t('Where your money is heading');
   // The cards of the page, in their usual order. Design mode lets the person move them and change their size.
   // A card that is null has nothing to show right now: its place stays free.
@@ -775,13 +788,13 @@ V.overview = () => {
       ...kpis,
       titled('starter', $t('Build your plan'), starter, { w: 12 }),
       titled('now', M.label(currentMonth, true), nowCard(), { w: 8, minW: 4 }),
-      titled('insights', $t('Insights'), insightsCard(), { cls: 'ov-side' }),
-      titled('chart', chartTitle, card(chartTitle, null, null, cashChart()), { w: 12, minW: 4 }),
+      // beside "now" on wide screens: its place keeps the height of that row, so nothing visible moves
+      later('insights', $t('Insights'), () => insightsCard(), { cls: 'ov-side', reserve: 430 }),
+      later('chart', chartTitle, () => card(chartTitle, null, null, cashChart()), { w: 12, minW: 4, reserve: 365 }),
       titled('calendar', $t('Calendar'), overviewCalendar(), { w: 4, minW: 3 }),
-      titled(
-        'due',
-        $t('Next to pay'),
-        card(
+      later('due', $t('Next to pay'), () => {
+        const due = dueList();
+        return card(
           $t('Next to pay'),
           $t('Unpaid costs, soonest first.'),
           null,
@@ -808,11 +821,9 @@ V.overview = () => {
                   : null,
               )
             : h('p', { class: 'muted', text: $t('Nothing left to pay right now.') }),
-        ),
-      ),
-      titled(
-        'budgets',
-        $t('Budgets this month'),
+        );
+      }),
+      later('budgets', $t('Budgets this month'), () =>
         budgets.length
           ? card(
               $t('Budgets this month'),
@@ -830,9 +841,7 @@ V.overview = () => {
             )
           : null,
       ),
-      titled(
-        'surplus',
-        $t('Monthly surplus'),
+      later('surplus', $t('Monthly surplus'), () =>
         card(
           $t('Monthly surplus'),
           $t('In minus out.'),
@@ -846,12 +855,11 @@ V.overview = () => {
           ),
         ),
       ),
-      titled('review', $t('How {0} is going', M.label(currentMonth, true)), monthReviewCard()),
-      titled('afford', $t('Can I afford this?'), affordCard()),
-      titled(
-        'soon',
-        $t('Coming up later'),
-        soon.length
+      later('review', $t('How {0} is going', M.label(currentMonth, true)), () => monthReviewCard()),
+      later('afford', $t('Can I afford this?'), () => affordCard()),
+      later('soon', $t('Coming up later'), () => {
+        const soon = soonList();
+        return soon.length
           ? card(
               $t('Coming up later'),
               $t('One-offs and trip costs in the following months.'),
@@ -869,17 +877,17 @@ V.overview = () => {
                 ),
               ),
             )
-          : null,
-      ),
-      titled(
-        'goals',
-        $t('Savings and debt'),
-        goalsLoans.length ? card($t('Savings and debt'), $t('Progress as of this month.'), null, goalsLoans) : null,
-      ),
-      titled(
-        'cats',
-        $t('Where it goes'),
-        catRows.length
+          : null;
+      }),
+      later('goals', $t('Savings and debt'), () => {
+        const goalsLoans = goalsLoansList();
+        return goalsLoans.length
+          ? card($t('Savings and debt'), $t('Progress as of this month.'), null, goalsLoans)
+          : null;
+      }),
+      later('cats', $t('Where it goes'), () => {
+        const { catRows, catMax, catTotal } = catList();
+        return catRows.length
           ? card(
               $t('Where it goes'),
               $t('Next 12 months, by category.'),
@@ -897,8 +905,8 @@ V.overview = () => {
                 ),
               ),
             )
-          : null,
-      ),
+          : null;
+      }),
     ],
   );
 };

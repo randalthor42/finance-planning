@@ -64,8 +64,14 @@
   font-size: 0.82rem;
   color: var(--text);
 }
-.legend button[aria-pressed='false'] {
-  opacity: 0.45;
+/* a series that is switched off: like the calendar's legend, readable text (WCAG AA), struck through, an empty swatch.
+   Only the series buttons: the month range (.seg) inside the legend has its own look */
+.legend > button[aria-pressed='false'] {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+.legend > button[aria-pressed='false'] i {
+  opacity: 0.35;
 }
 .legend i {
   width: 10px;

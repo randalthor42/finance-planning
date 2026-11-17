@@ -337,7 +337,7 @@ export function project(plan, opts) {
 
   // -- roll the ledger into balances
   // -- ticks, and things paid with a credit card: those do not take cash, they add to what is owed on the card
-  const cardIds = plan.accounts.filter(a => a.type === 'credit').map(a => a.id);
+  const cardIds = new Set(plan.accounts.filter(a => a.type === 'credit').map(a => a.id));
   const charges = months.map(() => ({}));
   const today_i = Period.of(settings, today) - s0;
   const checked = months.map(m => (plan.fixes[m.key] ? D.parse(plan.fixes[m.key].d) : null));
@@ -350,10 +350,10 @@ export function project(plan, opts) {
       e.paidDay = isObj(pr) ? D.parse(pr.d) : null;
       e.paidFrom = isObj(pr) && pr.a ? pr.a : e.account || null;
       // money brought in from a credit card to cover a short month: cash comes in, and the card owes that much more
-      if (e.cover && cardIds.includes(e.cover) && !(isObj(pr) && (pr.v !== 0 || beforeCheck(i, pr)))) {
+      if (e.cover && cardIds.has(e.cover) && !(isObj(pr) && (pr.v !== 0 || beforeCheck(i, pr)))) {
         charges[i][e.cover] = r2((charges[i][e.cover] || 0) + e.amount);
       }
-      if (e.amount < 0 && !e.budget && cardIds.includes(e.paidFrom)) {
+      if (e.amount < 0 && !e.budget && cardIds.has(e.paidFrom)) {
         // a card purchase is already inside what you owe on the card when its tick moved the money, or when it was ticked
         // no later than the day you last checked your balances; otherwise it is added to the card in its month
         const inside = isObj(pr) && pr.a === e.paidFrom && (pr.v !== 0 || beforeCheck(i, pr));
@@ -377,6 +377,14 @@ export function project(plan, opts) {
     // per month: what the plan still puts on the card, and what the plan still pays off (both not yet inside "owed")
     const added = [];
     const paidOff = [];
+    // the first month a loan takes this card's debt over (a bill "pays it until" that loan), once, not every month
+    let takeover = Infinity;
+    for (const b of plan.bills) {
+      const L = b.payTo === a.id && b.untilLoan ? loans[b.untilLoan] : null;
+      if (L && L.on) {
+        takeover = Math.min(takeover, L.f0);
+      }
+    }
     months.forEach((m, i) => {
       let addedNow = 0;
       let paidNow = 0;
@@ -386,24 +394,19 @@ export function project(plan, opts) {
         }
         addedNow = charges[i][a.id] || 0;
         owed = r2(owed + addedNow);
+        const paidMonth = plan.paid[m.key];
         for (const e of m.entries) {
-          const pr = (plan.paid[m.key] || {})[e.key];
+          if (e.payTo !== a.id || e.amount >= 0) {
+            continue;
+          }
+          const pr = paidMonth ? paidMonth[e.key] : undefined;
           const done = pr === true || (isObj(pr) && (pr.t === a.id || beforeCheck(i, pr)));
-          if (e.payTo === a.id && e.amount < 0 && !done) {
+          if (!done) {
             paidNow = r2(paidNow + Math.min(owed, -e.amount));
             owed = r2(Math.max(0, owed + e.amount));
           }
         }
-        if (
-          plan.bills.some(
-            b =>
-              b.payTo === a.id &&
-              b.untilLoan &&
-              loans[b.untilLoan] &&
-              loans[b.untilLoan].on &&
-              m.k >= loans[b.untilLoan].f0,
-          )
-        ) {
+        if (m.k >= takeover) {
           owed = 0;
         } // a loan took the card debt over
       }

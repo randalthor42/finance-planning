@@ -37,8 +37,14 @@ import { closePop, popover } from './popover.js';
  * @typedef {object} GridCard
  * @property {string} id stable name, unique on the page, used to save its place (a letter, then letters, digits, - or _)
  * @property {string} title its name in Design mode and for screen readers
- * @property {Element|null} el the card, or null when it has nothing to show: its place stays free, and Design mode
- *   shows a stand-in so it can still be arranged
+ * @property {Element|null|(() => Element|null)} el the card, or null when it has nothing to show: its place stays
+ *   free, and Design mode shows a stand-in so it can still be arranged. A function builds the card when it is needed
+ *   (see lazy).
+ * @property {boolean} [lazy] on the first drawing of the page in this visit, the card (el is then a function) is
+ *   built just after the page is painted, each such card in its own short task, in page order: a long page opens
+ *   sooner and the browser stays responsive. Its place keeps `reserve` px meanwhile, so nothing visible moves. Later
+ *   drawings (after a change) build it at once, as usual.
+ * @property {number} [reserve] the height (px) kept for a lazy card until it is built; 300 if not given
  * @property {number} [w] default width, in columns
  * @property {number} [h] default height, in rows (a row is at least --dg-row tall and grows with its cards)
  * @property {number} [minW] @property {number} [maxW] @property {number} [minH] @property {number} [maxH] size limits
@@ -48,6 +54,30 @@ import { closePop, popover } from './popover.js';
 
 /** Pages already warned about (see designGrid): once each is enough. */
 const warned = new Set();
+/** Pages drawn at least once in this visit: only their first drawing builds lazy cards later. */
+const drawnOnce = new Set();
+
+/**
+ * Builds the lazy cards of a first drawing, after the page is painted, one card per task (each stays well under the
+ * 50 ms of a "long task"), in page order. A card whose page was drawn again meanwhile is skipped (it is gone).
+ */
+function buildLater(queue) {
+  const next = () => {
+    const [spec, spot] = queue.shift();
+    if (spot.isConnected) {
+      const el = spec.el();
+      if (el) {
+        spot.replaceWith(el);
+      } else {
+        spot.parentElement.remove(); // nothing to show: its place stays free, as for a card that is null
+      }
+    }
+    if (queue.length) {
+      setTimeout(next, 0);
+    }
+  };
+  requestAnimationFrame(() => setTimeout(next, 0));
+}
 /** Narrower than this (the grid, in px) the cards are stacked and cannot be arranged. Keep in step with features.css. */
 const NARROW = 600;
 /** While dragging, the page scrolls when the pointer is this close (px) to the top or bottom of the window. */
@@ -140,6 +170,24 @@ export function designGrid(key, cards, { cols = GRID_COLS, layoutKey = key, orde
     console.warn(`Design mode: page "${key}" is not declared. Add designable('${key}', name) next to its view.`);
   }
   const designing = isDesigning(key);
+  const later = !designing && !drawnOnce.has(key) ? [] : null;
+  drawnOnce.add(key);
+  // lazy cards: a stand-in that keeps their place until buildLater; on later drawings they are built now
+  cards = cards.map(c => {
+    if (typeof c.el !== 'function') {
+      return c;
+    }
+    if (later && c.lazy) {
+      const spot = h('section', {
+        class: 'card dg-wait',
+        'aria-busy': 'true',
+        style: `min-height:${c.reserve || 300}px`,
+      });
+      later.push([c, spot]);
+      return { ...c, el: spot };
+    }
+    return { ...c, el: c.el() };
+  });
   const shown = designing ? cards : cards.filter(c => c.el);
   const specs = new Map(shown.map(c => [c.id, c]));
   const saved = Store.db.layouts[layoutKey] || null;
@@ -192,6 +240,9 @@ export function designGrid(key, cards, { cols = GRID_COLS, layoutKey = key, orde
   const wrap = h('div', { class: 'dg-wrap' });
   if (!designing) {
     wrap.append(grid);
+    if (later && later.length) {
+      buildLater(later);
+    }
     return wrap;
   }
 

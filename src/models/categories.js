@@ -42,4 +42,5 @@ export const SHIFTS = [
   ['next', $t('Next working day')],
   ['prev', $t('Working day before')],
 ];
-export const KEY_RE = /^(inc|bill|item|trip|loan|goal|wish)(:[a-z0-9]{1,16}){1,2}$/;
+export const KEY_RE =
+  /^(inc|bill|item|trip|loan|goal|wish)(:(?:[a-z0-9]{1,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})){1,2}$/;

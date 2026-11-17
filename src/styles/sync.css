@@ -1,0 +1,88 @@
+/* Google Drive sync and QR transfers (ui/views/syncSettings.js, ui/modals/qrTransfer.js) */
+
+/* the sync status icon, in the menu's foot and the top bar */
+.sync-state.good {
+  color: var(--good);
+}
+.sync-state.warn {
+  color: var(--warn);
+}
+.sync-state.bad {
+  color: var(--bad);
+}
+.sync-state.acc {
+  color: var(--accent);
+}
+.sync-state.spin .ico {
+  animation: sync-spin 1.2s linear infinite;
+}
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sync-state.spin .ico {
+    animation: none;
+  }
+}
+
+/* QR transfer */
+.qr-canvas,
+.qr-video {
+  display: block;
+  width: min(100%, 360px);
+  margin: 12px auto;
+  border-radius: 8px;
+}
+.qr-canvas {
+  aspect-ratio: 1;
+  height: auto;
+  background: #fff;
+  /* each module a sharp square when the canvas is scaled */
+  image-rendering: pixelated;
+}
+.qr-video {
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #000;
+}
+.qr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qr-scope {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+.qr-code-box {
+  margin: 14px 0 6px;
+  text-align: center;
+}
+.qr-code {
+  font:
+    600 1.5rem/1.3 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  letter-spacing: 0.06em;
+  user-select: all;
+}
+.qr-bar {
+  margin: 6px 0 8px;
+}
+.qr-open {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.qr-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

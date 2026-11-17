@@ -16,6 +16,33 @@ export const FMT = {
   nfc: null,
   nfn: null,
 };
+/**
+ * Number formats, one per locale and set of options: building an Intl.NumberFormat is slow (the first one also loads
+ * the locale's data), and setFmt runs on every recalculation, so each is made once and kept.
+ */
+const numberFormats = new Map();
+function numberFormat(locale, options) {
+  const key =
+    locale +
+    '|' +
+    options.style +
+    '|' +
+    options.currency +
+    '|' +
+    options.notation +
+    '|' +
+    options.minimumFractionDigits +
+    '|' +
+    options.maximumFractionDigits +
+    '|' +
+    options.useGrouping;
+  let format = numberFormats.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(locale, options);
+    numberFormats.set(key, format);
+  }
+  return format;
+}
 export function setFmt(S) {
   FMT.nloc = S.numFmt === 'us' ? 'en-US' : 'de-DE';
   FMT.dloc = I18N.lang !== 'en' ? I18N.lang : S.dateFmt === 'mdy' ? 'en-US' : 'en-GB';
@@ -24,33 +51,28 @@ export function setFmt(S) {
   FMT.cur = S.currency;
   FMT.cents = S.cents;
   const d = S.cents ? 2 : 0;
-  const mk = current => {
-    FMT.nf = new Intl.NumberFormat(FMT.nloc, {
-      style: 'currency',
-      currency: current,
-      minimumFractionDigits: d,
-      maximumFractionDigits: d,
-    });
-    FMT.nfc = new Intl.NumberFormat(FMT.nloc, {
-      style: 'currency',
-      currency: current,
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    });
-  };
+  const money = currency =>
+    numberFormat(FMT.nloc, { style: 'currency', currency, minimumFractionDigits: d, maximumFractionDigits: d });
   try {
-    mk(FMT.cur);
+    FMT.nf = money(FMT.cur);
   } catch (e) {
-    mk('EUR');
+    FMT.nf = money('EUR'); // a currency this browser does not know: amounts in euros, the code as typed elsewhere
   }
-  FMT.nfn = new Intl.NumberFormat(FMT.nloc, { maximumFractionDigits: 2, useGrouping: true });
+  FMT.nfc = null; // compact amounts (chart axes): made when first used
+  FMT.nfn = numberFormat(FMT.nloc, { maximumFractionDigits: 2, useGrouping: true });
 }
 export const money = n => {
   const v = FMT.cents ? r2(n) : Math.round(n);
   return FMT.nf.format(v || 0);
 };
 export const signed = n => (Math.round(n * (FMT.cents ? 100 : 1)) > 0 ? '+' : '') + money(n);
-export const compact = n => FMT.nfc.format(Math.round(n) || 0);
+export const compact = n => {
+  if (!FMT.nfc) {
+    const currency = FMT.nf.resolvedOptions().currency;
+    FMT.nfc = numberFormat(FMT.nloc, { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 });
+  }
+  return FMT.nfc.format(Math.round(n) || 0);
+};
 export const fmtNum = n => FMT.nfn.format(r2(n));
 /** Free-text money parser for pasted text. Accepts "1.234,56", "1,234.56", "12,5" and sums like "120+35". Never NaN, never negative. */
 export function parseMoney(s) {

@@ -1,6 +1,9 @@
 /**
- * @file Translations. The English sentence is the key: $t('text {0}', a). Packs live in their own localStorage key.
+ * @file Translations. The English sentence is the key: $t('text {0}', a). Packs live in their own localStorage key,
+ * read and written through the data access module (services/storage.js): the one import of this layer from a higher
+ * one, because the language has to be known before any text is made.
  */
+import { readJSON, writeJSON } from '../services/storage.js';
 import { has, isObj } from './util.js';
 
 export const I18N = {
@@ -10,13 +13,53 @@ export const I18N = {
   dict: null,
   pr: null,
   po: null,
-  KEYS: [],
-  WORDS: [],
+  /**
+   * Every text of the app and every word given to plural(), for "Export language": collected when building
+   * (vite.config.js). They are not in the page's code: the served page loads them on demand (i18n-texts.json next to
+   * it), the file to hand out has them inside as JSON. source() gets them (main.js sets it); loadTexts() once, when
+   * Settings › Language or an export needs them. Until then KEYS and WORDS are empty.
+   */
+  source: async () => null,
+  all: null,
+  loading: null,
+  get KEYS() {
+    return this.all ? this.all.keys : [];
+  },
+  get WORDS() {
+    return this.all ? this.all.words : [];
+  },
+  /** Loads the texts (once; again after a failure). Resolves to { keys, words }, empty when they cannot be had. */
+  loadTexts() {
+    if (!this.loading) {
+      this.loading = Promise.resolve()
+        .then(() => this.source())
+        .then(
+          read => read,
+          () => null,
+        )
+        .then(read => {
+          const keys = (read && Array.isArray(read.keys) && read.keys) || [];
+          const words = (read && Array.isArray(read.words) && read.words) || [];
+          if (keys.length) {
+            this.all = { keys, words };
+          } else {
+            this.loading = null; // try again next time (offline, say)
+          }
+          return { keys, words };
+        });
+    }
+    return this.loading;
+  },
+  /** Forgets the texts loaded (tests). */
+  reset() {
+    this.all = null;
+    this.loading = null;
+  },
   ORD: { one: 'st', two: 'nd', few: 'rd', other: 'th' },
   IRREG: { person: 'people', entry: 'entries', wish: 'wishes' },
   init() {
     try {
-      const raw = JSON.parse(localStorage.getItem(this.KEY));
+      const raw = readJSON(this.KEY);
       if (isObj(raw)) {
         for (const c of Object.keys(isObj(raw.packs) ? raw.packs : {}).slice(0, 40)) {
           const q = this.clean(raw.packs[c]);
@@ -76,12 +119,7 @@ export const I18N = {
     };
   },
   save() {
-    try {
-      localStorage.setItem(this.KEY, JSON.stringify({ lang: this.lang, packs: this.packs }));
-      return true;
-    } catch (e) {
-      return false;
-    }
+    return writeJSON(this.KEY, { lang: this.lang, packs: this.packs });
   },
   get(key) {
     const d = this.dict;
