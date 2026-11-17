@@ -97,15 +97,14 @@ const build = process.argv[3] || path.resolve(__dirname, '../dist-test/index.htm
       await p;
       t.fileMs += performance.now() - w0;
     }
-    // the synchronous part of push (read texts, compare, clocks, encode) measured apart
+    // the synchronous part of push (read texts, compare, encode) measured apart
     Store.commit(p => { p.settings.cushion = ++k; }, 'x');
     Store.flush();
     clearTimeout(Sync.timer);
     Sync.timer = 0;
     let s = performance.now();
     const list = Store.planList();
-    const v = localVersions({ me: Sync.device, base: Sync.base, local: list, deleted: Sync.deleted, hash: Sync.hash });
-    encodeDataFile(list.map(p => p.text), { versions: v.versions, deleted: v.deleted });
+    encodeDataFile(list.map(p => p.text), { saved: new Date().toISOString(), deletedPlans: Store.db.deletedPlans });
     t.fileBefore = performance.now() - s;
     await Sync.run(gen => Sync.push(gen));
     s = performance.now();

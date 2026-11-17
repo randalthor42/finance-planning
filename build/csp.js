@@ -5,12 +5,13 @@
  * - manifest-src 'self' manifest.webmanifest, next to the page;
  * - img-src 'self'      its icons (the browser loads one for the page to offer installing it), next to the page;
  * - worker-src 'self'   the service worker, sw.js next to the page;
- * - connect-src 'self'  requests to the page's own site only. The app makes none itself; browser tools do from the
- *                       page: DevTools checks the manifest's icons and screenshots, Lighthouse reads robots.txt and
- *                       llms.txt. Data could go nowhere new: the site that serves the page already controls its code.
- *                       Opened as a file, there is no site to reach.
- * - script-src 'self' blob:  the QR code reader and maker (ui/qrLoader.js), loaded only when used: next to the page
- *                       when served, or from the page itself (a blob: URL) when it is opened as a file.
+ * - connect-src 'self'  requests to the page's own site only. The app needs it: the served page fetches
+ *                       i18n-texts.json (the texts to translate, virtual:i18n-keys in vite.config.js) when Settings ›
+ *                       Language opens, and Export language fails without it. Browser tools use it too (DevTools checks the manifest's icons and
+ *                       screenshots). Data could go nowhere new: the site that serves the page already controls its
+ *                       code. Opened as a file, there is no site to reach.
+ * - script-src 'self' blob:  the QR code reader and maker (ui/qrLoader.js), loaded only when used: qr-*.js from
+ *                       its own site when served, or from the page itself (a blob: URL) when it is opened as a file.
  *
  * With Google Drive sync built in (a Google client ID when building: docs/sync.md), and only then, Google's sign-in
  * script and window (accounts.google.com/gsi) and the Drive API (www.googleapis.com) are allowed too: the one place

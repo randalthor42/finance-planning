@@ -2,7 +2,7 @@
 
 An offline personal finance planner. The source is plain JavaScript in ES modules with plain CSS, built by Vite. The build is still **one self-contained HTML file** (`runway-money-planner.html`) that needs nothing else, so it can be handed out or opened from disk exactly like before. Data stays on the device unless the person exports it, saves it to a file, sends it with QR codes or turns on Google Drive sync (the only other site the app can contact, and only when built with a Google client ID). Served over https with the files built next to it (`sw.js`, `manifest.webmanifest`…), it is also an **installable app** for Android, iOS and computers (see "Installable app" below).
 
-The same plans can be used on several devices: a data file in a synced folder, **Google Drive sync** (opt-in, the one network connection the app can make, and only when built with a Google client ID), **QR codes** from screen to camera, or a backup file. See **[docs/sync.md](docs/sync.md)** and **[docs/qr-transfer.md](docs/qr-transfer.md)**. New to the code? Start with **[docs/architecture.md](docs/architecture.md)** and **[docs/testing.md](docs/testing.md)**.
+The same plans can be used on several devices: a data file in a synced folder, **Google Drive sync** (opt-in, the only other site the app can contact, and only when built with a Google client ID), **QR codes** from screen to camera, or a backup file. See **[docs/sync.md](docs/sync.md)** and **[docs/qr-transfer.md](docs/qr-transfer.md)**. New to the code? Start with **[docs/architecture.md](docs/architecture.md)** and **[docs/testing.md](docs/testing.md)**.
 
 ## Commands
 
@@ -215,7 +215,8 @@ The same single file becomes an app on a phone or computer when it is served ove
 - Next to it, for hosting: `manifest.webmanifest` (`display: standalone`, `start_url`, `scope` and `id` `./`, theme
   colours), its icons (`icons/`: PNG 192 and 512, and a maskable 512 for Android's round and squircle shapes),
   its screenshots (`screenshots/wide.png` 1280×800 and `narrow.png` 412×915, for the richer install dialog on computers
-  and phones), `sw.js`, `robots.txt` and `llms.txt`. The PNG icons are drawn at build time from the logo
+  and phones) and `sw.js`. No `robots.txt`: a hosted copy holds someone's finances, and search engines are not
+  invited to index it. The PNG icons are drawn at build time from the logo
   (`build/icons.js`: signed distances for smooth edges, Node's zlib for the PNG). The screenshots are made from the
   sample plan by `node scripts/screenshots.mjs` (after `npm run build`; run it again after a visible change) and kept in
   `build/screenshots/`.
@@ -241,22 +242,28 @@ dark theme. `themeColor()` keeps the `theme-color` tags on the theme chosen in S
 - Opened as a file, none of this runs and nothing is logged; `tests/regression/pwa.ui.cjs` checks it with the shipped
   file itself.
 
-**The service worker** answers only GET requests for its own folder. The app's page comes from the cache at once and
-a fresh copy is fetched behind it for the next visit (stale-while-revalidate), so the app opens offline and is
-updated on the next start. On install it keeps the page that registered it, and the QR modules (`qr-encode.js`,
-`qr-decode.js`) so transfers work offline; when activated it removes only older
-`runway-` caches and takes over the open pages. It never sees the plans: they are in the browser storage and the data
-file, never in a request. `tests/unit/pwa.test.js` runs the generated `sw.js` in a fake worker
+**The service worker** answers only GET requests for the files the build writes: the page (`index.html`, and the
+folder itself, which is `start_url`), the QR modules (`qr-encode.js`, `qr-decode.js`), the texts to translate
+(`i18n-texts.json`), the manifest, its icons and screenshots. Anything else in its folder, and every other site, goes
+past it, never cached. Each build is one version, with its own cache (`runway-<fingerprint>`): at install it keeps the
+page, the QR modules and the texts, and the install fails if one of them cannot be fetched (the browser tries again
+later; the version before stays in charge); the manifest and images are kept if they can be. Every answer comes from
+the cache of its own version, so the app opens offline. A new build waits until every page of the old one is closed
+(no `skipWaiting`): an open page keeps its own worker and cache, so a QR module or the texts it loads later always
+match it, although their names do not change between builds. The new version is used once every tab and window of
+the app has been closed (a reload alone is not enough), and its activation removes only older `runway-` caches. It
+never sees the plans: they are in the browser storage and the data file, never in a request. `tests/unit/pwa.test.js` runs the generated `sw.js` in a fake worker
 (`tests/unit/helpers/fakeServiceWorker.js`).
 
 **Security policy** (`build/csp.js`): the page can reach no other site: no script, style, image or request from
 anywhere else, so nothing typed into it can be sent away. Its own site is allowed for the manifest (`manifest-src
 'self'`), the worker (`worker-src 'self'`), the manifest icons (`img-src data: 'self'`: the browser loads one for the
-page to offer installing it) and requests (`connect-src 'self'`). The app's own requests go only to its own site (the QR tools and the texts to translate, loaded on demand) and, when Drive sync is on, to Google. Browser tools make
-them from the page: DevTools' Manifest panel checks the icons and screenshots, and Lighthouse reads `robots.txt` and
-`llms.txt`. Without `connect-src 'self'` those checks fail with a CSP error. It gives no one a new way to get data:
-the site that serves the page already controls its code. Opened as a file, there is no site to reach. To go back to
-"no request at all", remove that one line; DevTools then cannot preview the icons, and the two audits fail.
+page to offer installing it) and requests (`connect-src 'self'`). The app itself needs that last one: the served
+page fetches `i18n-texts.json` from its own site when Settings › Language opens (`virtual:i18n-keys` in
+`vite.config.js`), so without it Export language fails; DevTools' Manifest panel also uses it to check the icons and
+screenshots. It gives no one a new way to get data: the site that serves the page already controls its code. Opened
+as a file, there is no site to reach, and the file to hand out has no `connect-src` at all (unless Drive sync is built
+in).
 `script-src 'self' blob:` lets the page load its own QR modules when a transfer starts (`qr-*.js` next to it, or the
 copies embedded in the file to hand out, from a `blob:` URL). Only a build with a Google client ID
 (`VITE_GOOGLE_CLIENT_ID`) also allows Google's sign-in (`accounts.google.com/gsi/…`) and the Drive API
@@ -264,6 +271,7 @@ copies embedded in the file to hand out, from a `blob:` URL). Only a build with 
 one names no other site at all.
 
 **Hosting**: put the whole `dist` folder on an https server, with `sw.js` served as JavaScript (`text/javascript`).
+Keep the page's name, `index.html`: it is the page the service worker keeps.
 Without `sw.js` the app still works and Chrome still offers to install it, but it does not open offline, and Chrome
 logs the failed download of `sw.js`. An installed app and a browser tab on the same site share the browser storage and
 the data file. `vite preview` answers unknown paths with 404, as a static host does (`appType: 'mpa'`): the app has one
@@ -283,6 +291,9 @@ npm run build && npm run preview                                   # http://loca
 node scripts/lighthouse.mjs after 3                                # 3 runs, medians, lighthouse/lh-after.json
 node scripts/lighthouse.mjs pair 3 <before url> <after url>        # two builds in turns, then a table
 ```
+
+Chrome is `CHROME_PATH` or Playwright's Chromium (`npx playwright install chromium`), on Windows, macOS or Linux.
+Lighthouse is not a dependency: the first run downloads `lighthouse@13.5.0` through `npx`.
 
 Single runs are noisy, and so is a shared machine (its speed changed 2× within an hour here). `pair` runs both builds
 in turns, so a slower or faster stretch affects both alike, and reports medians. Reports are written to `lighthouse/`
@@ -364,7 +375,7 @@ overwritten on its own: the status shows the problem, and *Replace its content w
 An empty file deletes nothing. *Stop using this file* and *Delete everything* let go of the file and leave it as it
 is.
 
-**Tests.** `tests/unit/merge.test.js`, `dataFile.test.js`, `store.test.js` and `fileSync.test.js` run in Node. In
+**Tests.** `tests/unit/recordMerge.test.js`, `dataFile.test.js`, `store.test.js` and `fileSync.test.js` run in Node. In
 `fileSync.test.js`, "devices" share a fake disk (`tests/unit/helpers/fakeFiles.js`), and it includes a sync client
 putting one device's file over another's. `tests/regression/filesync.ui.cjs` (`npm run test:file`) runs two devices
 as two browser contexts. The pickers return real handles from each one's Origin Private File System, and the script

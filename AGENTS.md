@@ -32,6 +32,8 @@ The build writes two pages: `runway-money-planner.html`, the file to hand out, w
 | `npm run test:ui` | Every browser suite (Playwright; first run `npx playwright install chromium`). |
 | `npm run test:drive`, `test:qr`, `test:file`, `test:storage`, `test:pwa`, `test:overview` | One browser suite each: Drive sync against a fake Google, QR transfer between two pages, the data file, storage and migrations, the installable app, the Overview. |
 | `npm run perf` | Performance probe on the test build: real plan, CPU slowed 4x; fails when a budget is exceeded (needs Playwright's Chromium). |
+| `npm run perf:calendar`, `perf:file` | The same for the calendar, and for writing the data file. |
+| `npm run lighthouse` | Lighthouse on the built page (downloads `lighthouse` through npx on first use; needs Playwright's Chromium). |
 
 ## Architecture in one picture
 
@@ -41,7 +43,7 @@ ui  ──►  state  ──►  services
  └─────────┴──────────────────────────────────►
 ```
 
-Imports only point **down**. Nothing outside `src/ui/` touches the page (two documented exceptions: `services/backup.js` creates a download link, `core/i18n.js` reloads the page on a language change). One import points up: `core/i18n.js` reads and writes its language packs through `services/storage.js`, because the language must be known before any module makes a text. Only `services/storage.js` touches `localStorage` and IndexedDB (a unit test checks this).
+Imports only point **down**. Nothing outside `src/ui/` touches the page (three documented exceptions: `services/backup.js` creates a download link, `core/i18n.js` reloads the page on a language change, `services/googleAuth.js` adds Google's sign-in script when Drive sync needs it). One import points up: `core/i18n.js` reads and writes its language packs through `services/storage.js`, because the language must be known before any module makes a text. Only `services/storage.js` touches `localStorage` and IndexedDB (a unit test checks this).
 
 | Layer | Folder | Responsibility | May import |
 |---|---|---|---|
@@ -112,13 +114,14 @@ Every file starts with a `@file` comment that states its one responsibility.
 3. The action calls `Store.commit(mutator, label)`, which: copies the plan for undo, applies the change, passes the plan through `normPlan`, dates what changed (`stampPlan`: new and changed records get `updatedAt`, removed ones move to `plan.deleted`), re-runs `project(plan)`, saves through the storage adapter, and notifies the UI. Drive sync and the data file are told after the save and run later.
 4. `App.render()` redraws the current view from `Store.plan` (the data) and `Store.proj` (the projection).
 
-The UI never edits `Store.plan` directly and never calculates money itself. Plan objects are never changed in place: the store caches each plan's JSON text by object (`TEXT` in `store.js`), so a plan changed in place would be saved with its old text.
+The UI never edits `Store.plan` directly and never calculates money itself. Plan objects are never changed in place: the store caches each plan's stored text by object (`TEXT` in `store.js`), so a plan changed in place would be saved with its old text. That text is `planText(plan)` (`models/records.js`): the JSON without `deletedAt: null` and without a `createdAt` equal to `updatedAt`, which `normPlan` puts back when it reads it. Compare and store plan texts with `planText`, never with `JSON.stringify`.
 
 ## Sync rules (read before touching records, merging or Drive sync)
 
-- Every record (account, income, bill, item, trip, trip cost, loan, goal, wish, and the plan itself) has `id`, `createdAt`, `updatedAt` and `deletedAt` (epoch ms). Only `stampPlan` sets them.
+- Every record (account, income, bill, item, trip, trip cost, loan, goal, wish, and the plan itself) has `id`, `createdAt`, `updatedAt` and `deletedAt` (epoch ms). `stampPlan` sets them on every save; the migrations and `normPlan` only fill them in for data that has none.
+- The time comes from `Store.now()`, which never goes below the newest time the data already holds (this device's last save, or a change merged in from another device): a clock put back, or another device's clock running ahead, cannot make a new edit lose to the version it replaced. Pure code takes the time as a parameter.
 - A deleted record is kept in `plan.deleted`, never in the live lists, so totals and the projection never see it. The newest 500 per kind are kept in full; older ones, up to 5,000, as markers (id and dates). A marker is what stops another device from bringing the record back.
-- The plan's own fields merge one by one by `plan.fieldsUpdatedAt`; the month maps (`paid`, `fixes`, `overrides`, `reserveOver`, `notes`) merge month by month and line by line by `plan.keysUpdatedAt`, so ticks made on two devices are both kept.
+- The plan's own fields merge one by one by `plan.fieldsUpdatedAt`; the month maps (`paid`, `fixes`, `overrides`, `reserveOver`, `notes`) merge month by month and line by line by `plan.keysUpdatedAt`, so ticks made on two devices are both kept. Its times are kept in sorted order (identical data must give identical text, or every merge sees a change), and months before the plan's first month keep none.
 - Per record, the newer `updatedAt` wins; a tie with different content is settled by the content, so every device makes the same choice. Merging must be the same in both directions and idempotent (`tests/unit/recordMerge.test.js`).
 - Data rewritten by an older version of the app (which drops dates) is detected at start (`schemaSeen` in the storage adapter) and migrated with the oldest date, so it cannot beat newer edits from other devices.
 
@@ -268,7 +271,7 @@ tests/
   fixtures/      test data. real*.json are real backups: ignored by git, never publish them.
 ```
 
-- **Unit tests** cover the core mechanics only: dates and pay periods, money parsing, loans, the month sum (ticks, budgets, corrections), trips across a payday, `normPlan`, and backup round trips. Keep them simple: one behaviour per test, made-up data, plain assertions. When a mechanic changes on purpose, change its test in the same commit.
+- **Unit tests** cover the mechanics: dates and pay periods, money parsing, loans, the month sum (ticks, budgets, corrections), trips across a payday, `normPlan`, backup round trips, records and migrations, merging, the store, the data file, Drive sync (against `helpers/fakeDrive.js`), QR frames and the installable app's worker. Keep them simple: one behaviour per test, made-up data, plain assertions. When a mechanic changes on purpose, change its test in the same commit.
 - **Regression suites** compare against real backups and drive the built file in a browser. Run them before a release. They need `tests/fixtures/real*.json`.
 - Tests live outside `src/` and are never bundled. The only test hook inside `src/` is `debug.js`, which the normal build removes.
 
@@ -292,4 +295,4 @@ tests/
 - **`logic/projection.js` is one long function.** It is the best-tested file; split it only with the regression suite at hand.
 - **Deleting a "from savings" cover line** does not put the money back in the savings account (undo does).
 - **Drive sync has only been tested against a fake Google** (`tests/unit/helpers/fakeDrive.js`). Check against the real API, in particular whether `If-Match` on an upload is honoured and whether the `ETag` header can be read cross-origin. Correctness does not depend on either (a replaced write is repaired by its device at its next sync), but conflicts cost an extra round when they are not.
-- **Clocks.** The newer edit wins by each device's own clock; a device whose clock runs far ahead wins conflicts it should not.
+- **Clocks.** The newer edit wins by time. A device whose clock runs far ahead still wins its own edits against the others until they have merged its changes (from then on their times start after its times).

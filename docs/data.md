@@ -94,6 +94,9 @@ Automatically, at start (`PlanStore.init`), when the stored data is older than t
 
 Imported backups and data files from older versions need no migration step: each plan passes through `normPlan` and
 `addPlan` (or the data file's merge), which give the missing dates.
+The other way round, an older version of the app cannot open a backup or data file written now: the body says
+schema 8, so it refuses it as "made by a newer version" (an encrypted backup is decrypted first, so the message is that
+one, not a wrong password).
 
 ### Running it again
 

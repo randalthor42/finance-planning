@@ -16,6 +16,7 @@ import { $t } from '../core/i18n.js';
 import { isObj, uid } from '../core/util.js';
 import { normDB } from './db.js';
 import { normPlan } from './plan.js';
+import { planText } from './records.js';
 
 /**
  * The file's text from the plans' JSON texts. The texts are joined as they are (the store keeps each plan's text), so
@@ -26,7 +27,7 @@ export function encodeDataFile(texts, meta = {}) {
     app: 'runway',
     kind: 'data',
     v: APP.schema,
-    saved: meta.saved || new Date().toISOString(),
+    saved: meta.saved || '',
     by: meta.by || '',
     deletedPlans: meta.deletedPlans || {},
   });
@@ -68,7 +69,7 @@ export function decodeDataFile(text) {
       plan.id = uid();
     }
     seen.add(plan.id);
-    list.push({ id: plan.id, plan, text: JSON.stringify(plan) });
+    list.push({ id: plan.id, plan, text: planText(plan) });
   }
   const str = v => (typeof v === 'string' ? v.slice(0, 40) : '');
   const deletedPlans = normDB({ plans: {}, deletedPlans: file.deletedPlans }).deletedPlans;

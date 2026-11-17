@@ -19,6 +19,31 @@ const textsMissing = () =>
     ? servedOnly()
     : $t('The texts to translate could not be loaded. Check your connection and try again.');
 
+/**
+ * The line under a language's name: built in (English), how much is translated, or only its code while the texts
+ * to translate are not loaded (total 0).
+ */
+function languageNote(code, done, total) {
+  if (code === 'en') {
+    return $t('Built in');
+  }
+  if (!total) {
+    return code;
+  }
+  return $t('{0} · {1} of {2} texts translated', code, done, total);
+}
+
+/** Why a language file was refused (I18N.importPack's reason), in words. */
+function importError(reason) {
+  if (reason === 'is-english') {
+    return $t('English is built in. Change "code" in the file to your language, for example es.');
+  }
+  if (reason === 'storage') {
+    return $t('This browser could not save the language.');
+  }
+  return $t('That is not a language file made by this planner.');
+}
+
 /* --- languages: flags, picker, and the Language section of Settings --- */
 /*i18n:off*/
 const FLAGS = {
@@ -150,14 +175,7 @@ function importLanguage() {
     f.text().then(txt => {
       const r = I18N.importPack(txt);
       if (typeof r === 'string') {
-        return toast(
-          r === 'is-english'
-            ? $t('English is built in. Change "code" in the file to your language, for example es.')
-            : r === 'storage'
-              ? $t('This browser could not save the language.')
-              : $t('That is not a language file made by this planner.'),
-          { kind: 'bad' },
-        );
+        return toast(importError(r), { kind: 'bad' });
       }
       toast($t('Language “{0}” added', r.name));
       App.render();
@@ -199,12 +217,7 @@ export function languageCard() {
             ),
             h('div', {
               class: 'small muted',
-              text:
-                l.code === 'en'
-                  ? $t('Built in')
-                  : total
-                    ? $t('{0} · {1} of {2} texts translated', l.code, done, total)
-                    : l.code,
+              text: languageNote(l.code, done, total),
             }),
             h(
               'div',

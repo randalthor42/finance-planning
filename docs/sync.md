@@ -32,7 +32,12 @@ Importing a backup or receiving QR codes first shows what would change (`ui/moda
   | `offline` | cloud crossed out | no connection; changes are saved here and wait |
   | `signin` | alert | Google's token ran out: *Sign in again* (a click on the icon) |
   | `locked` | lock | the cloud copy is encrypted with a passphrase this device does not have |
-  | `error` | alert (red) | Drive was busy or failed; tried again in a minute |
+  | `error` | alert (red) | Drive was busy, refused the request, or something failed; tried again in a minute |
+
+  While the status is `locked`, the syncs that start by themselves (after a change, back in the foreground, every
+  minute, when the connection returns, the retry) are skipped: each would download the file only to fail again. The
+  passphrase, *Sync now* and *Try again* still run. The card says what went wrong in its own words (`Drive.detail` is
+  `busy`, `refused` or `failed`); Google's or the browser's error text goes only to the console.
 
 - The card shows the status, the last sync and the encryption, with *Sync now*, *Encrypt with a passphrase* (or
   *Remove the passphrase*), *Turn off sync* and *Delete my cloud data*.
@@ -57,7 +62,8 @@ Nothing ever waits for the network: a change is made and saved on the device at 
 
 A look for changes is **one listing request** (every sync file's `createdTime`, `modifiedTime` and `version`). The file is downloaded only
 when another device changed it since the last sync, and uploaded only when it lacks something of this device. A save
-that changes no plan (a theme, a layout) is not a change to sync.
+that changes no plan (a theme, a layout) is not a change to sync: the plan texts are compared with those of the last
+sync, or, after a restart, with their fingerprint kept in the sync state (`syncedHash`, a cyrb53 hash).
 
 ### One sync, step by step (`DriveSync.step`)
 
@@ -148,6 +154,14 @@ follow the file: a device that still has a passphrase while the file is plain fo
 the file again, and a file still encrypted with the old passphrase is written again with the new one by the device
 that changed it.
 
+- Until that write, the old passphrase is kept on the device too (IndexedDB `kv`, `driveFormerPassphrase`), so a
+  change made offline, or just before the app was closed, is still applied after a restart. It is forgotten once the
+  file is written as the device chose, and by *Turn off sync*.
+- A passphrase changed while an upload is on its way is not taken as written by that upload (a counter,
+  `generation`, moves on with every change): the file stays "to be written" and the next run writes it.
+- If the old passphrase was lost anyway (an older version kept it only in memory) the status is _Passphrase
+  needed_; the passphrase entered then opens the file once as the old one, and the device's own choice is written.
+
 ### Requests (`services/drive.js`)
 
 Only these, to `https://www.googleapis.com`, with the `drive.appdata` token:
@@ -172,7 +186,8 @@ when needed: on the click on *Turn on sync*, and ahead of time only once sync is
 Google's window opens from the click on *Sign in again* itself). **Nothing is sent to Google, not even a request for
 its script, before the person clicks Turn on sync.** Browsers open a window only right after a click: if the script
 took too long to load and the browser blocked Google's window, Runway says so ("Click once more"); the second click
-opens it at once. The access token lasts about an
+opens it at once. A second sign-in asked for while Google's window is still open settles the first as closed
+(nothing changed), so no caller waits forever. The access token lasts about an
 hour and there is no refresh token without a backend, so after an hour away the status is *Sign in again*: one
 click, and Google's window usually closes by itself when access was already given. The token is kept in IndexedDB
 `kv` until it expires, and forgotten by *Turn off sync*. It is not revoked: revoking would withdraw Google's
@@ -208,7 +223,9 @@ origin. The card says so; the data file and QR codes work there.
 - `tests/unit/driveSync.test.js`: two or three "devices" (stores with their own storage) against a fake Google Drive
   (`tests/unit/helpers/fakeDrive.js`: the REST calls above, ETags and `If-Match`, tokens, offline). Turning on, a
   second device, same-record edits, deletions of records and plans, offline changes and coming back online, pending
-  changes after a restart, concurrent uploads (a refused `If-Match`), an expired token, the passphrase, turning off
+  changes after a restart, concurrent uploads (a refused `If-Match`), an expired token, the passphrase (also changed
+  during an upload, changed offline before a restart, and unlocking while locked), no automatic runs while locked,
+  error codes instead of Google's text, turning off
   (also in another tab, or in the middle of a sync), deleting the cloud data, routine checks costing one metadata
   request, and that a local change never waits for the network.
 - `tests/regression/drive.ui.cjs` (`npm run test:drive`): a computer and a phone as two browser contexts of the test

@@ -8,7 +8,7 @@ import { ID_RE, newId } from '../../src/core/util.js';
 import { KEY_RE } from '../../src/models/categories.js';
 import { mergeData } from '../../src/models/recordMerge.js';
 import { normPlan } from '../../src/models/plan.js';
-import { RECORD_LISTS, stampPlan } from '../../src/models/records.js';
+import { RECORD_LISTS, planText, stampPlan } from '../../src/models/records.js';
 import { project } from '../../src/logic/projection.js';
 
 const T0 = 1_790_000_000_000;
@@ -254,4 +254,12 @@ test('the plan’s own fields (settings, ticks, notes…) each have the time the
   const later = stampPlan(plan, normPlan(again), T2).plan;
   assert.equal(later.fieldsUpdatedAt.notes, T1, 'unchanged fields keep their time');
   assert.equal(later.updatedAt, T2);
+});
+
+test('the stored text leaves out what normPlan puts back, and reading it gives the same plan', () => {
+  const plan = stampPlan(null, normPlan({ ...JSON.parse(JSON.stringify(base())) }), T0).plan;
+  const text = planText(plan);
+  assert.ok(!text.includes('"deletedAt":null'), 'no deletedAt: null');
+  assert.ok(text.length < JSON.stringify(plan).length);
+  assert.deepEqual(normPlan(JSON.parse(text)), plan);
 });

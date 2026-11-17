@@ -38,7 +38,7 @@ if (from >= SCHEMA_VERSION) {
   say(`${input}: already schema ${from}; nothing to migrate.`);
   process.exit(0);
 }
-const result = migrate(db);
+const result = migrate(db, { now: Date.now() });
 const out = isFile ? { ...result.db, plans: Object.values(result.db.plans) } : result.db;
 if (isFile) {
   delete out.deletedPlans; // only the stored database keeps deleted plans

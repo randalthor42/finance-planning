@@ -27,6 +27,7 @@ import { googleAuth } from '../services/googleAuth.js';
 import { backup, kv, readJSON, writeJSON } from '../services/storage.js';
 import { Store } from './store.js';
 
+/** Drive sync's timings and limits, and where its state is kept (localStorage key). */
 export const DRIVE = {
   /** Local changes are synced this long after the last one (ms). */
   debounce: 5000,
@@ -43,8 +44,38 @@ export const DRIVE = {
   stateKey: 'runway.drive',
 };
 
+/** Runs that start by themselves (a timer, an event): skipped while the file waits for a passphrase. */
+const AUTOMATIC = new Set(['change', 'leave', 'online', 'foreground', 'poll', 'retry']);
+
 const localState = key => ({ load: () => readJSON(key), save: value => writeJSON(key, value) });
 const sameTexts = (list, texts) => !!texts && list.length === texts.length && list.every((p, i) => p.text === texts[i]);
+/**
+ * A short fingerprint of the plan texts (cyrb53, a fast non-cryptographic hash), kept with the sync state so that,
+ * after a restart, a save that changes no plan is still told apart from a change to sync.
+ */
+function fingerprint(texts) {
+  const joined = texts.join('\u0000');
+  let h1 = 0xdeadbeef ^ texts.length;
+  let h2 = 0x41c6ce57 ^ texts.length;
+  for (let i = 0; i < joined.length; i++) {
+    const code = joined.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+/** What kind of failure an error with this HTTP status is (fail): 'busy', 'refused' or 'failed'. */
+function failureKind(status) {
+  if (status === 403 || status === 429 || status >= 500) {
+    return 'busy';
+  }
+  if (status >= 400) {
+    return 'refused';
+  }
+  return 'failed';
+}
 /** The cloud file needs a passphrase we do not have, or a wrong one. */
 class Locked extends Error {}
 
@@ -72,12 +103,18 @@ export class DriveSync {
     this.detail = '';
     this.token = null;
     this.passphrase = null;
-    /** The passphrase before setPassphrase changed it, until the file is written with the new one. */
+    /**
+     * The passphrase the file may still be encrypted with after setPassphrase changed it, until the file is written
+     * with the new one. Kept on the device too (driveFormerPassphrase), so a restart in between can still read it.
+     */
     this.former = null;
+    /** Counts passphrase changes: a write that began before one does not count as applying it. */
+    this.generation = 0;
     this.timer = 0;
     this.retryTimer = 0;
     this.running = null;
-    this.again = false;
+    /** The reason of a run asked for while one was under way ('' when none): it runs once more after it. */
+    this.again = '';
     /** "Delete my cloud data" is under way: no sync reads or writes the file. */
     this.deleting = false;
     /** When visible() last looked for changes. */
@@ -122,11 +159,13 @@ export class DriveSync {
     await this.loadSecrets();
     this.run('open');
   }
+  /** Reads what is kept on this device: the token (if still valid), the passphrase and the former passphrase. */
   async loadSecrets() {
     try {
-      const t = await this.keep.get('driveToken');
-      this.token = isObj(t) && t.expiresAt - DRIVE.margin > this.now() ? t : null;
+      const saved = await this.keep.get('driveToken');
+      this.token = isObj(saved) && saved.expiresAt - DRIVE.margin > this.now() ? saved : null;
       this.passphrase = (await this.keep.get('drivePassphrase')) || null;
+      this.former = (await this.keep.get('driveFormerPassphrase')) || null;
     } catch (e) {}
   }
   /**
@@ -156,6 +195,10 @@ export class DriveSync {
     }
     return false;
   }
+  /**
+   * Opens Google's window (prompt: 'consent' or '') and keeps the token. Resolves to whether a token was given; when
+   * not, the person is told what to do if there is something to do.
+   */
   async signIn(prompt) {
     try {
       this.token = await this.auth.signIn({ prompt });
@@ -192,9 +235,11 @@ export class DriveSync {
     this.save();
     this.token = null;
     this.passphrase = null;
+    this.former = null;
     try {
       await this.keep.del('driveToken');
       await this.keep.del('drivePassphrase');
+      await this.keep.del('driveFormerPassphrase');
     } catch (e) {}
     this.setStatus('off');
   }
@@ -235,21 +280,48 @@ export class DriveSync {
    * written again, encrypted or not.
    */
   async setPassphrase(passphrase) {
-    // the file may still be encrypted with the former one: it is read with it once more
-    this.former = this.passphrase;
+    // the file may still be encrypted with the one before: it is read with it once more. While an earlier change is
+    // not written yet, the file is still as it was before that one, so its former passphrase stays.
+    let formerOne = this.passphrase;
+    if (this.state.rewrite) {
+      formerOne = this.former;
+    }
+    this.generation++;
     this.passphrase = passphrase || null;
     this.state.encrypted = !!passphrase;
     this.state.rewrite = true; // this device changed it: the file follows this device (followEncryption)
     this.state.pending = true;
     this.state.modifiedTime = null; // write it again, whatever the file is
     this.save();
+    await this.setFormer(formerOne);
     try {
-      await (passphrase ? this.keep.set('drivePassphrase', passphrase) : this.keep.del('drivePassphrase'));
+      if (passphrase) {
+        await this.keep.set('drivePassphrase', passphrase);
+      } else {
+        await this.keep.del('drivePassphrase');
+      }
     } catch (e) {}
     await this.run('passphrase');
   }
-  /** The passphrase another device set: tried on the file; kept if it opens it. */
+  /** The passphrase the file may still be encrypted with (null: none), here and on the device. */
+  async setFormer(passphrase) {
+    this.former = passphrase || null;
+    try {
+      if (this.former) {
+        await this.keep.set('driveFormerPassphrase', this.former);
+      } else {
+        await this.keep.del('driveFormerPassphrase');
+      }
+    } catch (e) {}
+  }
+  /**
+   * The passphrase another device set: tried on the file; kept if it opens it. Resolves to whether it did. While this
+   * device's own passphrase change is not written yet, the one entered is taken as the former one (unlockFormer).
+   */
   async unlock(passphrase) {
+    if (this.state.rewrite) {
+      return this.unlockFormer(passphrase);
+    }
     const previous = this.passphrase;
     this.passphrase = passphrase;
     await this.run('unlock');
@@ -265,12 +337,35 @@ export class DriveSync {
     } catch (e) {}
     return true;
   }
+  /**
+   * This device set or removed its passphrase, but the file is still encrypted with one it no longer has (an older
+   * version of the app kept it in memory only): the one entered opens the file once, and the file is then written as
+   * this device chose. The device's own choice stays.
+   */
+  async unlockFormer(passphrase) {
+    const previous = this.former;
+    this.former = passphrase;
+    await this.run('unlock');
+    if (this.status !== 'synced') {
+      this.former = previous;
+      return false;
+    }
+    return true;
+  }
+  /** Whether the plans are those of the last sync (after a restart: by the fingerprint kept with the sync state). */
+  matchesSynced() {
+    const list = this.store.planList();
+    if (this.syncedTexts) {
+      return sameTexts(list, this.syncedTexts);
+    }
+    return !!this.state.syncedHash && fingerprint(list.map(p => p.text)) === this.state.syncedHash;
+  }
   /** A local change was saved: sync in a few seconds (changes in a row are synced together). */
   changed() {
     if (!this.enabled) {
       return;
     }
-    if (!sameTexts(this.store.planList(), this.syncedTexts) || !this.syncedTexts) {
+    if (!this.matchesSynced()) {
       if (!this.state.pending) {
         this.state.pending = true;
         this.save();
@@ -313,6 +408,7 @@ export class DriveSync {
       this.timer = 0;
       this.token = null;
       this.passphrase = null;
+      this.former = null;
       this.setStatus('off');
     } else if (this.enabled && !was) {
       this.start();
@@ -333,16 +429,27 @@ export class DriveSync {
   sync(reason = 'now') {
     return this.run(reason);
   }
+  /**
+   * Starts a sync, or, while one runs, asks for one more after it. Resolves when both are done (finally waits for the
+   * run it returns), so unlock sees the status of the run that tried its passphrase. While the file waits for a
+   * passphrase, runs that start by themselves (AUTOMATIC) are skipped: each would download the file to fail again.
+   */
   run(reason) {
+    if (this.status === 'locked' && AUTOMATIC.has(reason)) {
+      return Promise.resolve();
+    }
     if (this.running) {
-      this.again = true;
+      if (!this.again || AUTOMATIC.has(this.again)) {
+        this.again = reason; // a run the person asked for (unlock, passphrase) is not skipped as an automatic one
+      }
       return this.running;
     }
     this.running = this.once(reason).finally(() => {
       this.running = null;
-      if (this.again) {
-        this.again = false;
-        return this.run('again');
+      const next = this.again;
+      if (next) {
+        this.again = '';
+        return this.run(next);
       }
     });
     return this.running;
@@ -389,8 +496,12 @@ export class DriveSync {
       this.fail(e);
     }
   }
-  /** One read, merge and write. Resolves to true when this device and the file are in step, false to try again. */
+  /**
+   * One read, merge and write. Resolves to true when this device and the file are in step, false to try again. A
+   * passphrase change made meanwhile (this.generation moved on) is not taken as written: the run it asked for does it.
+   */
   async step() {
+    const startGeneration = this.generation;
     if (this.deleting) {
       return true; // "Delete my cloud data" is under way: nothing is read or written meanwhile
     }
@@ -444,13 +555,18 @@ export class DriveSync {
       push = remote.changed || extras.length > 0 || this.encryptionToWrite(remote);
     }
     if (!push) {
-      this.state.rewrite = false; // nothing to write: the file is already as this device chose
-      this.remember(file, etag, this.texts());
+      if (startGeneration === this.generation) {
+        this.state.rewrite = false; // nothing to write: the file is already as this device chose
+      }
+      this.remember(file, etag, this.texts(), startGeneration);
       return true;
     }
     this.setStatus('syncing');
     // the plans as they are now: the upload sends these, and only these count as synced once it is done
     const sent = this.texts();
+    // and the passphrase it is encrypted with (encode reads it before its first wait)
+    const generation = this.generation;
+    const writtenWith = this.passphrase;
     const text = await this.encode(sent);
     if (!this.enabled) {
       return true;
@@ -475,9 +591,13 @@ export class DriveSync {
         throw e;
       }
     }
-    this.remember(saved, saved.etag, sent);
-    this.state.rewrite = false; // the file is now encrypted, or not, as this device chose
-    this.save();
+    if (generation === this.generation) {
+      this.state.rewrite = false; // the file is now encrypted, or not, as this device chose
+    } else {
+      // the passphrase changed during the upload: until it is written, the file is read with the one it has now
+      await this.setFormer(writtenWith);
+    }
+    this.remember(saved, saved.etag, sent, generation);
     for (const extra of extras) {
       // merged into the first file: no longer needed (gone already if another device deleted it first)
       await client.remove(extra.id).catch(e => {
@@ -529,18 +649,27 @@ export class DriveSync {
   /**
    * This device and the file are in step: their version, and the plan texts the file now holds (`texts`, taken before
    * the upload). A change made during the upload differs from them, so it stays pending and goes up next time.
+   * generation: this.generation when the file was read or written. If the passphrase changed since, the file is not
+   * yet as this device chose: it stays pending and its version unknown, so the run setPassphrase asked for writes it.
    */
-  remember(file, etag, texts) {
+  remember(file, etag, texts, generation = this.generation) {
     if (!this.enabled) {
       return;
     }
-    this.former = null;
     this.state.fileId = file.id;
-    this.state.modifiedTime = file.modifiedTime;
     this.state.version = String(file.version);
     this.state.etag = etag || null;
     this.state.lastSync = this.now();
     this.syncedTexts = texts;
+    this.state.syncedHash = fingerprint(texts);
+    if (generation !== this.generation) {
+      this.save();
+      return;
+    }
+    if (this.former) {
+      this.setFormer(null);
+    }
+    this.state.modifiedTime = file.modifiedTime;
     this.state.pending = !sameTexts(this.store.planList(), texts);
     this.save();
     if (this.state.pending && !this.timer) {
@@ -591,6 +720,11 @@ export class DriveSync {
       stale: encrypted && opener !== this.passphrase,
     };
   }
+  /**
+   * A sync failed: sets the status that says what to do. The detail of 'error' is a code for the page ('busy',
+   * 'refused', 'failed'; see failureKind), never the error's own text (Google's or the browser's, in English), which
+   * goes to the console.
+   */
   fail(e) {
     if (!this.enabled) {
       return this.setStatus('off'); // turned off meanwhile: whatever failed does not matter any more
@@ -607,9 +741,10 @@ export class DriveSync {
       this.keep.del('driveToken').catch(() => {});
       return this.setStatus('signin');
     }
-    this.later(status === 403 || status === 429 || status >= 500 ? 'busy' : String((e && e.message) || e));
+    console.warn('Google Drive sync failed:', e);
+    this.later(failureKind(status));
   }
-  /** Drive was busy or something failed: say so, and try again in a minute. */
+  /** Drive was busy or something failed (detail: what kind, see fail): say so, and try again in a minute. */
   later(detail) {
     this.setStatus('error', detail);
     clearTimeout(this.retryTimer);

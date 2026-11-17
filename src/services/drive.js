@@ -22,6 +22,10 @@ function byCreation(a, b) {
   return a.id < b.id ? -1 : 1;
 }
 
+/**
+ * A failed Drive request. status: the HTTP status, or 0 when the request never reached Google. The message is
+ * Google's own (English) text, for the console only: the page says what happened from the status (DriveSync.fail).
+ */
 export class DriveError extends Error {
   constructor(status, message) {
     super(message || `Google Drive answered ${status}`);

@@ -7,10 +7,11 @@ import { APP } from '../../src/config.js';
 import { decodeDataFile, encodeDataFile } from '../../src/models/dataFile.js';
 import { normPlan } from '../../src/models/plan.js';
 import { samplePlan } from '../../src/models/samplePlan.js';
+import { planText } from '../../src/models/records.js';
 import { IO } from '../../src/services/backup.js';
 
 const plan = normPlan({ id: 'plan0001', name: 'Home', incomes: [{ id: 'salary01', name: 'Salary', amount: 1000 }] });
-const text = JSON.stringify(plan);
+const text = planText(plan);
 
 test('the file says what it is, when it was saved and by which browser, then lists the plans', () => {
   const file = JSON.parse(encodeDataFile([text], { saved: '2026-11-16T10:00:00.000Z', by: 'dev12345' }));
@@ -19,7 +20,7 @@ test('the file says what it is, when it was saved and by which browser, then lis
   assert.equal(file.v, APP.schema);
   assert.equal(file.saved, '2026-11-16T10:00:00.000Z');
   assert.equal(file.by, 'dev12345');
-  assert.deepEqual(file.plans, [plan]);
+  assert.deepEqual(file.plans, [JSON.parse(planText(plan))], 'each plan as the app stores it (planText)');
 });
 
 test('the file carries the deleted plans and reads them back', () => {
@@ -59,7 +60,7 @@ test('a file with no plans is still a valid file', () => {
 
 test('reading the file back gives the same plans, as the same text', () => {
   const sample = normPlan(samplePlan());
-  const texts = [text, JSON.stringify(sample)];
+  const texts = [text, planText(sample)];
   const file = decodeDataFile(encodeDataFile(texts, { by: 'dev1' }));
   assert.deepEqual(
     file.list.map(p => p.id),
@@ -98,7 +99,7 @@ test('what comes in from the file is cleaned by normPlan, like every other way i
   assert.equal(new Set(file.list.map(p => p.id)).size, 3, 'ids are unique');
   assert.ok(file.list[2].plan.settings.horizon <= 120);
   for (const p of file.list) {
-    assert.equal(p.text, JSON.stringify(p.plan));
+    assert.equal(p.text, planText(p.plan));
     assert.equal(p.id, p.plan.id);
   }
 });

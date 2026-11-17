@@ -50,9 +50,10 @@ function i18nKeys() {
 }
 
 /**
- * The shipped file may not talk to the network at all (build/csp.js: only the manifest and the service worker of the
- * installable app are allowed, and Google's sign-in and Drive API when Drive sync is built in: a client ID in
- * VITE_GOOGLE_CLIENT_ID). The dev server needs its own connections, so the policy is added only when building.
+ * The security policy (build/csp.js): no other site, except Google's sign-in and Drive API when Drive sync is built in
+ * (a client ID in VITE_GOOGLE_CLIENT_ID). The served page may load its own files from its own site (the manifest and
+ * its icons, the service worker, the QR modules, i18n-texts.json); the file to hand out gets a stricter policy
+ * (namedCopy below). The dev server needs its own connections, so the policy is added only when building.
  */
 const strictCsp = google => ({ name: 'runway-csp', apply: 'build', transformIndexHtml: html => html.replace('<meta name="referrer"', `<meta http-equiv="Content-Security-Policy" content="${csp({ google })}">\n<meta name="referrer"`) });
 
@@ -73,7 +74,8 @@ const namedCopy = google => ({
     fs.writeFileSync(path.resolve(dir, TEXTS_FILE), texts);
     // the file to hand out: everything inside, its own stricter policy, and marked so it does not act as an installable app
     const page = embedQr(fs.readFileSync(f, 'utf8'), qr)
-      .replace(/<\/body>/i, `<script type="application/json" id="runway-i18n-texts">${texts}</script>\n</body>`)
+      // a function, so that a "$&" or "$'" inside a text is not read as a replacement pattern
+      .replace(/<\/body>/i, () => `<script type="application/json" id="runway-i18n-texts">${texts}</script>\n</body>`)
       .replace(/(<meta http-equiv="Content-Security-Policy" content=")[^"]*"/, `$1${csp({ google, standalone: true })}"`)
       .replace(/<html\b/i, '<html data-standalone');
     fs.writeFileSync(path.resolve(dir, 'runway-money-planner.html'), page);

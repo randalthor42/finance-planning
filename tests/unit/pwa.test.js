@@ -131,17 +131,9 @@ test('the manifest written next to the page is the manifest', () => {
   assert.deepEqual(JSON.parse(files.get('manifest.webmanifest')), manifest());
 });
 
-test('robots.txt lets crawlers in and points nowhere else; llms.txt describes the app in Markdown', () => {
-  const robots = files.get('robots.txt');
-  assert.match(robots, /^User-agent: \*$/m);
-  assert.match(robots, /^Allow: \/$/m);
-  assert.ok(!/Sitemap|http/i.test(robots));
-  const llms = files.get('llms.txt');
-  assert.match(llms, /^# Runway\n/, 'one H1 first');
-  assert.match(llms, /^> /m, 'a summary');
-  assert.ok(/offline/i.test(llms) && /data stays/i.test(llms));
-  assert.match(llms, /^## App$/m);
-  assert.match(llms, /^- \[Runway\]\(\.\/\): /m, 'links, as llms.txt lists them');
+test('no robots.txt or llms.txt: a hosted copy of personal finances does not invite crawlers', () => {
+  assert.equal(files.has('robots.txt'), false);
+  assert.equal(files.has('llms.txt'), false);
 });
 
 test('the page head gets the icons inline: SVG favicon and a 180 px iOS icon', () => {
@@ -165,13 +157,13 @@ const rulesOf = policy =>
       .map(([k, ...v]) => [k, v]),
   );
 
-test('the security policy blocks every other site; its own site only for the manifest, the worker and browser tools', () => {
+test('the security policy blocks every other site; its own site only for the manifest, the worker and its own files', () => {
   const rules = rulesOf(CSP);
   assert.deepEqual(rules['default-src'], ["'none'"]);
   assert.deepEqual(rules['manifest-src'], ["'self'"], 'manifest.webmanifest, next to the page');
   assert.deepEqual(rules['worker-src'], ["'self'"], 'sw.js from the same site, nothing else');
   assert.deepEqual(rules['img-src'], ['data:', "'self'"], 'inline images, and the manifest icons next to the page');
-  assert.deepEqual(rules['connect-src'], ["'self'"], 'requests to its own site only (DevTools, Lighthouse)');
+  assert.deepEqual(rules['connect-src'], ["'self'"], 'requests to its own site only (i18n-texts.json, browser tools)');
   assert.deepEqual(
     rules['script-src'],
     ["'unsafe-inline'", "'self'", 'blob:'],
@@ -222,6 +214,16 @@ test('the manifest is the file next to the page', () => {
 
 const PAGE = SCOPE + 'index.html';
 const worker = (options = {}) => loadWorker(serviceWorker('v1'), options);
+/** A server with the page and the files the page loads when used (QR modules, texts), each body tagged. */
+const site = (tag = 'v1') =>
+  fakeNetwork({
+    [PAGE]: [200, `${tag} page`],
+    [SCOPE + 'qr-encode.js']: [200, `${tag} encode`],
+    [SCOPE + 'qr-decode.js']: [200, `${tag} decode`],
+    [SCOPE + 'i18n-texts.json']: [200, `${tag} texts`],
+    [SCOPE + 'manifest.webmanifest']: [200, `${tag} manifest`],
+  });
+const body = async result => (result.responded ? result.response.text() : null);
 
 test('the worker is plain JavaScript with its version in the cache name', () => {
   assert.doesNotThrow(() => new Function(serviceWorker('abc123')));
@@ -229,92 +231,90 @@ test('the worker is plain JavaScript with its version in the cache name', () => 
   assert.notEqual(serviceWorker('a'), serviceWorker('b'));
 });
 
-test('install keeps the page that registered it, and the worker takes over at once', async () => {
-  const network = fakeNetwork({ [PAGE]: [200, '<html>app</html>'] });
-  const w = worker({ network, clientUrls: [PAGE + '?plan=1#x'] });
-  await w.install();
-  const cached = await (await w.caches.open('runway-v1')).match(PAGE);
-  assert.equal(await cached.text(), '<html>app</html>');
-  assert.equal(w.state.skipped, true);
-});
-
-test('install also keeps the QR transfer modules, so sending and receiving work offline', async () => {
-  const network = fakeNetwork({
-    [PAGE]: [200, 'app'],
-    [SCOPE + 'qr-encode.js']: [200, 'encode'],
-    [SCOPE + 'qr-decode.js']: [200, 'decode'],
-  });
-  const w = worker({ network, clientUrls: [PAGE] });
+test('install keeps the page, the QR modules and the texts, and does not take over open pages', async () => {
+  const w = worker({ network: site() });
   await w.install();
   const cache = await w.caches.open('runway-v1');
-  assert.equal(await (await cache.match(SCOPE + 'qr-encode.js')).text(), 'encode');
-  assert.equal(await (await cache.match(SCOPE + 'qr-decode.js')).text(), 'decode');
+  for (const [file, text] of [
+    ['index.html', 'v1 page'],
+    ['qr-encode.js', 'v1 encode'],
+    ['qr-decode.js', 'v1 decode'],
+    ['i18n-texts.json', 'v1 texts'],
+    ['manifest.webmanifest', 'v1 manifest'],
+  ]) {
+    assert.equal(await (await cache.match(SCOPE + file)).text(), text, file);
+  }
+  assert.equal(w.state.skipped, false, 'no skipWaiting: an open page keeps the worker of its own version');
 });
 
-test('install does not fail when a page cannot be fetched', async () => {
-  const network = fakeNetwork({});
+test('install fails, and keeps nothing, when the page cannot be fetched', async () => {
+  const network = site();
   network.offline = true;
   const w = worker({ network });
-  await assert.doesNotReject(() => w.install());
+  await assert.rejects(() => w.install());
+  assert.equal(w.caches.stores.has('runway-v1'), false);
 });
 
-test('a page in the cache opens from it at once, and the cache is refreshed behind it', async () => {
-  const network = fakeNetwork({ [PAGE]: [200, 'version 1'] });
-  const w = worker({ network });
-  await w.install();
-  network.pages[PAGE] = [200, 'version 2'];
-  const first = await w.fetch(PAGE);
-  assert.equal(await first.response.text(), 'version 1', 'instant, from the cache');
-  const second = await w.fetch(PAGE);
-  assert.equal(await second.response.text(), 'version 2', 'the next visit has the update');
+test('install fails when a file the page loads is missing; the icons and screenshots are optional', async () => {
+  const network = site();
+  delete network.pages[SCOPE + 'qr-decode.js'];
+  await assert.rejects(() => worker({ network }).install());
+  await assert.doesNotReject(() => worker({ network: site() }).install(), 'icons and screenshots are 404 here');
 });
 
-test('offline: the app still opens from the cache', async () => {
-  const network = fakeNetwork({ [PAGE]: [200, 'the app'] });
+test('the page opens from the cache of its own version, for the folder too, offline as well', async () => {
+  const network = site();
   const w = worker({ network });
   await w.install();
+  network.pages[PAGE] = [200, 'v2 page'];
+  assert.equal(await body(await w.fetch(PAGE)), 'v1 page', 'never a newer page under an older worker');
   network.offline = true;
-  const r = await w.fetch(PAGE + '?again');
-  assert.equal(await r.response.text(), 'the app');
+  assert.equal(await body(await w.fetch(PAGE + '?again#x')), 'v1 page');
+  assert.equal(await body(await w.fetch(SCOPE)), 'v1 page', 'start_url ./ is the page');
 });
 
-test('a page not in the cache comes from the network and is kept', async () => {
-  const other = SCOPE + 'runway-money-planner.html';
-  const network = fakeNetwork({ [PAGE]: [200, 'a'], [other]: [200, 'b'] });
+test('the QR modules and the texts come from the cache of the worker that installed with the page', async () => {
+  const network = site();
   const w = worker({ network });
   await w.install();
-  const r = await w.fetch(other);
-  assert.equal(await r.response.text(), 'b');
-  network.offline = true;
-  assert.equal(await (await w.fetch(other)).response.text(), 'b');
+  Object.assign(network.pages, site('v2').pages); // a new build on the server, same file names
+  assert.equal(await body(await w.fetch(SCOPE + 'qr-encode.js', { mode: 'no-cors' })), 'v1 encode');
+  assert.equal(await body(await w.fetch(SCOPE + 'i18n-texts.json', { mode: 'cors' })), 'v1 texts');
 });
 
-test('errors from the server are not kept', async () => {
-  const missing = SCOPE + 'missing.html';
-  const w = worker({ network: fakeNetwork({ [PAGE]: [200, 'a'] }) });
+test('anything else in its folder, other sites and anything but GET are left to the browser, never cached', async () => {
+  const network = site();
+  network.pages[SCOPE + 'notes.html'] = [200, 'notes'];
+  const w = worker({ network });
   await w.install();
-  const r = await w.fetch(missing);
-  assert.equal(r.response.status, 404);
-  assert.equal(await (await w.caches.open('runway-v1')).match(missing), undefined);
-});
-
-test('other sites, other folders and anything but GET are left to the browser', async () => {
-  const w = worker({ network: fakeNetwork({ [PAGE]: [200, 'a'] }) });
-  await w.install();
+  assert.equal((await w.fetch(SCOPE + 'notes.html')).responded, false, 'other content next to the app');
+  assert.equal((await w.fetch(SCOPE + 'runway-money-planner.html')).responded, false);
   assert.equal((await w.fetch('https://elsewhere.example/x.js')).responded, false);
   assert.equal((await w.fetch('https://example.org/other-app/index.html')).responded, false);
   assert.equal((await w.fetch(PAGE, { method: 'POST' })).responded, false);
+  assert.equal(await (await w.caches.open('runway-v1')).match(SCOPE + 'notes.html'), undefined);
+});
+
+test('a file that could not be kept at install comes from the network and is not cached', async () => {
+  const w = worker({ network: site() });
+  await w.install();
+  const icon = SCOPE + 'icons/icon-192.png';
+  const r = await w.fetch(icon, { mode: 'no-cors' });
+  assert.equal(r.responded, true);
+  assert.equal(r.response.status, 404);
+  assert.equal(await (await w.caches.open('runway-v1')).match(icon), undefined);
 });
 
 test('a new version removes the caches of older versions only, and takes the open pages', async () => {
   const stores = new Map();
-  const network = fakeNetwork({ [PAGE]: [200, 'a'] });
+  const network = site();
   const old = loadWorker(serviceWorker('old'), { network, caches: stores });
   await old.install();
   await old.activate();
   stores.set('someone-else', {});
   const next = loadWorker(serviceWorker('new'), { network, caches: stores });
   await next.install();
+  assert.ok(stores.has('runway-old'), 'kept while the new worker waits for the old pages to close');
   await next.activate();
   assert.deepEqual([...stores.keys()].sort(), ['runway-new', 'someone-else']);
   assert.equal(next.state.claimed, true);

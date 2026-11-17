@@ -66,6 +66,12 @@ export const money = n => {
   return FMT.nf.format(v || 0);
 };
 export const signed = n => (Math.round(n * (FMT.cents ? 100 : 1)) > 0 ? '+' : '') + money(n);
+/**
+ * An amount in short form, for chart axes: rounded to whole units, then written in the plan's currency and number
+ * locale with compact notation (for example "€1.2K"). Never NaN: a missing amount is 0.
+ * @param {number} n the amount
+ * @returns {string}
+ */
 export const compact = n => {
   if (!FMT.nfc) {
     const currency = FMT.nf.resolvedOptions().currency;

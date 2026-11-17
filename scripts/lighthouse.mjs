@@ -16,12 +16,16 @@
  * Lighthouse loads the page. Lighthouse then runs with its default mobile settings (simulated slow 4G, CPU 4x
  * slower) and --disable-storage-reset, so that the data stays. Reports go to lighthouse/: every run, and
  * lh-<label>.json, the run with the median performance score.
- * Chrome: CHROME_PATH, or Playwright's Chromium.
+ * Chrome: CHROME_PATH, or Playwright's Chromium (`npx playwright install chromium`), on Windows, macOS or Linux.
+ * Lighthouse itself is not a dependency: the first run downloads lighthouse@13.5.0 through npx (network needed once,
+ * then npx's cache).
  */
 import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright';
 import { APP } from '../src/config.js';
 import { heavyDb } from './heavy-data.mjs';
 
@@ -30,23 +34,16 @@ const OUT = path.join(ROOT, 'lighthouse');
 const LIGHTHOUSE = 'lighthouse@13.5.0';
 const [label = 'run', runsArg = '3', url = 'http://localhost:4173/'] = process.argv.slice(2);
 
+/** The Chrome to run: CHROME_PATH, or the Chromium Playwright installed for this system. */
 function chromePath() {
   if (process.env.CHROME_PATH) {
     return process.env.CHROME_PATH;
   }
-  const base = process.env.PLAYWRIGHT_BROWSERS_PATH || path.join(process.env.HOME, '.cache/ms-playwright');
-  const dir = fs
-    .readdirSync(base)
-    .filter(d => /^chromium-\d+$/.test(d))
-    .sort()
-    .pop();
-  for (const sub of ['chrome-linux64', 'chrome-linux']) {
-    const file = path.join(base, dir, sub, 'chrome');
-    if (fs.existsSync(file)) {
-      return file;
-    }
+  const file = chromium.executablePath();
+  if (fs.existsSync(file)) {
+    return file;
   }
-  throw new Error('No Chrome found: set CHROME_PATH');
+  throw new Error('No Chrome found: run `npx playwright install chromium`, or set CHROME_PATH');
 }
 
 /** A tiny DevTools protocol client over the page's WebSocket. */
@@ -95,7 +92,7 @@ async function waitFor(fn, ms = 15000) {
 
 /** Chrome with a new profile and the heavy database in the site's storage. */
 async function seededChrome(port, data, target = url) {
-  const profile = fs.mkdtempSync('/tmp/lh-profile-');
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'lh-profile-'));
   const chrome = spawn(
     chromePath(),
     ['--headless=new', '--no-sandbox', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, 'about:blank'],
@@ -121,21 +118,27 @@ async function seededChrome(port, data, target = url) {
   return { chrome, profile };
 }
 
+/**
+ * Runs Lighthouse (through npx, which downloads it on first use) against a Chrome already open on `port`.
+ * On Windows npx is npx.cmd, which runs only through a shell: there every argument is quoted (paths may have spaces).
+ */
 function lighthouse(port, file, target = url) {
+  const windows = process.platform === 'win32';
+  const args = [
+    '-y',
+    LIGHTHOUSE,
+    target,
+    `--port=${port}`,
+    '--disable-storage-reset',
+    '--output=json',
+    `--output-path=${file}`,
+    '--quiet',
+  ];
   return new Promise((resolve, reject) =>
     execFile(
       'npx',
-      [
-        '-y',
-        LIGHTHOUSE,
-        target,
-        `--port=${port}`,
-        '--disable-storage-reset',
-        '--output=json',
-        `--output-path=${file}`,
-        '--quiet',
-      ],
-      { maxBuffer: 1 << 26 },
+      windows ? args.map(arg => `"${arg}"`) : args,
+      { maxBuffer: 1 << 26, shell: windows },
       (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve()),
     ),
   );
@@ -234,7 +237,7 @@ async function measure(name, target, i, data) {
     });
     try {
       fs.rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-    } catch (e) {} // Chrome's helpers may still be closing files: a leftover folder in /tmp, not a failed run
+    } catch (e) {} // Chrome's helpers may still be closing files: a leftover temporary folder, not a failed run
   }
   const lhr = JSON.parse(fs.readFileSync(file, 'utf8'));
   const s = summary(lhr);

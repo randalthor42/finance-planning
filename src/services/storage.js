@@ -147,10 +147,10 @@ export async function backup(text, info) {
   try {
     await run('backups', 'readwrite', s => {
       s.add(entry);
-      // the oldest go once there are more than KEEP_BACKUPS (counted before this one is added)
+      // the oldest go once there are more than KEEP_BACKUPS (the requests run in order: this one is counted)
       const keys = s.getAllKeys();
       keys.onsuccess = () => {
-        const extra = keys.result.length + 1 - KEEP_BACKUPS;
+        const extra = keys.result.length - KEEP_BACKUPS;
         keys.result.slice(0, Math.max(0, extra)).forEach(key => s.delete(key));
       };
     });

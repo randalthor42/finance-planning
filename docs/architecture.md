@@ -21,8 +21,9 @@ models/    plan.js (normPlan), db.js, records.js (dates of every record), migrat
 core/      dates, format, i18n, util                                                       pure helpers
 ```
 
-`logic/`, `models/` and `core/` are pure: no DOM, no storage, no clock other than what is passed in. That is why most
-tests run in plain Node.
+`logic/`, `models/` and `core/` are pure: no DOM, no storage, no clock other than what is passed in. One exception:
+`core/i18n.js` reads and writes its language packs through `services/storage.js` (the language must be known before
+any module makes a text), and reloads the page on a language change. That is why most tests run in plain Node.
 
 ## One change, from click to disk to other devices
 
@@ -58,7 +59,8 @@ and applied with `Store.adoptMerged`. Neither makes an undo step; undo restarts 
   `runway-money-planner.html` (the file to hand out, with the lazily loaded parts below embedded).
 - `build/csp.js`: the security policy, added as a `<meta>`: no other site, except Google's sign-in and the Drive API
   when the build has a Google client ID (`VITE_GOOGLE_CLIENT_ID`, [sync.md](sync.md)).
-- `build/pwa.js`: manifest, icons, screenshots, `sw.js`, `robots.txt`, `llms.txt`.
+- `build/pwa.js`: manifest, icons, screenshots, `sw.js` (one cache per build; a new build waits for the old pages
+  to close, so lazily loaded files always match their page).
 - `build/qr.js`: the QR maker and reader bundled apart (`qr-encode.js`, `qr-decode.js`) and embedded in the file to
   hand out; loaded only when used (`ui/qrLoader.js`).
 - `virtual:i18n-keys`: every `$t('…')` text, for "Export language": `i18n-texts.json` next to the page (loaded when

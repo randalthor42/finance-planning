@@ -16,7 +16,15 @@ import { project } from '../logic/projection.js';
 import { dbText, normDB, normPrefs } from '../models/db.js';
 import { migrate, versionOf } from '../models/migrations.js';
 import { normPlan } from '../models/plan.js';
-import { RECORD_TYPE, planEntriesOf, planRecord, recordEntry, stampPlan } from '../models/records.js';
+import {
+  RECORD_TYPE,
+  planEntriesOf,
+  planRecord,
+  planText,
+  recordEntry,
+  stampPlan,
+  timestamp,
+} from '../models/records.js';
 import { LocalStorageAdapter } from '../services/storage.js';
 
 /** The first data format with sync dates on every record (models/migrations.js, migration 7). */
@@ -72,10 +80,32 @@ export class PlanStore {
     this.deviceId = null;
     /** Runs work that can wait (the record index): main.js gives the browser's idle callback. */
     this.later = fn => setTimeout(fn, 1000);
+    /** The newest time written or seen: now() never goes below it. */
+    this.lastStamp = 0;
   }
-  /** The time written on records: one clock for every save. */
-  now() {
+  /** The device's clock, in ms (tests replace it). */
+  clock() {
     return Date.now();
+  }
+  /**
+   * The time written on records: one clock for every save. Never earlier than a time the data already holds (this
+   * device's last save, or the newest change merged in from another device): a clock that was put back, or another
+   * device's clock that runs ahead, could otherwise give a new edit an older time than the version it replaces, and
+   * the edit would lose every merge.
+   */
+  now() {
+    const time = Math.max(this.clock(), this.lastStamp + 1);
+    this.lastStamp = time;
+    return time;
+  }
+  /** Moves the clock's floor past the newest time in these plans and deleted plans. */
+  seeTimes(plans, deletedPlans) {
+    for (const p of plans) {
+      this.lastStamp = Math.max(this.lastStamp, timestamp(p && p.updatedAt) ?? 0);
+    }
+    for (const d of Object.values(deletedPlans || {})) {
+      this.lastStamp = Math.max(this.lastStamp, timestamp(d && d.deletedAt) ?? 0);
+    }
   }
   /**
    * Cleans the plans that were read at start but not used yet. Called when every plan is needed, and by main.js
@@ -102,7 +132,7 @@ export class PlanStore {
   textOf(plan) {
     let text = TEXT.get(plan);
     if (text === undefined) {
-      text = JSON.stringify(plan);
+      text = planText(plan);
       TEXT.set(plan, text);
     }
     return text;
@@ -134,6 +164,7 @@ export class PlanStore {
     const migration = migrate(raw, { now: downgraded ? OLDEST : this.now() });
     this.pending = new Set();
     this.db = normDB(migration.db, this.pending);
+    this.seeTimes(Object.values(this.db.plans), this.db.deletedPlans);
     this.recalc();
     this.migrated = migration.applied.length ? this.afterMigration(text, migration) : Promise.resolve();
     if (downgraded) {
@@ -146,7 +177,9 @@ export class PlanStore {
     if (from > APP.schema) {
       this.log($t('This data was saved by a newer version of Runway. Update this copy before making changes.'));
     }
-    if (raw && this.adapter.markSchema) {
+    if (this.adapter.markSchema) {
+      // also on a first start: what this browser writes from now on is dated data, so an older version that rewrites
+      // it later is recognised (see `downgraded` above)
       this.adapter.markSchema(APP.schema);
     }
   }
@@ -308,7 +341,7 @@ export class PlanStore {
     if (!changed) {
       return false;
     }
-    TEXT.set(clean, JSON.stringify(clean));
+    TEXT.set(clean, planText(clean));
     const merge = !!this.tag && this.tag === this.lastTag;
     if (!merge) {
       this.pushUndo({ snap: prev, label: label || $t('Change') });
@@ -473,6 +506,10 @@ export class PlanStore {
    */
   replacePlans(entries, label, deletedPlans = null) {
     this.pending.clear(); // every plan is replaced
+    this.seeTimes(
+      entries.map(e => e.plan),
+      deletedPlans,
+    );
     const before = this.plan;
     const plans = {};
     for (const e of entries) {
@@ -519,7 +556,7 @@ export class PlanStore {
       return plan;
     }
     const clean = normPlan(plan);
-    const text = JSON.stringify(clean);
+    const text = planText(clean);
     if (current && this.textOf(current) === text) {
       return current;
     }

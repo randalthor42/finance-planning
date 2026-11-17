@@ -48,14 +48,17 @@ export const IO = {
       ['encrypt', 'decrypt'],
     );
   },
+  /** Drops the key made for `password` in this visit (a QR transfer's one-time code, once the transfer is over). */
+  forget(password) {
+    this.keys.delete(password);
+  },
   /**
    * Encrypts text with a passphrase: AES-256-GCM, the key from PBKDF2-SHA256 (ITER rounds, random salt), a new random
-   * IV every time. The key of a passphrase is made once per visit (keys). zip: compress first (default when able).
-   */
-  /**
-   * The encrypted envelope of a text. zip: compress before encrypting (Drive sync and QR transfers, where both ends
-   * are this version). Such an envelope says v: 2, so that it is told apart; an exported backup is not compressed
-   * (v: 1), so older versions of the app can still open it.
+   * IV every time. The key of a passphrase is made once per visit (keys; forget() drops one). zip: compress before
+   * encrypting (Drive sync and QR transfers, where both ends are this version); such an envelope says v: 2 so that it
+   * is told apart. An exported backup is not compressed (v: 1): an older version of the app then recognises it and
+   * says it was made by a newer version, instead of failing as if the password were wrong.
+   * @returns {Promise<Object>} the envelope
    */
   async encrypt(text, password, { zip = false } = {}) {
     zip = zip && this.canZip();

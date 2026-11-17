@@ -4,7 +4,9 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { dbText } from '../../src/models/db.js';
 import { normPlan } from '../../src/models/plan.js';
+import { planText } from '../../src/models/records.js';
 import { samplePlan } from '../../src/models/samplePlan.js';
 import { Actions } from '../../src/state/actions.js';
 import { Store } from '../../src/state/store.js';
@@ -152,7 +154,7 @@ test('what is saved is the state: the stored text and the dates', () => {
   });
   Actions.remove('items', 'item0new');
   Store.flush();
-  assert.equal(Store.adapter.text, JSON.stringify(Store.db));
+  assert.equal(Store.adapter.text, dbText(Store.db, planText));
   const stored = JSON.parse(Store.adapter.text);
   assert.equal(stored.schemaVersion, 8);
   assert.ok(stored.plans[Store.db.active].deleted.items.some(i => i.id === 'item0new'));

@@ -41,12 +41,35 @@ export const DRIVE_STATUS = {
   error: () => [$t('Not syncing'), 'bad', 'alert', $t('Google Drive did not answer. Runway tries again in a minute.')],
 };
 
-const ago = ms => {
+/** A moment (epoch ms) as a short date and time ("16 Nov, 10:00"), or '' for none. */
+const dateTimeText = ms => {
   if (!ms) {
     return '';
   }
   return new Date(ms).toLocaleString(FMT.dloc, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 };
+
+/** What went wrong, from the kind of failure Drive sync noted (Drive.detail; see DriveSync.fail). */
+function errorText() {
+  if (Drive.detail === 'refused') {
+    return $t('Google Drive refused the request. Runway tries again in a minute.');
+  }
+  if (Drive.detail === 'failed') {
+    return $t('Something went wrong while syncing. Runway tries again in a minute.');
+  }
+  return $t('Google Drive did not answer. Runway tries again in a minute.');
+}
+
+/** What the Encryption row of the card says. */
+function encryptionText(status) {
+  if (status === 'locked') {
+    return $t('On (set on another device)');
+  }
+  if (Drive.encrypted) {
+    return $t('With your passphrase');
+  }
+  return $t('Off');
+}
 
 /** Why Drive sync cannot be used here, or '' when it can. */
 export function driveUnavailable() {
@@ -72,7 +95,7 @@ export function syncIcon(go) {
   if (Drive.status === 'signin') {
     Drive.prepare(); // sync is on: Google's script ready for the click on this icon
   }
-  const title = Drive.lastSync && Drive.status === 'synced' ? `${text} ${ago(Drive.lastSync)}` : text;
+  const title = Drive.lastSync && Drive.status === 'synced' ? `${text} ${dateTimeText(Drive.lastSync)}` : text;
   return h(
     'button',
     {
@@ -146,17 +169,19 @@ function unlockModal() {
       if (!v.pw) {
         return $t('Enter the passphrase.');
       }
-      Drive.unlock(v.pw).then(ok =>
-        ok
-          ? toast($t('Unlocked. Syncing.'))
-          : toast($t('That passphrase does not open your cloud copy.'), { kind: 'bad' }),
-      );
+      Drive.unlock(v.pw).then(ok => {
+        if (ok) {
+          toast($t('Unlocked. Syncing.'));
+        } else {
+          toast($t('That passphrase does not open your cloud copy.'), { kind: 'bad' });
+        }
+      });
       return '';
     },
   });
 }
 
-const kv = (label, value) => h('div', { class: 'row' }, h('span', { class: 'grow muted', text: label }), value);
+const infoRow = (label, value) => h('div', { class: 'row' }, h('span', { class: 'grow muted', text: label }), value);
 const note = (tone, ic, text) =>
   h('div', { class: 'note ' + tone, style: 'margin-top:12px' }, icon(ic), h('div', { class: 'grow', text }));
 
@@ -179,6 +204,28 @@ export function turnOnButton(label = $t('Turn on sync'), tone = 'primary') {
   return on;
 }
 
+/** The passphrase button of the card: remove it, set one, or none while the file waits for one (null). */
+function passphraseButton(status) {
+  if (Drive.encrypted) {
+    return btn($t('Remove the passphrase'), () =>
+      confirmModal(
+        $t('Remove the passphrase?'),
+        $t('Your cloud copy will be stored without encryption, readable by Google like your other Drive files.'),
+        $t('Remove the passphrase'),
+        () => Drive.setPassphrase(null),
+      ),
+    );
+  }
+  if (status === 'locked') {
+    return null;
+  }
+  return btn($t('Encrypt with a passphrase'), passphraseModal, '', 'lock');
+}
+
+/**
+ * Settings › Storage: the Google Drive sync card. Why sync cannot be used here, the Turn on button, or, while sync is
+ * on, its status, last sync and encryption with what can be done.
+ */
 export function driveCard() {
   const title = $t('Sync with Google Drive');
   const about = $t(
@@ -206,25 +253,15 @@ export function driveCard() {
   const rows = h(
     'div',
     { class: 'rows', 'data-drive-status': status },
-    kv($t('Status'), chip(label, tone)),
-    kv($t('Last synced'), h('span', { text: Drive.lastSync ? ago(Drive.lastSync) : $t('Not yet') })),
-    kv(
-      $t('Encryption'),
-      h('span', {
-        text:
-          status === 'locked'
-            ? $t('On (set on another device)')
-            : Drive.encrypted
-              ? $t('With your passphrase')
-              : $t('Off'),
-      }),
-    ),
+    infoRow($t('Status'), chip(label, tone)),
+    infoRow($t('Last synced'), h('span', { text: Drive.lastSync ? dateTimeText(Drive.lastSync) : $t('Not yet') })),
+    infoRow($t('Encryption'), h('span', { text: encryptionText(status) })),
   );
   const notes = {
     offline: () => note('warn', 'cloudOff', text),
     signin: () => note('warn', 'alert', text),
     locked: () => note('warn', 'lock', text),
-    error: () => note('bad', 'alert', Drive.detail && Drive.detail !== 'busy' ? `${text} (${Drive.detail})` : text),
+    error: () => note('bad', 'alert', errorText()),
   };
   const main = {
     signin: () => btn($t('Sign in again'), signIn, 'primary', 'check'),
@@ -241,18 +278,7 @@ export function driveCard() {
       'div',
       { class: 'acts', style: 'margin-top:12px' },
       main[status] ? main[status]() : btn($t('Sync now'), () => Drive.sync('now'), '', 'refresh'),
-      Drive.encrypted
-        ? btn($t('Remove the passphrase'), () =>
-            confirmModal(
-              $t('Remove the passphrase?'),
-              $t('Your cloud copy will be stored without encryption, readable by Google like your other Drive files.'),
-              $t('Remove the passphrase'),
-              () => Drive.setPassphrase(null),
-            ),
-          )
-        : status !== 'locked'
-          ? btn($t('Encrypt with a passphrase'), passphraseModal, '', 'lock')
-          : null,
+      passphraseButton(status),
       btn($t('Turn off sync'), () => Drive.turnOff(), 'ghost'),
       btn(
         $t('Delete my cloud data'),
@@ -278,6 +304,7 @@ export function driveCard() {
   );
 }
 
+/** Settings › Storage: the card that sends or receives plans with QR codes (modals/qrTransfer.js). */
 export function qrCard() {
   return card(
     $t('Move with QR codes'),

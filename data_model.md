@@ -52,7 +52,10 @@ A **record** is one thing a person adds, with an id. Every record has:
 | `updatedAt` | epoch ms | when it was last saved with a change |
 | `deletedAt` | epoch ms or `null` | when it was deleted; `null` while it is live |
 
-These four are set by the store on every save (`models/records.js stampPlan`); no component sets them. A deleted
+These four are set by the store on every save (`models/records.js stampPlan`); no component sets them. The stored
+text leaves out `deletedAt` while it is `null` and `createdAt` when it equals `updatedAt` (`planText`): `normPlan` puts
+them back when the data is read, so the app always works with all four. This keeps the stored data small: the dates add
+about 15% to a large plan instead of about 40%. A deleted
 record is kept, with `deletedAt`, in the plan's `deleted` lists, so nothing that reads the live lists (lists, totals,
 charts, the projection, search, exports of live data) ever sees it.
 
@@ -129,4 +132,7 @@ key is `null`), `planId`, `type`. The plan entry's `data` is the plan without it
   QR transfers are always encrypted, with the one-time code ([docs/qr-transfer.md](docs/qr-transfer.md)).
 - **Data file** (Settings › Storage): `{ app: "runway", kind: "data", v: 8, saved, by, deletedPlans, plans }`,
   merged record by record like Drive sync (README › Storage).
-- Both open in older schemas too: every plan goes through `normPlan`, and one without dates gets them when it is added.
+- Files written in older schemas open too: every plan goes through `normPlan`, and one without dates gets them when it
+  is added. The other way does not work: a file written now (`v: 8`) is refused by an older version of the app ("made
+  by a newer version"), encrypted or not (it decrypts the envelope, then refuses the body), never with a wrong-password
+  error.

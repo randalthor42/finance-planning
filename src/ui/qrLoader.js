@@ -21,7 +21,8 @@ export function loadQr(kind) {
 async function load(kind) {
   const embedded = document.getElementById('runway-qr-' + kind);
   if (embedded) {
-    const code = embedded.textContent.replace(/<\\\/script/gi, '</script');
+    // build/qr.js wrote every "</script" (in any case) as "<\/script"; the case is kept both ways
+    const code = embedded.textContent.replace(/<\\(\/script)/gi, '<$1');
     const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
     try {
       return await import(/* @vite-ignore */ url);
@@ -39,6 +40,10 @@ async function load(kind) {
   return import(/* @vite-ignore */ new URL(`qr-${kind}.js`, document.baseURI).href);
 }
 
-/** What to do when a part loaded on demand cannot be had because the served page was opened from a disk. */
+/**
+ * What to do when a part loaded on demand cannot be had because the served page (dist/index.html) was opened from a
+ * disk. Used for the QR modules here and for the texts to translate in views/language.js.
+ * @returns {string} the message, translated
+ */
 export const servedOnly = () =>
   $t('This copy of the page only works from a website. Open runway-money-planner.html, which has everything inside.');

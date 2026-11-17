@@ -170,8 +170,15 @@ export class FileSync {
   unlink() {
     this.drop();
     this.saveMeta();
-    this.setStatus(!this.io.supported() ? 'unsupported' : this.store.db.fileSync ? 'unlinked' : 'off');
+    this.setStatus(this.restingStatus());
     return this.keep.del(HANDLE).catch(() => {});
+  }
+  /** The status with no file in use: unsupported by this browser, waiting for one, or turned off. */
+  restingStatus() {
+    if (!this.io.supported()) {
+      return 'unsupported';
+    }
+    return this.store.db.fileSync ? 'unlinked' : 'off';
   }
   /** The Settings switch. Off: the file is not written (it is still remembered). On again: catches up with it. */
   async setEnabled(on) {

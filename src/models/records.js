@@ -125,7 +125,7 @@ const isObject = v => !!v && typeof v === 'object' && !Array.isArray(v);
  * (set, changed or removed); `base` is the time of every path not in `at` (the field's time when this tracking began).
  * @param {*} raw @returns {Object<string,{base:number, at:Object<string,number>}>}
  */
-export function normKeyTimes(raw) {
+export function normKeyTimes(raw, startMonth = null) {
   const out = {};
   for (const f of Object.keys(MAP_FIELDS)) {
     const entry = isObject(raw) ? raw[f] : null;
@@ -135,11 +135,27 @@ export function normKeyTimes(raw) {
     }
     const at = {};
     for (const [path, time] of Object.entries(isObject(entry.at) ? entry.at : {})) {
-      if (path.length <= 100 && timestamp(time) !== null) {
+      if (path.length <= 100 && timestamp(time) !== null && !beforePlan(path, startMonth)) {
         at[path] = timestamp(time);
       }
     }
-    out[f] = { base, at };
+    out[f] = { base, at: sortedTimes(at) };
+  }
+  return out;
+}
+/**
+ * Whether a path is a month before the plan's first month: such months no longer count, and their change times are
+ * dropped (they would only grow). Every device drops the same ones, since the first month is plan data too.
+ */
+const beforePlan = (path, startMonth) => !!startMonth && path.slice(0, 7) < startMonth;
+/**
+ * The same times with their paths in sorted order: two devices that hold the same times must write the same text, or
+ * every merge would see a change where there is none (and clear undo, and write again).
+ */
+export function sortedTimes(at) {
+  const out = {};
+  for (const path of Object.keys(at).sort()) {
+    out[path] = at[path];
   }
   return out;
 }
@@ -155,13 +171,33 @@ function stampKeys(prev, next, f, now) {
     const depth = MAP_FIELDS[f];
     const old = flatPaths(prev[f], depth);
     const after = flatPaths(next[f], depth);
+    const startMonth = next.settings && next.settings.startMonth;
     for (const path of new Set([...Object.keys(old), ...Object.keys(after)])) {
-      if (JSON.stringify(old[path]) !== JSON.stringify(after[path])) {
+      if (JSON.stringify(old[path]) !== JSON.stringify(after[path]) && !beforePlan(path, startMonth)) {
         at[path] = now;
       }
     }
   }
-  return { base, at };
+  return { base, at: sortedTimes(at) };
+}
+
+/**
+ * A plan as stored text (the store's cache, the data file, the Drive file): the same JSON, without what normPlan puts
+ * back when it reads it (the dates make the stored data about 40% larger otherwise): `deletedAt: null` (a live
+ * record) and a `createdAt` equal to its `updatedAt` (a record never changed since it was made).
+ * @param {import('../types.js').Plan} plan
+ * @returns {string}
+ */
+export function planText(plan) {
+  return JSON.stringify(plan, function compact(key, value) {
+    if (key === 'deletedAt' && value === null) {
+      return undefined;
+    }
+    if (key === 'createdAt' && value !== null && value === this.updatedAt) {
+      return undefined;
+    }
+    return value;
+  });
 }
 
 /** A date as stored: epoch ms (a whole number from 1970 to the year 5138), or null. */
@@ -348,9 +384,17 @@ export function stampPlan(prev, next, now) {
   }
   next.keysUpdatedAt = keyTimes;
   next.createdAt = prev ? (prev.createdAt ?? now) : (timestamp(next.createdAt) ?? now);
-  next.updatedAt = !prev ? (timestamp(next.updatedAt) ?? now) : changed ? now : prev.updatedAt;
+  next.updatedAt = updatedAfterSave(prev, next, changed, now);
   next.deletedAt = null;
   return { plan: next, changed, touched };
+}
+
+/** The plan's updatedAt after a save: kept when nothing changed, now when something did; its own for a new plan. */
+function updatedAfterSave(prev, next, changed, now) {
+  if (!prev) {
+    return timestamp(next.updatedAt) ?? now;
+  }
+  return changed ? now : prev.updatedAt;
 }
 
 /* --- the record index (services/storage.js records): one entry per record --- */

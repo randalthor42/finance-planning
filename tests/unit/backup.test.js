@@ -75,7 +75,7 @@ test('a Drive or QR payload is compressed before it is encrypted (envelope v2), 
   assert.equal((await IO.read(text, PASSWORD)).plans[0].items.length, 400);
 });
 
-test('an exported backup is not compressed (v1), so older versions of the app can open it', async () => {
+test('an exported backup is not compressed (v1): an older version reads it and says it is from a newer version', async () => {
   const envelope = JSON.parse(await IO.backup([plan], PASSWORD));
   assert.equal(envelope.v, 1);
   assert.equal(envelope.zip, undefined);

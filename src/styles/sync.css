@@ -38,6 +38,7 @@
 .qr-canvas {
   aspect-ratio: 1;
   height: auto;
+  /* not a token on purpose: a QR code is read as black modules on white, whatever the theme */
   background: #fff;
   /* each module a sharp square when the canvas is scaled */
   image-rendering: pixelated;
@@ -45,6 +46,7 @@
 .qr-video {
   aspect-ratio: 4 / 3;
   object-fit: cover;
+  /* not a token on purpose: the camera picture's letterbox stays black whatever the theme */
   background: #000;
 }
 .qr-meta {

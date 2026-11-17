@@ -353,6 +353,140 @@ test('a new passphrase replaces the old one in the file, even though the old one
   assert.equal(await b.sync.unlock('second passphrase'), true);
 });
 
+test('a passphrase set while an upload is on its way is applied: the file ends encrypted', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  let setting = null;
+  drive.beforeUpdate = () => {
+    setting = a.sync.setPassphrase('set during the upload'); // not awaited: it waits for this very upload
+  };
+  addBill(a, 'Uploading');
+  await settle(a);
+  await setting;
+  await a.sync.idle();
+  assert.equal(cloud(drive).kind, 'encrypted', 'the file follows the card');
+  assert.equal(a.sync.encrypted, true);
+  assert.equal(a.sync.state.rewrite, false, 'and the change counts as written once it is');
+  await a.sync.sync('foreground');
+  assert.equal(a.sync.passphrase, 'set during the upload', 'the passphrase is not forgotten afterwards');
+});
+
+test('passphrase removed offline, then the app restarted: the old file is still read, and the removal applied', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  await a.sync.setPassphrase('old passphrase');
+  drive.offline = true;
+  await a.sync.setPassphrase(null);
+  drive.offline = false;
+  const again = device(drive, { adapter: a.adapter, keep: a.keep, meta: a.meta, auth: a.auth });
+  await again.sync.start();
+  await again.sync.idle();
+  assert.equal(again.sync.status, 'synced', 'not locked');
+  assert.equal(cloud(drive).kind, 'backup', 'the file is plain, as chosen');
+  assert.equal(again.keep.map.has('driveFormerPassphrase'), false, 'the former passphrase is forgotten once written');
+});
+
+test('unlocking with the old passphrase while this device’s own change is unwritten keeps that change', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  await a.sync.setPassphrase('old passphrase');
+  drive.offline = true;
+  await a.sync.setPassphrase('new passphrase');
+  drive.offline = false;
+  await a.keep.del('driveFormerPassphrase'); // as an older version kept it: in memory only
+  const again = device(drive, { adapter: a.adapter, keep: a.keep, meta: a.meta, auth: a.auth });
+  await again.sync.start();
+  await again.sync.idle();
+  assert.equal(again.sync.status, 'locked');
+  assert.equal(await again.sync.unlock('old passphrase'), true);
+  assert.equal(again.sync.passphrase, 'new passphrase', 'the new one stays');
+  const b = device(drive, { plans: [] });
+  await b.sync.turnOn();
+  assert.equal(await b.sync.unlock('old passphrase'), false, 'the file is written with the new one');
+  assert.equal(await b.sync.unlock('new passphrase'), true);
+});
+
+test('unlock during a running sync reports the result of the run that used the passphrase', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  await a.sync.setPassphrase('correct horse battery');
+  const b = device(drive, { plans: [] });
+  await b.sync.turnOn();
+  assert.equal(b.sync.status, 'locked');
+  let unlocking = null;
+  b.sync.onChange = () => {
+    if (b.sync.status === 'locked' && !unlocking) {
+      unlocking = b.sync.unlock('correct horse battery'); // the running sync has just failed without it
+    }
+  };
+  b.sync.status = 'error'; // so that the next run reaches 'locked' again
+  await b.sync.sync('now');
+  assert.ok(unlocking, 'unlock was asked during the run');
+  assert.equal(await unlocking, true);
+  assert.equal(b.sync.status, 'synced');
+});
+
+test('while locked, runs that start by themselves do not download the file', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  await a.sync.setPassphrase('correct horse battery');
+  const b = device(drive, { plans: [] });
+  await b.sync.turnOn();
+  assert.equal(b.sync.status, 'locked');
+  drive.calls.length = 0;
+  let redraws = 0;
+  b.sync.onChange = () => redraws++;
+  for (const reason of ['poll', 'foreground', 'change', 'online', 'retry']) {
+    await b.sync.sync(reason);
+  }
+  assert.deepEqual(drive.calls, [], 'no request');
+  assert.equal(redraws, 0, 'no flicker');
+  assert.equal(await b.sync.unlock('correct horse battery'), true, 'unlock still runs');
+});
+
+test('after a restart, a preference change before the first sync is not a change to sync', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  const again = device(drive, { adapter: a.adapter, keep: a.keep, meta: a.meta, auth: a.auth });
+  again.store.setPref('theme', 'dark');
+  again.store.flush();
+  assert.equal(again.sync.pending, false);
+  addBill(again, 'A real change');
+  again.store.flush();
+  assert.equal(again.sync.pending, true);
+  await again.sync.idle();
+});
+
+test('a failure shows a code, never Google’s or the browser’s own English text', async () => {
+  const drive = new FakeDrive();
+  const a = device(drive);
+  await a.sync.turnOn();
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    a.sync.client = () => ({
+      list: async () => {
+        throw new TypeError('x is not a function');
+      },
+    });
+    await a.sync.sync('now');
+    assert.equal(a.sync.status, 'error');
+    assert.equal(a.sync.detail, 'failed');
+    a.sync.client = token => driveClient({ fetch: async () => new Response('{}', { status: 400 }), token });
+    await a.sync.sync('now');
+    assert.equal(a.sync.detail, 'refused');
+  } finally {
+    console.warn = warn;
+    clearTimeout(a.sync.retryTimer);
+  }
+});
+
 test('two devices that made the sync file at the same moment end on one file, with both sides’ data', async () => {
   const drive = new FakeDrive();
   const a = device(drive);

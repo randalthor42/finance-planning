@@ -64,6 +64,40 @@ function paydayText(settings) {
   return $t('on the {0}', day);
 }
 
+/** What deleting a plan removes: from this browser, and from the data file or, through Drive sync, other devices. */
+function deletePlanText() {
+  if (Sync.status === 'ok') {
+    return $t(
+      'This removes the plan and everything in it from this browser and from {0}. Export a backup first if you might want it back.',
+      Sync.name,
+    );
+  }
+  if (Drive.enabled) {
+    return $t(
+      'This removes the plan and everything in it from this browser and, through Google Drive sync, from your other devices. Export a backup first if you might want it back.',
+    );
+  }
+  return $t(
+    'This removes the plan and everything in it from this browser. Export a backup first if you might want it back.',
+  );
+}
+
+/** What "Delete everything" does, and what it leaves as it is (the data file, the cloud copy). */
+function deleteAllText() {
+  if (Sync.name) {
+    return $t(
+      'Every plan stored in this browser will be removed. This cannot be undone. {0} is disconnected and left as it is.',
+      Sync.name,
+    );
+  }
+  if (Drive.enabled) {
+    return $t(
+      'Every plan stored in this browser will be removed. This cannot be undone. Google Drive sync is turned off here; your cloud copy is left as it is.',
+    );
+  }
+  return $t('Every plan stored in this browser will be removed. This cannot be undone.');
+}
+
 V.settings = () => {
   const plan = Store.plan;
   const settings = plan.settings;
@@ -261,22 +295,8 @@ V.settings = () => {
                 ibtn(
                   $t('Delete plan'),
                   () =>
-                    confirmModal(
-                      $t('Delete “{0}”?', x.name),
-                      Sync.status === 'ok'
-                        ? $t(
-                            'This removes the plan and everything in it from this browser and from {0}. Export a backup first if you might want it back.',
-                            Sync.name,
-                          )
-                        : Drive.enabled
-                          ? $t(
-                              'This removes the plan and everything in it from this browser and, through Google Drive sync, from your other devices. Export a backup first if you might want it back.',
-                            )
-                          : $t(
-                              'This removes the plan and everything in it from this browser. Export a backup first if you might want it back.',
-                            ),
-                      $t('Delete plan'),
-                      () => Store.removePlan(x.id),
+                    confirmModal($t('Delete “{0}”?', x.name), deletePlanText(), $t('Delete plan'), () =>
+                      Store.removePlan(x.id),
                     ),
                   'sm ghost danger',
                   'trash',
@@ -348,28 +368,14 @@ V.settings = () => {
           btn(
             $t('Delete everything'),
             () =>
-              confirmModal(
-                $t('Delete all plans?'),
-                Sync.name
-                  ? $t(
-                      'Every plan stored in this browser will be removed. This cannot be undone. {0} is disconnected and left as it is.',
-                      Sync.name,
-                    )
-                  : Drive.enabled
-                    ? $t(
-                        'Every plan stored in this browser will be removed. This cannot be undone. Google Drive sync is turned off here; your cloud copy is left as it is.',
-                      )
-                    : $t('Every plan stored in this browser will be removed. This cannot be undone.'),
-                $t('Delete everything'),
-                () => {
-                  UI.view = 'overview';
-                  // the data file and Drive sync are let go first, so that emptying this browser does not empty them
-                  // (and Drive sync does not bring the plans back)
-                  Sync.unlink();
-                  Drive.turnOff();
-                  Store.wipe();
-                },
-              ),
+              confirmModal($t('Delete all plans?'), deleteAllText(), $t('Delete everything'), () => {
+                UI.view = 'overview';
+                // the data file and Drive sync are let go first, so that emptying this browser does not empty them
+                // (and Drive sync does not bring the plans back)
+                Sync.unlink();
+                Drive.turnOff();
+                Store.wipe();
+              }),
             'danger sm',
             'trash',
           ),

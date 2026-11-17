@@ -80,7 +80,7 @@ export function normPlan(p) {
       .filter(isObj)
       .map(x => {
         const r = fn(x);
-        r.createdAt = ts(x.createdAt);
+        r.createdAt = ts(x.createdAt) ?? ts(x.updatedAt); // left out of the stored text when equal (planText)
         r.updatedAt = ts(x.updatedAt);
         r.deletedAt = null;
         return r;
@@ -383,7 +383,7 @@ export function normPlan(p) {
       // older ones, and markers that arrived as markers, stay markers (id and dates only)
       const marker = i < firstFull || isDeletedRef(x);
       const r = marker ? { id: x.id } : build(x);
-      r.createdAt = ts(x.createdAt);
+      r.createdAt = ts(x.createdAt) ?? ts(x.updatedAt);
       r.updatedAt = ts(x.updatedAt);
       r.deletedAt = ts(x.deletedAt);
       if (kind === 'tripItems') {
@@ -405,8 +405,8 @@ export function normPlan(p) {
   };
   const times = isObj(p.fieldsUpdatedAt) ? p.fieldsUpdatedAt : {};
   out.fieldsUpdatedAt = Object.fromEntries(PLAN_FIELDS.map(f => [f, ts(times[f])]));
-  out.keysUpdatedAt = normKeyTimes(p.keysUpdatedAt);
-  out.createdAt = ts(p.createdAt);
+  out.keysUpdatedAt = normKeyTimes(p.keysUpdatedAt, out.settings.startMonth);
+  out.createdAt = ts(p.createdAt) ?? ts(p.updatedAt);
   out.updatedAt = ts(p.updatedAt);
   out.deletedAt = null;
   return isObj(p.snaps) || isObj(p.actuals) ? migrateFixes(out, p) : out;

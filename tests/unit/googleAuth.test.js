@@ -77,3 +77,11 @@ test('closing Google’s window, refusing Drive access, or no connection: each r
   const offline = googleAuth({ clientId: 'x', win: fakePage({ fails: true }) });
   await assert.rejects(offline.signIn(), e => e.type === 'offline');
 });
+
+test('a second sign-in while Google’s window is open settles the first as closed, so no caller waits forever', async () => {
+  const auth = googleAuth({ clientId: 'x', win: fakePage() });
+  const first = auth.signIn();
+  const second = auth.signIn();
+  await assert.rejects(first, e => e.type === 'closed');
+  assert.equal((await second).token, 'tok');
+});

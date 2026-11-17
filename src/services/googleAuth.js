@@ -6,8 +6,13 @@
  * Without a backend there is no refresh token: an access token lasts about an hour. After that, Google needs a click
  * to give a new one (a pop-up, which browsers only open from a click), so the status becomes "Sign in again".
  */
+/** The only access asked for: the app's own hidden folder in the person's Drive. */
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+/** Google Identity Services' script, loaded only when a sign-in is needed. */
 export const GIS_URL = 'https://accounts.google.com/gsi/client';
+
+/** The error a sign-in rejects with when Google's window closed without an answer (callers: nothing changed). */
+const closedError = () => Object.assign(new Error('closed'), { type: 'closed' });
 
 /** A Google sign-in for one client id. win: the page's window (injectable for tests). */
 export function googleAuth({ clientId, win = globalThis }) {
@@ -79,13 +84,23 @@ export function googleAuth({ clientId, win = globalThis }) {
           error_callback: error => {
             const p = pending;
             pending = null;
-            if (p) {
-              p.reject(Object.assign(new Error(error.type || 'closed'), { type: error.type || 'closed' }));
+            if (!p) {
+              return;
+            }
+            if (error.type) {
+              p.reject(Object.assign(new Error(error.type), { type: error.type }));
+            } else {
+              p.reject(closedError());
             }
           },
         });
       }
       return new Promise((resolve, reject) => {
+        if (pending) {
+          // a second sign-in while Google's window is still open: Google answers only the last request, so the
+          // first one is settled now, as closed, instead of waiting forever
+          pending.reject(closedError());
+        }
         pending = { resolve, reject };
         client.requestAccessToken({ prompt });
       });

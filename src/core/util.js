@@ -23,6 +23,23 @@ export const newId = () => {
   const x = [...b].map(n => n.toString(16).padStart(2, '0')).join('');
   return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20)}`;
 };
+/**
+ * `length` random characters of `alphabet` (at most 256 characters), from crypto.getRandomValues. Each character is
+ * equally likely: a byte that would favour the first characters (the top 256 % alphabet.length values) is drawn again.
+ * @returns {string}
+ */
+export const randomText = (alphabet, length) => {
+  const fair = 256 - (256 % alphabet.length);
+  let out = '';
+  while (out.length < length) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(length))) {
+      if (byte < fair && out.length < length) {
+        out += alphabet[byte % alphabet.length];
+      }
+    }
+  }
+  return out;
+};
 /** A record or plan id: the short ids the app makes (uid), or a UUID (newId). */
 export const ID_RE = /^(?:[a-z0-9]{4,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 export const pmt = (P, r, n) => (r ? (P * r) / (1 - Math.pow(1 + r, -n)) : P / n);

@@ -1,15 +1,15 @@
 /**
- * @file The installable app (PWA) and the site's files, at build time: a Vite plugin that adds them to the
- * single-file build.
+ * @file The installable app (PWA) at build time: a Vite plugin that adds it to the single-file build.
  *
  * - Next to the page it writes manifest.webmanifest (display standalone, start_url ./), its icons and screenshots as
- *   files, sw.js (the service worker), robots.txt and llms.txt: siteFiles(). These matter only where the page is
- *   served over http or https, and they go with it like sw.js does (a service worker must be a file on the same
- *   site). Manifest images are files, not data: URIs, so browser tools (DevTools' Manifest panel) can check them;
- *   ui/pwa.js links the manifest over http(s) only.
+ *   files, and sw.js (the service worker): siteFiles(). These matter only where the page is served over http or https,
+ *   and they go with it (a service worker must be a file on the same site). Manifest images are files, not data: URIs,
+ *   so browser tools (DevTools' Manifest panel) can check them; ui/pwa.js links the manifest over http(s) only.
+ *   No robots.txt: a hosted copy holds someone's personal finances, and search engines are not invited in.
  * - The page head gets the favicon (SVG) and the iOS home screen icon (PNG, 180 px) inline: opened as a file, the app
  *   still has its icons and depends on no other file.
- * - sw.js is named after a fingerprint of the page, so each build replaces the last.
+ * - sw.js keeps its name; its content, and the name of its cache, carry a fingerprint of the page, so each build is a
+ *   new worker to the browser.
  */
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -56,7 +56,10 @@ const SCREENSHOTS = [
 const pngSize = png => `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`;
 
 let cached = null;
-/** The files written next to the page, except sw.js: relative path → content. Drawn once per build. */
+/**
+ * The files written next to the page, except sw.js: relative path → content. Drawn once per build.
+ * @returns {Map<string, string|Buffer>}
+ */
 export function siteFiles() {
   if (!cached) {
     cached = new Map();
@@ -67,29 +70,14 @@ export function siteFiles() {
       cached.set(file, fs.readFileSync(path.join(HERE, file)));
     }
     cached.set(MANIFEST_URL.slice(2), JSON.stringify(manifest(), null, 2) + '\n');
-    cached.set('robots.txt', 'User-agent: *\nAllow: /\n');
-    cached.set(
-      'llms.txt',
-      `# ${APP.name}\n\n> ${DESCRIPTION}\n\n` +
-        `${APP.name} is a personal finance planner that runs entirely in the browser, from one HTML file. ` +
-        'It plans income, bills, budgets, subscriptions, transactions, trips and events, wishes, savings goals and ' +
-        'loans up to ten years ahead, and shows every month, a forecast, reviews and an audit of the plan.\n\n' +
-        '## Privacy\n\n' +
-        '- Works offline. The page contacts no other site, except Google sign-in and Google Drive when the person turns\n' +
-        '  sync on; from where it is served it loads only its own files (the QR tools, the texts to translate).\n' +
-        "- The data stays on the person's devices: in the browser's storage, in a JSON file of their choosing, and, if\n" +
-        '  they turn sync on, in a hidden app folder of their own Google Drive (optionally encrypted).\n' +
-        '- Plans can move between devices with QR codes, with no network.\n' +
-        '- There is no account of ours, no server-side data and nothing to crawl beyond this page.\n\n' +
-        '## App\n\n' +
-        `- [${APP.name}](./): the planner itself, one HTML file that also works offline\n` +
-        '- [Web app manifest](./manifest.webmanifest): name, icons and screenshots of the installable app\n',
-    );
   }
   return cached;
 }
 
-/** The web app manifest. */
+/**
+ * The web app manifest.
+ * @returns {object} the manifest, as written to manifest.webmanifest
+ */
 export function manifest() {
   return {
     name: `${APP.name} · money planner`,
@@ -116,7 +104,10 @@ export function manifest() {
   };
 }
 
-/** The icons in the page head: the browser tab (SVG) and the iOS home screen (PNG; iOS rounds the corners itself). */
+/**
+ * The icons in the page head: the browser tab (SVG) and the iOS home screen (PNG; iOS rounds the corners itself).
+ * @returns {object[]} Vite tag descriptors
+ */
 export function headTags() {
   return [
     { tag: 'link', attrs: { rel: 'icon', type: 'image/svg+xml', href: svgDataUri('any') }, injectTo: 'head' },
@@ -129,47 +120,52 @@ export function headTags() {
 }
 
 /**
- * The service worker. It keeps the app's page so the installed app opens offline, and opens it from that copy at
- * once while a fresh copy is fetched for the next time (stale-while-revalidate). It only handles GET requests for
- * its own folder; it never sees the plans (they are in the browser storage and the data file, not in requests;
- * Drive sync's requests go to Google, outside its folder, and pass it by). It also keeps the QR transfer modules and
- * the texts to translate, which the page loads only when used.
+ * The service worker. Each build is one version: at install it keeps that build's page (index.html, also answered for
+ * the folder itself) and the files its page loads only when used (the QR modules, the texts to translate) in a cache
+ * named after the build, and fails the install if any of them cannot be kept (the browser tries again on a later
+ * visit; the version before stays in charge). The manifest, icons and screenshots are kept too, if they can be.
+ *
+ * It answers only those files, always from its own cache (the network only for one it could not keep): anything else
+ * in its folder, and every other site, goes past it untouched, never cached. It never sees the plans (they are in the
+ * browser storage and the data file, not in requests; Drive sync's requests go to Google).
+ *
+ * A new build waits until every page of the old one is closed (no skipWaiting): an open page keeps the worker and the
+ * cache of its own version, so a QR module or the texts it loads later always match it, although their names do not
+ * change between builds. When the new worker activates, it removes the older runway- caches.
  * Written as a function so it is real, linted code; serviceWorker() turns it into sw.js.
  */
-function worker(CACHE, FILES) {
+function worker(CACHE, NEEDED, EXTRA) {
   const scope = self.registration.scope;
-  /** One copy per page, whatever its ?query or #part. */
+  const at = file => new URL(file, scope).href;
+  const PAGE = at('index.html');
+  /** Without its ?query or #part: one copy per file. */
   const key = url => {
     const u = new URL(url);
     u.hash = '';
     u.search = '';
     return u.href;
   };
+  /** Everything this worker answers: the page, as itself or as its folder, and the files of its build. */
+  const KNOWN = new Set([scope, PAGE, ...NEEDED.map(at), ...EXTRA.map(at)]);
+  /** Fetches one file into the cache; throws when it cannot. */
+  const keep = async (cache, url) => {
+    const response = await fetch(url, { cache: 'reload' });
+    if (!response.ok) {
+      throw new Error(`${url}: ${response.status}`);
+    }
+    await cache.put(url, response);
+  };
   self.addEventListener('install', event => {
     event.waitUntil(
       (async () => {
         const cache = await caches.open(CACHE);
-        // the page that registered the worker (the app's HTML file), or the folder itself
-        const pages = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        const urls = new Set(pages.map(c => key(c.url)).filter(url => url.startsWith(scope)));
-        if (!urls.size) {
-          urls.add(scope);
+        try {
+          await Promise.all([PAGE, ...NEEDED.map(at)].map(url => keep(cache, url)));
+        } catch (e) {
+          await caches.delete(CACHE);
+          throw e;
         }
-        // what the page loads only when used (the QR modules, the texts to translate): kept now for offline use
-        for (const file of FILES) {
-          urls.add(new URL(file, scope).href);
-        }
-        await Promise.all(
-          [...urls].map(async url => {
-            try {
-              const response = await fetch(url, { cache: 'reload' });
-              if (response.ok) {
-                await cache.put(url, response);
-              }
-            } catch (e) {} // offline while installing: the page is kept the next time it loads
-          }),
-        );
-        await self.skipWaiting();
+        await Promise.all(EXTRA.map(file => keep(cache, at(file)).catch(() => {})));
       })(),
     );
   });
@@ -187,24 +183,15 @@ function worker(CACHE, FILES) {
   });
   self.addEventListener('fetch', event => {
     const request = event.request;
-    if (request.method !== 'GET' || !request.url.startsWith(scope)) {
+    const url = key(request.url);
+    if (request.method !== 'GET' || !KNOWN.has(url)) {
       return;
     }
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE);
-        const kept = await cache.match(request, { ignoreSearch: true });
-        const fresh = fetch(request).then(async response => {
-          if (response.ok && response.type === 'basic') {
-            await cache.put(key(request.url), response.clone());
-          }
-          return response;
-        });
-        if (kept) {
-          event.waitUntil(fresh.catch(() => {}));
-          return kept;
-        }
-        return fresh;
+        const kept = await cache.match(url === scope ? PAGE : url);
+        return kept || fetch(request);
       })(),
     );
   });
@@ -212,18 +199,28 @@ function worker(CACHE, FILES) {
 
 /** The texts to translate (Export language), next to the page: loaded only when needed (vite.config.js). */
 export const TEXTS_FILE = 'i18n-texts.json';
-/** Files next to the page the worker keeps at install, beyond the page: what it loads only when used. */
-const CACHED_FILES = [...Object.values(QR_MODULES).map(m => m.file), TEXTS_FILE];
+/** Files next to the page that it loads only when used: kept at install with the page, or no install. */
+const NEEDED_FILES = [...Object.values(QR_MODULES).map(m => m.file), TEXTS_FILE];
+/** The other files the build writes next to the page (manifest, icons, screenshots): kept at install if they can be. */
+const extraFiles = () => [...siteFiles().keys()];
 
-/** The text of sw.js for one build. */
+/**
+ * The text of sw.js for one build.
+ * @param {string} version the build's fingerprint, which names its cache
+ * @returns {string}
+ */
 export function serviceWorker(version) {
+  const args = [JSON.stringify('runway-' + version), JSON.stringify(NEEDED_FILES), JSON.stringify(extraFiles())];
   return (
     `/* Runway service worker, build ${version}. Generated by build/pwa.js: edit it there. */\n` +
-    `(${worker.toString()})(${JSON.stringify('runway-' + version)}, ${JSON.stringify(CACHED_FILES)});\n`
+    `(${worker.toString()})(${args.join(', ')});\n`
   );
 }
 
-/** The Vite plugin. */
+/**
+ * The Vite plugin.
+ * @returns {object} a Vite plugin
+ */
 export function pwa() {
   let outDir = 'dist';
   let building = false;
@@ -234,7 +231,7 @@ export function pwa() {
       building = config.command === 'build';
     },
     transformIndexHtml: () => headTags(),
-    /** After the single file is written: the files that go next to it, and sw.js named after that file's content. */
+    /** After the single file is written: the files that go next to it, and sw.js with that file's fingerprint. */
     closeBundle() {
       const page = path.join(outDir, 'index.html');
       if (!building || !fs.existsSync(page)) {

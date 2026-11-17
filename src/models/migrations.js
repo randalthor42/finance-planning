@@ -94,14 +94,17 @@ export const MIGRATIONS = [
  * Runs the migrations the data needs, in order (raw is changed in place and returned as db). Data from a newer
  * version is left alone.
  * @param {Object|null} raw the database as stored (parsed JSON)
- * @param {Object} [options] now (epoch ms), migrations and target (tests)
+ * @param {Object} options now (epoch ms, required when anything is migrated), migrations and target (tests)
  * @returns {{db:Object|null, from:number, to:number, applied:string[]}}
  */
-export function migrate(raw, { now = Date.now(), migrations = MIGRATIONS, target = SCHEMA_VERSION } = {}) {
+export function migrate(raw, { now, migrations = MIGRATIONS, target = SCHEMA_VERSION } = {}) {
   const from = versionOf(raw);
   const applied = [];
   if (!isObj(raw) || from >= target) {
     return { db: raw, from, to: from, applied };
+  }
+  if (!Number.isFinite(now)) {
+    throw new Error('migrate needs the time to date records with (options.now)');
   }
   const steps = migrations.filter(m => m.to > from && m.to <= target).sort((a, b) => a.to - b.to);
   for (const m of steps) {

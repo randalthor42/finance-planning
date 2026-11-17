@@ -7,6 +7,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { APP } from '../../src/config.js';
 import { decodeDataFile } from '../../src/models/dataFile.js';
+import { dbText } from '../../src/models/db.js';
+import { planText } from '../../src/models/records.js';
 import { normPlan } from '../../src/models/plan.js';
 import { samplePlan } from '../../src/models/samplePlan.js';
 import { FileSync } from '../../src/state/fileSync.js';
@@ -535,7 +537,7 @@ test('the browser copy always matches the state after changes from the file', as
   await settle(a);
   await b.sync.check();
   b.store.flush();
-  assert.equal(b.adapter.text, JSON.stringify(b.store.db));
+  assert.equal(b.adapter.text, dbText(b.store.db, planText));
   assert.ok(
     b.store.db.log.some(e => e.text.includes(FILE)),
     'listed in the activity log',

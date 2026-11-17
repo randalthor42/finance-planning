@@ -120,7 +120,7 @@ function listen(page, into) {
     ok(!!head.icon && head.icon.startsWith('data:image/svg+xml,%3Csvg'), 'head: the favicon is inline SVG');
     ok(!!head.touch && head.touch[0] === '180x180' && head.touch[1].startsWith('data:image/png;base64,iVBOR'), 'head: the iOS icon is an inline 180 px PNG');
     ok(head.manifest === BASE + 'manifest.webmanifest', 'head: the manifest file next to the page is linked');
-    ok(/manifest-src 'self'/.test(head.csp) && /worker-src 'self'/.test(head.csp) && /connect-src 'self'/.test(head.csp) && /default-src 'none'/.test(head.csp), 'csp: its own site for the manifest, the worker and tools; nothing else');
+    ok(/manifest-src 'self'/.test(head.csp) && /worker-src 'self'/.test(head.csp) && /connect-src 'self'/.test(head.csp) && /default-src 'none'/.test(head.csp), 'csp: its own site for the manifest, the worker and its own files; nothing else');
 
     // Chrome's view of the manifest, and its install check
     const app = await cdp.send('Page.getAppManifest');
@@ -193,19 +193,6 @@ function listen(page, into) {
       'theme: and the light one',
     );
 
-    // a new build: the worker updates and drops the old cache
-    state.swSuffix = '\n// next build\n';
-    const next = await page.evaluate(async () => {
-      const reg = await navigator.serviceWorker.getRegistration();
-      await reg.update();
-      const worker = reg.installing || reg.waiting;
-      if (worker && worker.state !== 'activated') {
-        await new Promise(resolve => worker.addEventListener('statechange', () => worker.state === 'activated' && resolve()));
-      }
-      return caches.keys();
-    });
-    ok(next.length === 1, 'update: a new worker replaces the old one and its cache');
-
     // nothing outside its own folder, and the page itself still cannot fetch
     ok(outside.length === 0, 'network: no request outside the app’s folder' + (outside.length ? ': ' + outside.join(', ') : ''));
     ok(logs.length === 0, 'http: nothing in the console' + (logs.length ? ': ' + logs.join(' | ') : ''));
@@ -242,6 +229,31 @@ function listen(page, into) {
     } else {
       console.log('skip safe area: this Chromium cannot emulate it');
     }
+    // a new build: it waits while a page of the old one is open (that page keeps the files of its own version), then
+    // replaces the old worker and its cache once the page is closed
+    state.swSuffix = '
+// next build
+';
+    const waiting = await page.evaluate(async () => {
+      const reg = await navigator.serviceWorker.getRegistration();
+      await reg.update();
+      const worker = reg.installing || reg.waiting;
+      if (worker && worker.state === 'installing') {
+        await new Promise(resolve => worker.addEventListener('statechange', () => worker.state !== 'installing' && resolve()));
+      }
+      return { state: worker && worker.state, caches: (await caches.keys()).length };
+    });
+    ok(waiting.state === 'installed' && waiting.caches === 2, 'update: the new worker waits while the old page is open, both versions kept: ' + JSON.stringify(waiting));
+    await page.close();
+    let keys = [];
+    for (const deadline = Date.now() + 5000; Date.now() < deadline && keys.length !== 1; ) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const workers = ctx.serviceWorkers();
+      if (workers.length) {
+        keys = await workers[workers.length - 1].evaluate(() => caches.keys()).catch(() => keys);
+      }
+    }
+    ok(keys.length === 1, 'update: once the old page is closed, the new worker replaces the old one and its cache');
     await ctx.close();
   } catch (e) {
     ok(false, 'stopped: ' + (e && e.message ? e.message.split('\n')[0] : e));

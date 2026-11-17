@@ -315,3 +315,21 @@ test('a merged plan is already clean: normPlan changes no character of it', () =
     assert.equal(JSON.stringify(normPlan(JSON.parse(text))), text);
   }
 });
+
+test('change times are kept in sorted order: a plan merged with an identical copy of itself changes nothing', () => {
+  let p = base();
+  p = edit(p, d => (d.paid['2027-03'] = { 'bill:bill0001': true }), at(1));
+  p = edit(p, d => (d.paid['2027-01'] = { 'bill:bill0001': true }), at(2));
+  assert.deepEqual(Object.keys(p.keysUpdatedAt.paid.at), [...Object.keys(p.keysUpdatedAt.paid.at)].sort());
+  const r = mergeData(db(p), db(JSON.parse(JSON.stringify(p))));
+  assert.equal(r.localChanged, false);
+  assert.equal(r.remoteChanged, false);
+  assert.equal(r.plans[0], p, 'the same object: undo stays');
+});
+
+test('months before the plan’s first month keep no change times', () => {
+  const p = edit(base(), d => (d.paid['2026-11'] = { 'bill:bill0001': true }), at(1));
+  assert.ok(p.keysUpdatedAt.paid.at['2026-11 bill:bill0001']);
+  const rolled = normPlan({ ...p, settings: { ...p.settings, startMonth: '2027-01' } });
+  assert.deepEqual(rolled.keysUpdatedAt.paid.at, {}, 'dropped once the plan starts later');
+});

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { dbText, normDB } from '../../src/models/db.js';
 import { normPlan } from '../../src/models/plan.js';
 import { samplePlan } from '../../src/models/samplePlan.js';
+import { planText } from '../../src/models/records.js';
 import { PlanStore } from '../../src/state/store.js';
 import { memoryAdapter } from './helpers/fakeFiles.js';
 
@@ -52,7 +53,7 @@ test('what is saved always matches the state, after every kind of change', () =>
   const adapter = store.adapter;
   const check = label => {
     store.flush();
-    assert.equal(adapter.text, JSON.stringify(store.db), label);
+    assert.equal(adapter.text, dbText(store.db, planText), label);
   };
   store.commit(p => p.bills.push({ name: 'Climbing', amount: 30 }), 'add');
   check('commit');
@@ -82,7 +83,7 @@ test('a change serialises only the plan that changed', () => {
   store.flush();
   // the same string, not an equal one: the untouched plan was not serialised again
   assert.ok(Object.is(store.textOf(other), before));
-  assert.equal(store.textOf(store.plan), JSON.stringify(store.plan));
+  assert.equal(store.textOf(store.plan), planText(store.plan));
 });
 
 test('renaming replaces the plan object, so a cached text can never be stale', () => {
@@ -116,7 +117,7 @@ test('planList gives every plan with its text, in order', () => {
     Object.keys(store.db.plans),
   );
   for (const p of list) {
-    assert.equal(p.text, JSON.stringify(store.db.plans[p.id]));
+    assert.equal(p.text, planText(store.db.plans[p.id]));
     assert.ok(p.plan === store.db.plans[p.id]);
   }
 });
@@ -141,14 +142,14 @@ test('replacePlans: changes from the file replace the plans, keep undo when the 
   const rev = store.rev;
   let renders = 0;
   store.onChange = () => renders++;
-  store.replacePlans([{ plan: open }, { plan: changedOther, text: JSON.stringify(changedOther) }], 'From file');
+  store.replacePlans([{ plan: open }, { plan: changedOther, text: planText(changedOther) }], 'From file');
   assert.equal(store.db.plans[other.id].name, 'Second, from the file');
   assert.equal(store.undoS.length, 1, 'undo still works on the open plan');
   assert.equal(store.rev, rev, 'the open plan did not change: no new projection');
   assert.equal(renders, 1);
   assert.equal(store.db.log.at(-1).text, 'From file');
   store.flush();
-  assert.equal(store.adapter.text, JSON.stringify(store.db));
+  assert.equal(store.adapter.text, dbText(store.db, planText));
 });
 
 test('replacePlans: when the open plan changed, the projection follows and undo starts again', () => {
@@ -186,18 +187,19 @@ test('adoptMerged: a merge result (Drive sync) replaces plans and takes its dele
   assert.equal(store.rev, rev);
   assert.equal(store.db.log.at(-1).text, 'Synced');
   store.flush();
-  assert.equal(store.adapter.text, JSON.stringify(store.db));
+  assert.equal(store.adapter.text, dbText(store.db, planText));
 });
 
 test('storageUse counts what is really stored', () => {
   const store = storeWith(samplePlan());
   const use = store.storageUse();
-  assert.equal(use.chars, JSON.stringify(store.db).length + store.adapter.key.length);
+  assert.equal(use.chars, dbText(store.db, planText).length + store.adapter.key.length);
 });
 
 /* Start-up: only the open plan is cleaned at once; the others when first needed, or when the browser is idle. */
 function storedWith(...plans) {
   const adapter = memoryAdapter(normDB({ plans: Object.fromEntries(plans.map(p => [p.id, p])), active: plans[0].id }));
+  adapter.text = dbText(JSON.parse(adapter.text), planText); // stored as the app stores it (planText)
   const store = new PlanStore(adapter);
   return { store, adapter };
 }
@@ -308,4 +310,35 @@ test('data never stored with dates in this browser is migrated with today’s da
   store.init();
   assert.equal(store.plan.bills[0].updatedAt, 1_790_000_000_000);
   assert.ok(marked >= 8, 'this browser now knows it stores dated data');
+});
+
+test('a clock put back never dates an edit before the version it replaces', () => {
+  const store = storeWith(samplePlan());
+  let clock = 2_000_000;
+  store.clock = () => clock;
+  store.commit(p => (p.bills[0].amount = 50), 'first');
+  const first = store.plan.bills[0].updatedAt;
+  clock = 1_000; // the device's clock was put back
+  store.commit(p => (p.bills[0].amount = 60), 'second');
+  assert.ok(store.plan.bills[0].updatedAt > first, 'still later than the edit before');
+  assert.ok(store.plan.updatedAt > first);
+});
+
+test('a merged change from a device whose clock runs ahead does not make later edits here lose', () => {
+  const store = storeWith(samplePlan());
+  store.clock = () => 1_000_000;
+  const ahead = { ...store.plan, name: 'From the future', updatedAt: 9_000_000 };
+  store.adoptMerged([ahead], {}, 'merged');
+  store.commit(p => (p.name = 'Mine, later'), 'rename');
+  assert.ok(store.plan.updatedAt > 9_000_000);
+});
+
+test('a first start records that this browser stores dated data', () => {
+  const adapter = memoryAdapter(null);
+  let marked = 0;
+  adapter.markSchema = v => (marked = v);
+  const store = new PlanStore(adapter);
+  store.later = () => {};
+  store.init();
+  assert.ok(marked >= 8);
 });

@@ -28,6 +28,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.15.0",
+    "esbuild": "^0.25.12",
     "globals": "^17.14.0",
     "playwright": "^1.48.0",
     "prettier": "^3.10.1",

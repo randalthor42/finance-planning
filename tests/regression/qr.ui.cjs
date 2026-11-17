@@ -90,8 +90,6 @@ const FAKE_CAMERA = `(() => {
     await d.page.locator('dialog .qr-speed').getByRole('button', { name: 'Fast' }).click();
     const code = await d.page.locator('[data-transfer-code]').getAttribute('data-transfer-code');
     ok((await d.page.locator('[data-transfer-code]').textContent()) !== code, 'send: the code is hidden while the loop runs');
-    await d.page.getByRole('button', { name: 'Show the code' }).click();
-    ok((await d.page.locator('[data-transfer-code]').textContent()) === code, 'send: shown when asked for');
     const total = +(/of (\d+)/.exec(await d.page.locator('[data-qr-counter]').textContent())[1]);
     const frames = new Map();
     const end = Date.now() + 10000;
@@ -103,6 +101,14 @@ const FAKE_CAMERA = `(() => {
       frames.set(n, url);
       await d.page.waitForTimeout(40);
     }
+    // the code shown: the loop stops (no photo catches both); it can be started again for missed codes
+    await d.page.getByRole('button', { name: 'Show the code' }).click();
+    ok((await d.page.locator('[data-transfer-code]').textContent()) === code, 'send: shown when asked for');
+    ok((await d.page.locator('dialog canvas.qr-canvas').count()) === 0, 'send: the loop stops while the code is shown');
+    await d.page.getByRole('button', { name: 'Show the QR codes again' }).click();
+    await d.page.waitForSelector('dialog canvas.qr-canvas[data-frame]');
+    ok((await d.page.locator('[data-transfer-code]').textContent()) !== code, 'send: the loop again, the code hidden again');
+    await d.page.getByRole('button', { name: 'Show the code' }).click();
     return { code, total, frames };
   }
   /**
@@ -168,7 +174,12 @@ const FAKE_CAMERA = `(() => {
     await show(B, foreign[1], 'RW1:zzzzzz:1:');
     ok(/another transfer/.test(await message(B)), 'B: a code of another transfer is refused: ' + (await message(B)));
     await B.page.screenshot({ path: path.join(SHOTS, 'qr-2-receive.png') });
-    for (const n of order.slice(firstHalf.length)) await show(B, sent.frames.get(n), n);
+    const rest = order.slice(firstHalf.length);
+    for (const n of rest.slice(0, -1)) await show(B, sent.frames.get(n), n);
+    const lastOne = rest[rest.length - 1];
+    const waiting = await B.page.locator('[data-qr-missing]').textContent();
+    ok(waiting === `Waiting for codes ${lastOne}`, `B: the missing code is named: “${waiting}”`);
+    await show(B, sent.frames.get(lastOne), lastOne);
     await B.page.waitForSelector('.qr-code-input');
     ok(true, 'B: every code in: it asks for the one-time code');
     ok(await B.page.evaluate(() => !document.querySelector('.qr-video') || !document.querySelector('.qr-video').srcObject), 'B: the camera is off');
@@ -260,6 +271,12 @@ const FAKE_CAMERA = `(() => {
     await B.page.getByRole('button', { name: 'Receive', exact: true }).click();
     await B.page.waitForFunction(() => /may not use the camera/.test(document.querySelector('[data-qr-message]').textContent));
     ok(true, 'B: camera refused: says how to allow it');
+    const camerasBefore = await B.page.evaluate(() => window.__cameras);
+    await B.page.evaluate(() => (window.__cameraDenied = false));
+    await B.page.getByRole('button', { name: 'Start over' }).click();
+    await B.page.waitForFunction(n => window.__cameras === n + 1, camerasBefore);
+    ok(/Point the camera/.test(await progress(B)), 'B: allowed now: Start over starts the camera again');
+    await B.page.keyboard.press('Escape');
 
     // ------------------------------------------------------------------- the file to hand out, from disk
     const F = await browser.newContext();

@@ -1,6 +1,7 @@
 /**
  * @file Merging two copies of the data record by record: this device's ("local") and another's ("remote": the Drive
- * file, a QR transfer, an imported backup). Pure. Used by Drive sync (state/driveSync.js) and the import preview.
+ * file, the data file, a QR transfer, an imported backup). Pure. Used by Drive sync (state/driveSync.js), the data file
+ * (state/fileSync.js) and the import preview (ui/modals/importPreview.js).
  *
  * Rules (see docs/sync.md):
  * - Per record id, the version with the newer updatedAt wins. A deleted record (deletedAt) is a version like any
@@ -149,7 +150,8 @@ function mergeMap(L, R, f) {
     const rv = r.values[path];
     let take = tl > tr ? lv : rv;
     if (tl === tr) {
-      take = tieBreak(lv === undefined ? null : lv, rv === undefined ? null : rv) === 'local' ? lv : rv;
+      const orNull = v => (v === undefined ? null : v);
+      take = tieBreak(orNull(lv), orNull(rv)) === 'local' ? lv : rv;
     }
     if (take !== undefined) {
       values[path] = take;
@@ -190,6 +192,14 @@ function mergeTripCosts(L, R, trips) {
     return { ...trip, items };
   });
   return { trips: out, local, remote };
+}
+
+/** What the import preview says of a plan: new here, changed by the merge, or the same. */
+function previewStatus(local, merged) {
+  if (!local) {
+    return 'new';
+  }
+  return merged.local ? 'merged' : 'same';
 }
 
 /** Both sides have the plan: records, deleted records, own fields. */
@@ -324,7 +334,7 @@ export function mergeData(local, remote) {
     summary.push({
       id,
       name: m.plan.name,
-      status: !L ? 'new' : m.local ? 'merged' : 'same',
+      status: previewStatus(L, m),
       ...c,
     });
   }

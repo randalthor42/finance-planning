@@ -4,6 +4,7 @@
  *   node scripts/heavy-data.mjs [6|7] > heavy.json   the database, as the app stores it (localStorage "runway.db.v1")
  * Version 7 (the default) is the current format, with dates on every record; 6 is the format before it.
  */
+import { pathToFileURL } from 'node:url';
 import { APP } from '../src/config.js';
 import { D, M } from '../src/core/dates.js';
 import { normDB } from '../src/models/db.js';
@@ -279,6 +280,6 @@ function heavyDbOf() {
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.stdout.write(JSON.stringify(heavyDb({ version: +(process.argv[2] || APP.schema) })));
 }

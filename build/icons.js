@@ -18,7 +18,9 @@ export const LOGO = {
   ],
   width: 2.6,
 };
+/** The square's colour: the app's accent. */
 export const ACCENT = '#2457d6';
+/** The line's colour. */
 export const INK = '#ffffff';
 
 const hex = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
@@ -26,6 +28,9 @@ const hex = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
 /**
  * The SVG. variant 'any': the rounded square on transparent; 'full': the square to the edges (the platform cuts its
  * own shape), with the line scaled by `scale` around the centre.
+ * @param {'any'|'full'} [variant]
+ * @param {number} [scale] size of the line, 1 = as in the logo
+ * @returns {string} the SVG text
  */
 export function iconSvg(variant = 'any', scale = 1) {
   const s = LOGO.size;
@@ -58,7 +63,13 @@ function roundedSquare(px, py, s, r) {
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
-/** RGBA pixels of the icon at `px` pixels. Same variants as iconSvg. */
+/**
+ * RGBA pixels of the icon at `px` pixels, drawn with signed distances for smooth edges. Same variants as iconSvg.
+ * @param {number} px width and height
+ * @param {'any'|'full'} [variant]
+ * @param {number} [scale]
+ * @returns {Uint8Array} px × px × 4 bytes, row by row
+ */
 export function iconPixels(px, variant = 'any', scale = 1) {
   const s = LOGO.size;
   const unit = px / s; // pixels per grid unit
@@ -113,6 +124,13 @@ function chunk(type, data) {
   tail.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
   return Buffer.concat([head, data, tail]);
 }
+/**
+ * A PNG file of RGBA pixels (8 bits per channel, no filter, zlib at level 9).
+ * @param {Uint8Array} rgba width × height × 4 bytes, row by row
+ * @param {number} width
+ * @param {number} height
+ * @returns {Buffer} the PNG file
+ */
 export function encodePng(rgba, width, height) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
@@ -132,6 +150,19 @@ export function encodePng(rgba, width, height) {
   ]);
 }
 
+/**
+ * The icon as a PNG data: URI, for the page head (the iOS home screen icon).
+ * @param {number} px width and height
+ * @param {'any'|'full'} [variant]
+ * @param {number} [scale]
+ * @returns {string}
+ */
 export const pngDataUri = (px, variant, scale) =>
   'data:image/png;base64,' + encodePng(iconPixels(px, variant, scale), px, px).toString('base64');
+/**
+ * The icon as an SVG data: URI, for the page head (the favicon).
+ * @param {'any'|'full'} [variant]
+ * @param {number} [scale]
+ * @returns {string}
+ */
 export const svgDataUri = (variant, scale) => 'data:image/svg+xml,' + encodeURIComponent(iconSvg(variant, scale));

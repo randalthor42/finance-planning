@@ -58,22 +58,38 @@ const warned = new Set();
 const drawnOnce = new Set();
 
 /**
+ * Builds one lazy card in place of its stand-in. A card with nothing to show, or whose building failed, gives up its
+ * place, as for a card that is null; the error is thrown again in a task of its own, so the global error reporter
+ * (main.js) sees it and the cards after it are still built.
+ */
+function buildOne(spec, spot) {
+  let el = null;
+  try {
+    el = spec.el();
+  } catch (e) {
+    setTimeout(() => {
+      throw e;
+    }, 0);
+  }
+  if (el) {
+    spot.replaceWith(el);
+  } else {
+    spot.parentElement.remove();
+  }
+}
+
+/**
  * Builds the lazy cards of a first drawing, after the page is painted, one card per task (each stays well under the
  * 50 ms of a "long task"), in page order. A card whose page was drawn again meanwhile is skipped (it is gone).
  */
 function buildLater(queue) {
   const next = () => {
     const [spec, spot] = queue.shift();
-    if (spot.isConnected) {
-      const el = spec.el();
-      if (el) {
-        spot.replaceWith(el);
-      } else {
-        spot.parentElement.remove(); // nothing to show: its place stays free, as for a card that is null
-      }
-    }
     if (queue.length) {
-      setTimeout(next, 0);
+      setTimeout(next, 0); // first, so a card that fails cannot stop the ones after it
+    }
+    if (spot.isConnected) {
+      buildOne(spec, spot);
     }
   };
   requestAnimationFrame(() => setTimeout(next, 0));
