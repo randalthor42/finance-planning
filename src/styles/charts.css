@@ -65,7 +65,11 @@
   color: var(--text);
 }
 .legend button[aria-pressed='false'] {
-  opacity: 0.45;
+  color: var(--faint);
+  text-decoration: line-through;
+}
+.legend button[aria-pressed='false'] i {
+  opacity: 0.35;
 }
 .legend i {
   width: 10px;

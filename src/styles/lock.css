@@ -1,0 +1,92 @@
+/* The app lock (ui/lock.js) and what goes with it: the lock screen, the settings' warning, overdue reminders. */
+
+/* locked: nothing of the app shows behind the lock screen, not even an open window, menu or the day sheet */
+html.locked #app,
+html.locked #toasts,
+html.locked .skip,
+html.locked .sheet,
+html.locked .sheet-scrim,
+html.locked .mpop,
+html.locked dialog.modal {
+  visibility: hidden;
+}
+dialog.lockscreen {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  border: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+dialog.lockscreen[open] {
+  display: grid;
+  place-items: center;
+}
+dialog.lockscreen::backdrop {
+  background: var(--bg);
+}
+.lock-in {
+  display: grid;
+  gap: 12px;
+  width: min(360px, 92vw);
+  padding: 24px;
+  text-align: center;
+}
+.lock-in h2 {
+  font-size: 1.3rem;
+}
+.lock-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 4px;
+}
+.lock-form {
+  display: flex;
+  gap: 8px;
+}
+.lock-pin {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.3rem;
+  text-align: center;
+  letter-spacing: 0.3em;
+}
+.lock-msg {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--bad);
+  font-weight: 500;
+}
+.lock-forgot {
+  text-align: left;
+  font-size: 0.9rem;
+}
+.lock-forgot summary {
+  color: var(--accent);
+  cursor: pointer;
+}
+.lock-erase {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+.switch-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.lock-note {
+  margin-bottom: 12px;
+  align-items: flex-start;
+}
+.pin-inp {
+  letter-spacing: 0.2em;
+}
+/* a payment whose day passed without a tick */
+.row.overdue .t {
+  color: var(--bad);
+}

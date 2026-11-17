@@ -6,6 +6,7 @@ import { sv } from './dom.js';
 const ICONS = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  agenda: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3v3H8z',
   repeat: 'M4 10V8a2 2 0 012-2h12l-3-3M20 14v2a2 2 0 01-2 2H6l3 3',
   tag: 'M3 12V4h8l10 10-8 8L3 12zM7.5 8.5h.01',
   plane: 'M3 11l18-7-6 17-3-7-9-3z',
@@ -35,6 +36,9 @@ const ICONS = {
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
   clock: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2',
+  eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z',
+  eyeoff: 'M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c6.4 0 10 6 10 6a17 17 0 01-3.1 3.8M6.6 6.6C3.7 8.4 2 12 2 12s3.6 6 10 6c1.6 0 3-.4 4.3-1M9.9 9.9a3 3 0 004.2 4.2',
+  lock: 'M6 11h12v10H6zM8 11V8a4 4 0 018 0v3',
 };
 export const icon = n =>
   sv(

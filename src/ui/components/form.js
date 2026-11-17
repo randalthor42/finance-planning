@@ -101,6 +101,13 @@ function fieldEl(f, v, ctx) {
       v[f.k] = isFinite(x) ? x : f.blank ? null : 0;
       changed();
     });
+  } else if (f.type === 'time') {
+    // a time of day, 'HH:MM', or '' when left empty (the browser's own time picker)
+    c = h('input', { class: 'inp num', type: 'time', value: v[f.k] || '', step: 60 });
+    c.addEventListener('input', () => {
+      v[f.k] = c.value;
+      changed();
+    });
   } else if (f.type === 'select') {
     c = h(
       'select',
@@ -241,7 +248,8 @@ function fieldEl(f, v, ctx) {
 }
 /**
  * Declarative form in a modal. onSave(values) returns an error string to keep the modal open.
- * auto:true lets the form follow the autosave setting. Field options: show(v), live (redraw on change), then(v) -> keys of other fields to refresh,
+ * auto:true lets the form follow the autosave setting. Types: text, pass, area, money, num, select, month, date,
+ * time ('HH:MM' or ''), seg, lines, toggle, sec, custom. Field options: show(v), live (redraw on change), then(v) -> keys of other fields to refresh,
  * hint (short line under the field), info (longer explanation behind an "i" button).
  * type 'custom': render(values, apply) returns an element; apply({ key: value }) fills fields (e.g. quick picks).
  */

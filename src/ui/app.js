@@ -10,9 +10,11 @@ import { $, h, sv } from './dom.js';
 import { icon } from './icons.js';
 import { searchModal } from './modals/search.js';
 import { UI } from './state.js';
+import { Lock, applyPrivacy } from './lock.js';
+import { checkReminders } from './reminders.js';
 import { FTABS } from './views/forecast.js';
 import { langPicker } from './views/language.js';
-import { V } from './views/registry.js';
+import { LEAVE, V } from './views/registry.js';
 import { STABS } from './views/settings.js';
 import { TOOLS } from './views/tools.js';
 
@@ -41,6 +43,7 @@ const NAV = [
   [
     $t('Plans and goals'),
     [
+      ['agenda', $t('My calendar'), 'agenda'],
       ['trips', $t('Trips and events'), 'plane'],
       ['wishes', $t('Wishlist'), 'star'],
       ['goals', $t('Savings goals'), 'target'],
@@ -129,6 +132,41 @@ function renderSide() {
       },
       icon('redo'),
     );
+  // hidden amounts: the eye shows or hides them; the lock: lock now (both only when turned on in the settings)
+  const eye = () => {
+    if (!Store.db.hideAmounts) {
+      return null;
+    }
+    return h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn ghost icon',
+        'aria-label': UI.revealed ? $t('Hide amounts') : $t('Show amounts'),
+        'aria-pressed': String(!!UI.revealed),
+        title: UI.revealed ? $t('Hide amounts') : $t('Show amounts'),
+        onclick: () => {
+          UI.revealed = !UI.revealed;
+          App.render();
+        },
+      },
+      icon(UI.revealed ? 'eyeoff' : 'eye'),
+    );
+  };
+  const lockNow = () =>
+    Lock.enabled()
+      ? h(
+          'button',
+          {
+            type: 'button',
+            class: 'btn ghost icon',
+            'aria-label': $t('Lock now'),
+            title: $t('Lock now'),
+            onclick: () => Lock.lock(),
+          },
+          icon('lock'),
+        )
+      : null;
   const item = n => {
     const hasSub = !!SUBS[n[0]] && UI.view === n[0];
     const sub = hasSub && !UI.subClosed ? SUBS[n[0]]() : null;
@@ -210,6 +248,8 @@ function renderSide() {
         h('i'),
         h('span', { text: Store.saveOk ? $t('Saved') : $t('Not saved!') }),
       ),
+      eye(),
+      lockNow(),
       undo(),
       redo(),
     ),
@@ -230,12 +270,19 @@ function renderSide() {
     home(),
     h('b', { text: current ? current[1] : APP.name }),
     h('span', { class: 'grow' }),
+    ...[eye(), lockNow()].filter(Boolean), // replaceChildren would write null as text
     undo(),
     redo(),
   );
 }
+/** The page was opened from the menu: its title gets the focus when it is drawn (see App.go). */
+let focusPage = false;
 export const App = {
   render() {
+    if (!Store.db) {
+      return; // encrypted data not opened yet: the lock screen is all there is
+    }
+    applyPrivacy();
     if (POP && !POP.closest('dialog')) {
       closePop();
     }
@@ -274,6 +321,15 @@ export const App = {
     main.replaceChildren(...[content].flat(Infinity).filter(Boolean));
     main.dataset.view = view;
     scrollTo(0, same ? y : 0);
+    // the tab and a screen reader's page list name the page ("Month planner · Runway")
+    const h1 = main.querySelector('h1');
+    document.title = h1 && h1.textContent ? `${h1.textContent} · ${APP.name}` : APP.name;
+    if (!same && focusPage && h1) {
+      // opened from the menu: a screen reader starts reading the new page, and Tab goes on from its title
+      h1.tabIndex = -1;
+      h1.focus({ preventScroll: true });
+    }
+    focusPage = false;
   },
   /** Fold or unfold the sub-sections of the open menu item. */
   toggleSub() {
@@ -281,6 +337,13 @@ export const App = {
     App.render();
   },
   go(view, o) {
+    // a page may ask something first (My calendar: add the drafts to the plan?), then go on with proceed
+    if (view !== UI.view && LEAVE[UI.view] && LEAVE[UI.view](() => App.go(view, o))) {
+      return;
+    }
+    // chosen in the menu (side bar or top bar): the focus moves to the new page's title once it is drawn
+    const active = document.activeElement;
+    focusPage = view !== UI.view && !!active && !!active.closest && !!active.closest('#side, #top');
     if (view !== UI.view) {
       UI.design = null;
     }
@@ -298,9 +361,16 @@ export const App = {
   },
   /** The overview and "this month" follow the real date: when the day changes, everything is recomputed. */
   tick() {
+    if (!Store.db) {
+      return;
+    }
     if (D.today() !== Store.day && !document.querySelector('dialog[open]')) {
       Store.recalc();
       App.render();
     }
+    if (!document.hidden) {
+      Lock.markActive();
+    }
+    checkReminders();
   },
 };

@@ -14,9 +14,34 @@ import { confirmModal } from '../components/modal.js';
 import { toast } from '../components/toast.js';
 import { h } from '../dom.js';
 
+/** The name of each setting, for the activity log. */
+const NAMES = () => ({
+  weekStart: $t('Week starts on'),
+  fixedWeeks: $t('Always six weeks'),
+  maxChips: $t('Lines per day'),
+  trips: $t('Trips as bars'),
+  legend: $t('Legend'),
+  overview: $t('Show the calendar on the Overview'),
+  overviewGroups: $t('What the Overview calendar shows'),
+  plannerFigure: $t('Number on each day'),
+  menus: $t('Use context menus'),
+  add: $t('What the day menu can add'),
+  line: $t('What the menu of a line can do'),
+});
+/** "Calendar settings: Legend: off" — what changed, with its new value when it is a switch. */
+function changeText(change) {
+  const names = NAMES();
+  const parts = Object.entries(change).map(([key, value]) => {
+    if (typeof value !== 'boolean') {
+      return names[key] || key;
+    }
+    return $t('{0}: {1}', names[key] || key, value ? $t('on') : $t('off'));
+  });
+  return $t('Calendar settings: {0}', parts.join(', '));
+}
 /** Saves a change. The page is drawn again, so the focus goes back to the control that made the change. */
 function save(change, focusKey) {
-  Store.setPref('calendar', { ...Store.db.calendar, ...change });
+  Store.setPref('calendar', { ...Store.db.calendar, ...change }, changeText(change));
   const target = focusKey && document.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`);
   if (target) {
     target.focus();
@@ -103,7 +128,7 @@ export function calendarSettingsCards() {
           $t('Every calendar setting on this page goes back to how it started, in this browser.'),
           $t('Reset'),
           () => {
-            Store.setPref('calendar', calendarDefaults());
+            Store.setPref('calendar', calendarDefaults(), $t('Calendar settings are back to how they started'));
             toast($t('Calendar settings are back to how they started.'));
           },
           'primary',

@@ -10,10 +10,32 @@ export const I18N = {
   dict: null,
   pr: null,
   po: null,
-  KEYS: [],
-  WORDS: [],
+  /**
+   * Every text of the app (KEYS) and every counted word (WORDS), for "Export language" and the Language card. They are
+   * read the first time they are needed, not when the app starts: about 1 300 texts nobody needs to open a page
+   * (vite.config.js i18nKeys keeps them in the page as inert JSON). useKeys(load) says where they come from.
+   */
+  keysLoader: null,
+  keysLoaded: null,
+  useKeys(load) {
+    this.keysLoader = load;
+    this.keysLoaded = null;
+  },
+  texts() {
+    if (!this.keysLoaded) {
+      const loaded = this.keysLoader ? this.keysLoader() : null;
+      this.keysLoaded = { KEYS: (loaded && loaded.KEYS) || [], WORDS: (loaded && loaded.WORDS) || [] };
+    }
+    return this.keysLoaded;
+  },
+  get KEYS() {
+    return this.texts().KEYS;
+  },
+  get WORDS() {
+    return this.texts().WORDS;
+  },
   ORD: { one: 'st', two: 'nd', few: 'rd', other: 'th' },
-  IRREG: { person: 'people', entry: 'entries', wish: 'wishes' },
+  IRREG: { person: 'people', entry: 'entries', wish: 'wishes', try: 'tries' },
   init() {
     try {
       const raw = JSON.parse(localStorage.getItem(this.KEY));

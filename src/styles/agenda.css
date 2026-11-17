@@ -1,0 +1,150 @@
+/* My calendar (views/agenda.js) and its windows: drafts bar, review and apply, customise, add from your plan.
+   The calendar itself is calendar.css. */
+
+/* the drafts bar above the calendar */
+.agenda-drafts {
+  align-items: center;
+  margin-bottom: 14px;
+  border: 1px dashed var(--warn-edge);
+  background: var(--warn-tint);
+}
+.agenda-drafts .ico {
+  color: var(--warn);
+}
+.agenda-drafts .small {
+  color: var(--muted);
+}
+.agenda-card {
+  padding-top: 14px;
+}
+
+/* review and apply: one row per draft with its tick box, then what the ticked ones change */
+.agenda-apply {
+  margin: 10px 0 14px;
+}
+.agenda-apply-r {
+  cursor: pointer;
+  gap: 10px;
+}
+.agenda-apply-r .check {
+  flex: none;
+}
+.agenda-impact {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.agenda-impact-h {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.agenda-impact-r {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 0.9rem;
+}
+.agenda-impact-r .l {
+  flex: 1 1 180px;
+  color: var(--muted);
+}
+.agenda-impact-r .b {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--faint);
+}
+.agenda-impact-r .arrow {
+  color: var(--faint);
+}
+.agenda-impact-r .bad {
+  color: var(--bad);
+}
+.agenda-impact-r .warn {
+  color: var(--warn);
+}
+.agenda-impact-r .good {
+  color: var(--good);
+}
+
+/* customise: own calendars with their colours, layers and categories as on/off buttons */
+.agenda-cals {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.agenda-cal-r {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.agenda-cal-r > .inp {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.agenda-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.agenda-sw {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--cal-c);
+  background-clip: content-box;
+}
+.agenda-sw[aria-pressed='true'] {
+  border-color: var(--text);
+}
+.agenda-sw:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.agenda-layers .cal-lg,
+.agenda-cats .cal-lg {
+  cursor: pointer;
+}
+.agenda-cats .cal-lg[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.agenda-cats .cal-lg[aria-pressed='false'] span {
+  text-decoration: none;
+}
+
+/* add from your plan: a search field, then records by kind with tick boxes */
+.agenda-pick {
+  display: grid;
+  gap: 10px;
+}
+.agenda-pick .inp[type='search'] {
+  width: 100%;
+}
+.agenda-pick-r {
+  cursor: pointer;
+  gap: 10px;
+}
+.agenda-pick-r[hidden],
+.agenda-pick-g[hidden] {
+  display: none;
+}
+/* a button under a list of the form (Add a calendar, Every category) sits at the start, like the form's own */
+.agenda-set .fld > .btn,
+.agenda-cats > .btn {
+  align-self: flex-start;
+  justify-self: start;
+}
+/* delete one day, the following days or every day: three answers and Cancel, wrapping on a narrow window */
+.agenda-scope .modal-f {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.agenda-scope .modal-f .sp {
+  flex: 1 1 0;
+}

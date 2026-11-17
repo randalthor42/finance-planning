@@ -4,6 +4,7 @@
 import { $t, I18N } from '../../core/i18n.js';
 import { has } from '../../core/util.js';
 import { IO } from '../../services/backup.js';
+import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { btn, ibtn } from '../components/button.js';
 import { card, chip } from '../components/layout.js';
@@ -118,7 +119,7 @@ export function langPicker() {
                   type: 'button',
                   role: 'menuitem',
                   class: l.code === I18N.lang ? 'on' : '',
-                  onclick: () => I18N.setLang(l.code),
+                  onclick: () => useLanguage(l),
                 },
                 flag(l.flag),
                 ' ',
@@ -129,6 +130,13 @@ export function langPicker() {
         }),
   );
   return b;
+}
+/** Switches the language (the page reloads): written down in the log first, like every change. */
+function useLanguage(l) {
+  if (l.code !== I18N.lang) {
+    Store.note($t('Language: {0}', l.name));
+  }
+  I18N.setLang(l.code);
 }
 function importLanguage() {
   const input = h('input', { type: 'file', accept: '.json,application/json' });
@@ -152,6 +160,7 @@ function importLanguage() {
           { kind: 'bad' },
         );
       }
+      Store.note($t('Added the language “{0}”', r.name));
       toast($t('Language “{0}” added', r.name));
       App.render();
     });
@@ -193,7 +202,7 @@ export function languageCard() {
             h(
               'div',
               { class: 'acts' },
-              l.code !== I18N.lang ? btn($t('Use'), () => I18N.setLang(l.code), 'sm') : null,
+              l.code !== I18N.lang ? btn($t('Use'), () => useLanguage(l), 'sm') : null,
               btn(
                 $t('Export'),
                 () => IO.download(`runway-language-${l.code}.json`, I18N.exportPack(l.code)),
@@ -211,6 +220,7 @@ export function languageCard() {
                         ),
                         $t('Remove'),
                         () => {
+                          Store.note($t('Removed the language “{0}”', l.name));
                           I18N.remove(l.code);
                           App.render();
                         },

@@ -10,7 +10,7 @@ import { clamp, uid } from '../../core/util.js';
 import { CATS, INCATS } from '../../models/categories.js';
 import { Store } from '../../state/store.js';
 import { NOTE, formModal } from '../components/form.js';
-import { find, need, remove, upsert } from '../helpers.js';
+import { find, inPlan, need } from '../helpers.js';
 import { h } from '../dom.js';
 import { UI, curK, selK } from '../state.js';
 
@@ -49,8 +49,11 @@ function quickPickField(plan) {
   };
 }
 
-export function itemModal(id, preset, title) {
-  const current = id && find('items', id);
+/**
+ * The window of a one-off. `target` is where it saves (helpers.js): the plan, or the drafts of My calendar.
+ */
+export function itemModal(id, preset, title, target = inPlan) {
+  const current = id && target.find('items', id);
   const plan = Store.plan;
   const budgets = plan.bills.filter(b => b.budget);
   const names = () => [...new Set(plan.items.map(i => i.name).filter(Boolean))].slice(-60);
@@ -58,20 +61,26 @@ export function itemModal(id, preset, title) {
   const inCurrentMonth = selK() === curK();
   formModal({
     preview: v => {
+      const draft = target.draft ? $t('A draft: your plan does not change until you apply it on your calendar.') : '';
       const d = D.parse(v.date);
       if (d === null || !plan.settings.payDay) {
-        return '';
+        return draft;
       }
       const k = Period.of(plan.settings, d);
-      return $t(
-        'Counts in {0} ({1}–{2}).',
-        M.label(k, true),
-        D.label(Period.start(plan.settings, k)),
-        D.label(Period.end(plan.settings, k)),
-      );
+      return [
+        draft,
+        $t(
+          'Counts in {0} ({1}–{2}).',
+          M.label(k, true),
+          D.label(Period.start(plan.settings, k)),
+          D.label(Period.end(plan.settings, k)),
+        ),
+      ]
+        .filter(Boolean)
+        .join(' ');
     },
     auto: true,
-    title: title || (current ? $t('Edit transaction') : $t('Add transaction')),
+    title: title || itemTitle(current, target.draft),
     values: current || {
       id: uid(),
       name: '',
@@ -152,7 +161,7 @@ export function itemModal(id, preset, title) {
           : !v.date && !v.month
             ? $t('Pick a day or a month.')
             : ((UI.lastBudget = b ? b.id : UI.lastBudget),
-              upsert('items', {
+              target.save('items', {
                 ...v,
                 budget: b ? b.id : null,
                 cat: b ? b.cat : v.cat,
@@ -161,8 +170,15 @@ export function itemModal(id, preset, title) {
               ''))
       );
     },
-    onDelete: current && (() => remove('items', id)),
+    onDelete: current && (() => target.remove('items', id)),
   });
+}
+/** The window title: a transaction, or a draft of one (a draft says so, and whether it is money in or out). */
+function itemTitle(current, draft) {
+  if (draft) {
+    return current ? $t('Edit draft') : $t('New draft');
+  }
+  return current ? $t('Edit transaction') : $t('Add transaction');
 }
 /** "Log a spend" from a budget: the same window with that budget picked. */
 export const logSpend = (billId, m) =>

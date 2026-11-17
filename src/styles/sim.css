@@ -1,0 +1,155 @@
+/* Forecast › Simulation (views/simulation.js): settings, headline numbers, the fan chart, risks, what if, backtest. */
+
+.sim-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.sim-controls .frow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sim-controls .frow > span:first-child {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.sim-note {
+  margin-bottom: 12px;
+  align-items: center;
+}
+.sim-loading {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--muted);
+}
+/* an answer being worked out again: the old one stays, quieter */
+.sim-result.stale {
+  opacity: 0.55;
+  transition: opacity 0.2s ease 0.15s;
+}
+.sim-kpis {
+  margin-bottom: 12px;
+}
+
+/* the fan: the 90% band, the 50% band, the middle, the plan, zero and the buffer */
+.fan .fan-90 {
+  fill: var(--s-cash);
+  opacity: 0.14;
+}
+.fan .fan-50 {
+  fill: var(--s-cash);
+  opacity: 0.3;
+}
+.fan .fan-mid {
+  stroke: var(--s-cash);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+.fan .fan-plan {
+  stroke: var(--faint);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.fan .fan-cmp {
+  stroke: var(--s-wish);
+  stroke-width: 2.5;
+}
+.fan .fan-cmp-low {
+  stroke: var(--s-wish);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+.fan .fan-grid {
+  stroke: var(--line);
+}
+.fan .fan-zero {
+  stroke: var(--bad);
+  stroke-width: 1.5;
+}
+.fan .fan-buffer {
+  stroke: var(--warn);
+  stroke-dasharray: 4 4;
+}
+.fan .fan-guide {
+  stroke: var(--faint);
+}
+.sim-legend {
+  margin-top: 8px;
+}
+.sim-legend i {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.sim-legend .lg-mid {
+  height: 3px;
+  background: var(--s-cash);
+}
+.sim-legend .lg-50 {
+  background: color-mix(in srgb, var(--s-cash) 30%, transparent);
+}
+.sim-legend .lg-90 {
+  background: color-mix(in srgb, var(--s-cash) 14%, transparent);
+}
+.sim-legend .lg-plan {
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--faint) 0 4px, transparent 4px 7px);
+}
+.sim-legend .lg-cmp {
+  height: 3px;
+  background: var(--s-wish);
+}
+
+.sim-risks {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+.sim-row.off .t {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+/* the what-if window: one row per change */
+.sim-changes {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.sim-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sim-change > select.inp {
+  width: auto;
+  flex: 1 1 200px;
+}
+.sim-change .inp.num {
+  width: 120px;
+}
+.sim-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.sim-pct .inp {
+  width: 90px;
+}
+.sim-cmp-v {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.sim-cmp-v .arrow {
+  color: var(--faint);
+}

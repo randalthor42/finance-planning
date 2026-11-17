@@ -176,6 +176,9 @@ main .card {
   text-align: right;
 }
 .row.off {
+  color: var(--muted);
+}
+.row.off > :is(.mono, .ico, svg) {
   opacity: 0.5;
 }
 /* a paid line is muted, not struck through: a struck-through salary reads as "cancelled" */

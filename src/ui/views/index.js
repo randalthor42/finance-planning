@@ -2,6 +2,7 @@
  * @file Loads every view. Each view module adds its render function to the registry (V). A new view must be imported here.
  */
 import './accounts.js';
+import './agenda.js';
 import './audit.js';
 import './forecast.js';
 import './goals.js';

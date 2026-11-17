@@ -65,6 +65,17 @@ export const UI = {
   design: null,
   /** Month planner: the figures of the month sum to flash once after a tick ({ month, terms }), or null. */
   pulse: null,
+  /**
+   * My calendar: ids of the drafts made or changed in this visit. Leaving the page asks whether to apply them while any
+   * of them is still a draft (applied ones are no longer drafts; Undo of an apply makes them drafts again).
+   */
+  agendaTouched: new Set(),
+  /** My calendar: the own calendar the last appointment went into, for the next new one (this visit only). */
+  lastCal: null,
+  /** Forecast › Simulation: the what-if compared with the baseline (a scenario id of plan.sim), or null. */
+  simScenario: null,
+  /** Hidden amounts were tapped to show them (or shown with the eye button). Hidden again in the background. */
+  revealed: false,
 };
 export const nowK = () => (Store.plan ? Period.now(Store.plan.settings) : M.now());
 export const curK = () => {

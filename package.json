@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "node --test \"tests/unit/*.test.js\"",
     "test:regression": "node tests/regression/engine.test.mjs",
-    "test:ui": "vite build --mode test --outDir dist-test && node tests/regression/calendar.ui.cjs && node tests/regression/ui.test.cjs && node tests/regression/smoke.cjs",
+    "test:ui": "vite build --mode test --outDir dist-test && node tests/regression/agenda.ui.cjs && node tests/regression/calendar.touch.ui.cjs && node tests/regression/simulation.ui.cjs && node tests/regression/a11y.ui.cjs && node tests/regression/lock.ui.cjs && node tests/regression/calendar.ui.cjs && node tests/regression/ui.test.cjs && node tests/regression/smoke.cjs",
     "lint": "eslint src tests/unit",
     "format": "prettier --write src tests/unit",
     "check": "npm run lint && npm test && npm run build",

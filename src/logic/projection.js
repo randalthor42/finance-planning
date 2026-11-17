@@ -5,22 +5,12 @@ import { D, M, Period } from '../core/dates.js';
 import { $t } from '../core/i18n.js';
 import { has, isObj, r2 } from '../core/util.js';
 import { loanCalc } from './loans.js';
+import { recurs } from './recurs.js';
+
+export { recurs };
+import { occurrences, prepareEntries } from './occurrences.js';
 import { tripParts } from './trips.js';
 import { wishCalc } from './wishes.js';
-
-/** Is a recurring line charged in month k? `anchor` is used when it has no start month. */
-export function recurs(r, k, anchor) {
-  const f = M.parse(r.from);
-  const t = M.parse(r.to);
-  if (f !== null && k < f) {
-    return false;
-  }
-  if (t !== null && k > t) {
-    return false;
-  }
-  const a = f !== null ? f : anchor;
-  return (((k - a) % r.every) + r.every) % r.every === 0;
-}
 
 /** The group of a one-off: a spend from a budget, money drawn from a card or savings (financing), money in, or a cost. */
 function itemGroup(item) {
@@ -326,6 +316,33 @@ export function project(plan, opts) {
           sub: r.sub,
           cat: 'shopping',
           amount: -r.amount,
+        });
+      }
+    }
+  }
+  // -- My calendar: appointments with money that counts (switched on, or applied from the calendar's drafts), one
+  //    line per occurrence, on its first day, in the budget month of that day
+  const counted = plan.agenda ? plan.agenda.entries.filter(e => e.on && e.amount > 0) : [];
+  if (counted.length) {
+    const first = months[0].start;
+    const last = months[n - 1].end;
+    for (const p of prepareEntries(counted)) {
+      const e = p.entry;
+      for (const day of occurrences(p, first, last)) {
+        if (day < first) {
+          continue; // started before the plan: its money was spent then
+        }
+        put(Period.of(settings, day), {
+          key: `appt:${e.id}:${day}`,
+          group: 'item',
+          id: e.id,
+          label: e.title,
+          sub: $t('Appointment'),
+          cat: e.cat,
+          amount: e.kind === 'in' ? e.amount : -e.amount,
+          date: day,
+          note: e.note,
+          appt: true,
         });
       }
     }

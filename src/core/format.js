@@ -15,7 +15,13 @@ export const FMT = {
   nf: null,
   nfc: null,
   nfn: null,
+  /** Amounts are hidden on screen (Settings › Lock and privacy, "Hide amounts until tapped"): money() shows MASK. */
+  hidden: false,
+  /** Finds a formatted amount inside a text (maskMoney), made by setFmt for the plan's currency and number format. */
+  amountRe: null,
 };
+/** What a hidden amount shows instead. */
+export const MASK = '•••';
 export function setFmt(S) {
   FMT.nloc = S.numFmt === 'us' ? 'en-US' : 'de-DE';
   FMT.dloc = I18N.lang !== 'en' ? I18N.lang : S.dateFmt === 'mdy' ? 'en-US' : 'en-GB';
@@ -43,14 +49,43 @@ export function setFmt(S) {
   } catch (e) {
     mk('EUR');
   }
+  FMT.amountRe = amountPattern();
   FMT.nfn = new Intl.NumberFormat(FMT.nloc, { maximumFractionDigits: 2, useGrouping: true });
 }
-export const money = n => {
+/** An amount as text, always: for what must keep it even while amounts are hidden (the activity log). */
+export const plainMoney = n => {
   const v = FMT.cents ? r2(n) : Math.round(n);
   return FMT.nf.format(v || 0);
 };
-export const signed = n => (Math.round(n * (FMT.cents ? 100 : 1)) > 0 ? '+' : '') + money(n);
-export const compact = n => FMT.nfc.format(Math.round(n) || 0);
+/** An amount to show: MASK while amounts are hidden. So are signed and compact amounts. Numbers in fields are not. */
+export const money = n => (FMT.hidden ? MASK : plainMoney(n));
+export const signed = n => {
+  if (FMT.hidden) {
+    return MASK;
+  }
+  const scale = FMT.cents ? 100 : 1;
+  const sign = Math.round(n * scale) > 0 ? '+' : '';
+  return sign + plainMoney(n);
+};
+export const compact = n => (FMT.hidden ? MASK : FMT.nfc.format(Math.round(n) || 0));
+/**
+ * The same text with every formatted amount in it masked, while amounts are hidden: for texts written before (a
+ * notification, a line of the activity log). Only what looks like an amount of the plan's currency is masked; dates
+ * and counts stay.
+ */
+export const maskMoney = text => (FMT.hidden && FMT.amountRe ? String(text).replace(FMT.amountRe, MASK) : String(text));
+
+/** A pattern for an amount as FMT.nf writes it: the currency on either side of the number, a sign before either. */
+function amountPattern() {
+  const parts = FMT.nf.formatToParts(-1234.5);
+  const currency = parts.find(p => p.type === 'currency').value;
+  const esc = v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sym = esc(currency);
+  const num = `\\d[\\d${esc(FMT.grp)}]*(?:${esc(FMT.dec)}\\d+)?`;
+  const sign = '[+\\-\u2212]?';
+  const gap = '[\\s\u00a0\u202f]?';
+  return new RegExp(`${sign}${sym}${gap}${sign}${num}|${sign}${num}${gap}${sym}`, 'g');
+}
 export const fmtNum = n => FMT.nfn.format(r2(n));
 /** Free-text money parser for pasted text. Accepts "1.234,56", "1,234.56", "12,5" and sums like "120+35". Never NaN, never negative. */
 export function parseMoney(s) {

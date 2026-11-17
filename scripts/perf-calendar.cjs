@@ -63,6 +63,20 @@ const profileMode = (profileArg && profileArg.split('=')[1]) || 'full';
       for (let i = 0; i < 8; i++) {
         p.loans.push({ ...p.loans[0], id: null, name: 'Loan ' + i, day: 1 + i * 3 });
       }
+      // My calendar: 300 appointments (a tenth repeat daily or weekly), 30 drafts
+      const repeats = ['none', 'none', 'none', 'none', 'none', 'none', 'none', 'none', 'week', 'day'];
+      p.agenda = {
+        entries: Array.from({ length: 300 }, (_, i) => ({
+          title: 'Appointment ' + i,
+          date: D.key(D.inMonth(k0 + Math.floor(i / 25), 1 + (i % 28))),
+          time: i % 2 ? String(8 + (i % 10)).padStart(2, '0') + ':30' : '',
+          repeat: repeats[i % 10],
+        })),
+        drafts: {
+          items: Array.from({ length: 25 }, (_, i) => ({ name: 'Draft ' + i, amount: 20 + i, date: D.key(D.inMonth(k0 + (i % 6), 3 + i)) })),
+          trips: Array.from({ length: 5 }, (_, i) => ({ name: 'Draft trip ' + i, from: D.key(D.inMonth(k0 + i, 10)), to: D.key(D.inMonth(k0 + i, 13)), items: [{ name: 'Hotel', amount: 250 }] })),
+        },
+      };
       Store.addPlan(p);
       UI.month = null;
     });
@@ -116,6 +130,24 @@ const profileMode = (profileArg && profileArg.split('=')[1]) || 'full';
     }
     view('months:calendar', () => Object.assign(UI, { view: 'months', mview: 'calendar' }));
     view('settings:calendar', () => Object.assign(UI, { view: 'settings', stab: 'calendar' }));
+    // My calendar (a build without it leaves these rows out): what it shows at first, then every layer of the plan on
+    const hasAgenda = typeof V === 'object' && !!V.agenda;
+    if (hasAgenda) {
+      const layers = Store.plan.agenda.layers;
+      view('agenda', () => (UI.view = 'agenda'));
+      Store.plan.agenda.layers = [...AGENDA_LAYERS];
+      view('agenda:allLayers', () => (UI.view = 'agenda'));
+      Store.plan.agenda.layers = layers;
+      // a save that changes only the calendar keeps the projection; a save of a plan record works it out again
+      const entry = { ...Store.plan.agenda.entries[0] };
+      const item = { ...Store.plan.items[0] };
+      let n = 0;
+      out.save = {
+        appointment: time(() => Actions.saveEntry({ ...entry, title: 'Perf ' + n++ }), 10),
+        transaction: time(() => Actions.save('items', { ...item, name: 'Perf ' + n++ }), 10),
+      };
+      Store.undoS = [];
+    }
     // the calendar on its own: building it (detached), then building, placing and laying it out
     const host = document.createElement('div');
     host.style.cssText = 'position:absolute;left:0;top:0;width:1200px';
@@ -153,12 +185,15 @@ const profileMode = (profileArg && profileArg.split('=')[1]) || 'full';
       cal().querySelector(`[data-day="${day}"]`).click();
       settle();
     }, 10);
+    // the Overview's mini month has no legend (legend: false): only timed where there is one
     const legend = () => cal().querySelector('.cal-lg');
-    out.interaction.legendOffOn = time(() => {
-      legend().click();
-      legend().click();
-      settle();
-    }, 10);
+    if (legend()) {
+      out.interaction.legendOffOn = time(() => {
+        legend().click();
+        legend().click();
+        settle();
+      }, 10);
+    }
     out.interaction.dayMenu = time(() => {
       cal().querySelector(`[data-day="${day}"]`).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 200, clientY: 200 }));
       settle();

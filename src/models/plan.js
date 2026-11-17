@@ -6,6 +6,8 @@ import { D, M, Period } from '../core/dates.js';
 import { $t } from '../core/i18n.js';
 import { clamp, isObj, r2, uid } from '../core/util.js';
 import { project } from '../logic/projection.js';
+import { normAgenda } from './agenda.js';
+import { normSim } from './sim.js';
 import { CATS, EVERY, INCATS, KEY_RE, SHIFTS } from './categories.js';
 
 /** Returns a clean, complete plan no matter what it is given. Idempotent. Also migrates older versions (missing fields get defaults). */
@@ -195,6 +197,59 @@ export function normPlan(p) {
   }));
   const budgetIds = bills.filter(b => b.budget).map(b => b.id);
 
+  /** A one-off: a purchase, a spend from a budget, money in. Also cleans the drafts of My calendar (models/agenda.js). */
+  const item = x => {
+    const kind = pick(x.kind, ['out', 'in'], 'out');
+    const dn = D.parse(x.date);
+    // an exact day decides which budget period the item belongs to
+    return {
+      id: id(x.id),
+      name: str(x.name) || $t('Untitled'),
+      amount: num(x.amount, 0, 1e9, 0),
+      kind,
+      month: dn !== null ? M.key(Period.of(settings, dn)) : mon(x.month) || settings.startMonth,
+      date: dn !== null ? x.date : null,
+      cat: kind === 'in' ? pick(x.cat, inIds, 'other') : pick(x.cat, catIds, 'other'),
+      budget: kind === 'out' && budgetIds.includes(x.budget) ? x.budget : null,
+      account: accIds.includes(x.account) ? x.account : null,
+      cover: kind === 'in' && accIds.includes(x.cover) ? x.cover : null,
+      note: note(x),
+    };
+  };
+  /** A trip, event or someday idea with its costs. Also cleans the drafts of My calendar. */
+  const trip = x => {
+    // kind 'idea' = somewhere you would like to go one day: never counted until you plan it
+    const kind = pick(x.kind, ['trip', 'event', 'idea'], 'trip');
+    const from = day(x.from);
+    let to = day(x.to);
+    if (!from || (to && D.parse(to) < D.parse(from))) {
+      to = from ? (to && D.parse(to) >= D.parse(from) ? to : null) : null;
+    }
+    return {
+      id: id(x.id),
+      name: str(x.name) || $t('Trip'),
+      kind,
+      month: mon(x.month) || settings.startMonth,
+      from,
+      to,
+      on: kind === 'idea' ? false : x.on !== false,
+      budget: num(x.budget, 0, 1e9, 0),
+      reserve: x.reserve !== false,
+      note: note(x),
+      items: list(
+        x.items,
+        i => ({
+          id: id(i.id),
+          name: str(i.name),
+          amount: num(i.amount, 0, 1e9, 0),
+          pay: mon(i.pay),
+          note: note(i),
+        }),
+        100,
+      ),
+    };
+  };
+
   const out = {
     id: typeof p.id === 'string' && /^[a-z0-9]{4,16}$/.test(p.id) ? p.id : uid(),
     name: str(p.name, 40) || $t('My plan'),
@@ -202,64 +257,8 @@ export function normPlan(p) {
     accounts,
     incomes: list(p.incomes, x => rec(x, inIds, 'salary')),
     bills,
-    items: list(
-      p.items,
-      x => {
-        const kind = pick(x.kind, ['out', 'in'], 'out');
-        const dn = D.parse(x.date);
-        // an exact day decides which budget period the item belongs to
-        return {
-          id: id(x.id),
-          name: str(x.name) || $t('Untitled'),
-          amount: num(x.amount, 0, 1e9, 0),
-          kind,
-          month: dn !== null ? M.key(Period.of(settings, dn)) : mon(x.month) || settings.startMonth,
-          date: dn !== null ? x.date : null,
-          cat: kind === 'in' ? pick(x.cat, inIds, 'other') : pick(x.cat, catIds, 'other'),
-          budget: kind === 'out' && budgetIds.includes(x.budget) ? x.budget : null,
-          account: accIds.includes(x.account) ? x.account : null,
-          cover: kind === 'in' && accIds.includes(x.cover) ? x.cover : null,
-          note: note(x),
-        };
-      },
-      5000,
-    ),
-    trips: list(
-      p.trips,
-      x => {
-        // kind 'idea' = somewhere you would like to go one day: never counted until you plan it
-        const kind = pick(x.kind, ['trip', 'event', 'idea'], 'trip');
-        const from = day(x.from);
-        let to = day(x.to);
-        if (!from || (to && D.parse(to) < D.parse(from))) {
-          to = from ? (to && D.parse(to) >= D.parse(from) ? to : null) : null;
-        }
-        return {
-          id: id(x.id),
-          name: str(x.name) || $t('Trip'),
-          kind,
-          month: mon(x.month) || settings.startMonth,
-          from,
-          to,
-          on: kind === 'idea' ? false : x.on !== false,
-          budget: num(x.budget, 0, 1e9, 0),
-          reserve: x.reserve !== false,
-          note: note(x),
-          items: list(
-            x.items,
-            i => ({
-              id: id(i.id),
-              name: str(i.name),
-              amount: num(i.amount, 0, 1e9, 0),
-              pay: mon(i.pay),
-              note: note(i),
-            }),
-            100,
-          ),
-        };
-      },
-      200,
-    ),
+    items: list(p.items, item, 5000),
+    trips: list(p.trips, trip, 200),
     loans,
     goals: list(
       p.goals,
@@ -319,6 +318,11 @@ export function normPlan(p) {
     ),
     notes: monthMap(p.notes, v => (typeof v === 'string' && v.trim() ? v.slice(0, 600) : undefined)),
   };
+  // My calendar, last: the plan's own records claim their ids first (a draft never takes the id of one), and its pins
+  // are checked against the clean lists
+  out.agenda = normAgenda(p.agenda, { id, str, num, day, note, item, trip, records: out });
+  // Forecast › Simulation: settings, the person's own values for what it learned, what-if scenarios (models/sim.js)
+  out.sim = normSim(p.sim, { id, incomeIds: out.incomes.map(x => x.id), goalIds: out.goals.map(x => x.id) });
   return isObj(p.snaps) || isObj(p.actuals) ? migrateFixes(out, p) : out;
 }
 /** Versions up to 5 stored "real balance on a day" and "month-end check-in". Both become one correction per month. The result has neither, so this runs once. */

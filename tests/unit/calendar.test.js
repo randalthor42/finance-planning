@@ -138,6 +138,14 @@ test('totals: in, out, net and count; events without an amount only count', () =
   );
 });
 
+test('totals: tentative events (drafts) are counted as events but their money is not added up', () => {
+  const events = normEvents([
+    { title: 'Salary', amount: 2000 },
+    { title: 'TV, a draft', amount: -800, tentative: true },
+  ]);
+  assert.deepEqual(totals(events), { in: 2000, out: 0, net: 2000, count: 2 });
+});
+
 /* --- adapters --- */
 
 const TODAY = D.parse('2026-11-14');

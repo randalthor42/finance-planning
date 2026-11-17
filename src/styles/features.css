@@ -36,7 +36,8 @@
   padding: 5px;
   border-radius: 6px;
   line-height: 0;
-  opacity: 0.45;
+  /* visible enough to be seen (an icon needs 3:1, WCAG 1.4.11), quiet enough not to compete with the amount */
+  opacity: 0.8;
 }
 .row:hover .rowdel,
 .row:focus-within .rowdel,
@@ -167,11 +168,11 @@
 }
 .day-h .btn {
   padding: 1px 6px;
-  opacity: 0.55;
+  color: var(--muted); /* quiet by colour, readable (WCAG AA); it used to fade to 55% until pointed at */
 }
 .day:hover .day-h .btn,
 .day-h .btn:focus-visible {
-  opacity: 1;
+  color: var(--text);
 }
 .day.we .day-h b {
   color: var(--muted);
@@ -389,8 +390,9 @@ dialog.modal.narrow {
 a {
   color: var(--accent);
 }
+/* a paid line of the ledger: quieter text, still readable (WCAG AA); amounts keep their colour */
 tr.dim td {
-  opacity: 0.55;
+  color: var(--muted);
 }
 .titem {
   grid-template-columns: auto minmax(0, 1.5fr) 104px minmax(0, 1.2fr) auto auto;

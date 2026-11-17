@@ -418,7 +418,12 @@ V.trips = () => {
           ['list', $t('List')],
         ],
         Store.db.tripView,
-        v => Store.setPref('tripView', v),
+        v =>
+          Store.setPref(
+            'tripView',
+            v,
+            v === 'list' ? $t('Trips and events shown as a list') : $t('Trips and events shown as cards'),
+          ),
       ),
       btn($t('Someday idea'), () => tripModal(null, { kind: 'idea', on: false }), '', 'plus'),
       btn($t('Plan a trip'), () => tripModal(), 'primary', 'plus'),

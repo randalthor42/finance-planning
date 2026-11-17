@@ -5,6 +5,7 @@
  * simply because their surprises are not in the plan yet. A scenario replaces what later months leave over with a
  * more careful assumption and carries the difference forward.
  */
+import { mulberry32 } from '../core/random.js';
 import { r2 } from '../core/util.js';
 
 /** What a month really leaves over in the plan: income minus costs, plus any correction from real money. */
@@ -53,77 +54,11 @@ export function dampedTrend(series, { alpha = 0.5, beta = 0.3, phi = 0.85 } = {}
   return { level, trend, ahead };
 }
 
-/** A small repeatable random number generator (mulberry32), so the same plan always gives the same simulation. */
-export function seededRandom(seed) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let mixed = state;
-    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
-    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
-    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** The value below which the given share of a sorted list falls (0.1 = the "1 in 10" low). */
-const percentile = (sorted, share) =>
-  sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(share * sorted.length)))];
-
 /**
- * Range of outcomes (Monte Carlo simulation with bootstrapped shocks).
- * The middle path is the "recent pace" scenario. Around it, every later month gets a random shock drawn from how
- * far the sample months themselves were from their average: months that swing a lot give a wide range, steady
- * months a narrow one. Many runs give, for every month, a low (1 in 10 worse), a middle and a high (1 in 10 better).
- * `chanceBelowZero` is the share of runs in which the balance goes below zero in any month after the sample months.
- * @returns {{rows: {k: number, key: string, planClose: number, low: number, middle: number, high: number}[], chanceBelowZero: number, average: number}}
+ * A small repeatable random number generator (mulberry32, core/random.js). The range of outcomes that used it is now
+ * Forecast › Simulation (logic/sim), which learns from real history; kept for anything that wants a seeded generator.
  */
-export function forecastRange(projection, currentPosition, { sampleMonths = 4, runs = 2000, seed = 20261114 } = {}) {
-  const months = projection.months;
-  const sampleSize = Math.max(1, Math.min(sampleMonths, months.length - currentPosition));
-  const sample = months.slice(currentPosition, currentPosition + sampleSize).map(leftOver);
-  const average = r2(sample.reduce((sum, value) => sum + value, 0) / sample.length);
-  const shocks = sample.map(value => value - average);
-  const random = seededRandom(seed);
-  const firstRandomMonth = currentPosition + sampleSize;
-  const startBalance = months.length ? months[0].open : 0;
-
-  // balances[month position] collects the end balance of every run
-  const balances = months.map(() => []);
-  let runsBelowZero = 0;
-  for (let run = 0; run < runs; run++) {
-    let balance = startBalance;
-    let wentBelowZero = false;
-    months.forEach((month, position) => {
-      let left = leftOver(month);
-      if (position >= firstRandomMonth) {
-        const shock = shocks[Math.floor(random() * shocks.length)];
-        left = Math.min(left, average) + shock;
-      }
-      balance += left;
-      // only the simulated months count: a sample month that the plan itself puts below zero is not a matter of chance
-      if (position >= firstRandomMonth && balance < 0) {
-        wentBelowZero = true;
-      }
-      balances[position].push(balance);
-    });
-    if (wentBelowZero) {
-      runsBelowZero++;
-    }
-  }
-
-  const rows = months.map((month, position) => {
-    const sorted = balances[position].sort((a, b) => a - b);
-    return {
-      k: month.k,
-      key: month.key,
-      planClose: month.close,
-      low: r2(percentile(sorted, 0.1)),
-      middle: r2(percentile(sorted, 0.5)),
-      high: r2(percentile(sorted, 0.9)),
-    };
-  });
-  return { rows, chanceBelowZero: runs ? runsBelowZero / runs : 0, average };
-}
+export const seededRandom = mulberry32;
 
 /**
  * Cost overrun measured against reality (budget variance analysis; the same idea as the cost performance index in

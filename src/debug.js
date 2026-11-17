@@ -59,6 +59,27 @@ import * as m54 from './logic/calendar.js';
 import * as m55 from './ui/components/calendar.js';
 import * as m56 from './ui/components/calendarData.js';
 import * as m57 from './models/calendarPrefs.js';
+import * as m58 from './models/agenda.js';
+import * as m59 from './logic/agenda.js';
+import * as m60 from './ui/components/agendaData.js';
+import * as m61 from './ui/modals/appointment.js';
+import * as m62 from './ui/modals/applyDrafts.js';
+import * as m63 from './ui/modals/agendaSettings.js';
+import * as m64 from './ui/modals/pinPicker.js';
+import * as m65 from './ui/components/sheet.js';
+import * as m66 from './ui/components/gestures.js';
+import * as m67 from './core/gesture.js';
+import * as m68 from './logic/occurrences.js';
+import * as m69 from './ui/simRun.js';
+import * as m70 from './services/lazySim.js';
+import * as m71 from './ui/simFormat.js';
+import * as m72 from './ui/lock.js';
+import * as m73 from './ui/reminders.js';
+import * as m74 from './logic/lock.js';
+import * as m75 from './logic/reminders.js';
+import * as m76 from './services/pin.js';
+import * as m77 from './services/lockConfig.js';
+import * as m78 from './services/biometric.js';
 
 export const expose = () =>
   Object.assign(
@@ -121,4 +142,25 @@ export const expose = () =>
     m55,
     m56,
     m57,
+    m58,
+    m59,
+    m60,
+    m61,
+    m62,
+    m63,
+    m64,
+    m65,
+    m66,
+    m67,
+    m68,
+    m69,
+    m70,
+    m71,
+    m72,
+    m73,
+    m74,
+    m75,
+    m76,
+    m77,
+    m78,
   );

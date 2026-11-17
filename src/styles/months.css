@@ -103,7 +103,7 @@
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  opacity: 0.7;
+  color: var(--faint); /* quieter by colour, not by opacity: it stays readable (WCAG AA) */
   margin-left: 4px;
 }
 .grp-toggle .num {
@@ -123,7 +123,7 @@
 /* what the last check against real money found: a small date, one clear number, one short explanation */
 .fixnote .fix-when {
   font-size: 0.78rem;
-  opacity: 0.75;
+  color: var(--muted);
 }
 .fixnote .fix-head {
   font-size: 1.05rem;

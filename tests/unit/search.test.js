@@ -42,3 +42,34 @@ test('every word must match, and an empty search finds nothing', () => {
   assert.equal(searchPlan(plan, 'camera rent').length, 0);
   assert.equal(searchPlan(plan, '   ').length, 0);
 });
+
+test('finds appointments and drafts of My calendar, with where they are', () => {
+  const withAgenda = normPlan({
+    agenda: {
+      entries: [{ id: 'dent0001', title: 'Dentist', date: '2026-11-10', note: 'bring the card' }],
+      drafts: {
+        items: [{ id: 'tv000001', name: 'New TV', amount: 800, date: '2026-11-20' }],
+        trips: [{ id: 'rome0001', name: 'Rome', month: '2026-12', items: [{ name: 'Dentist in Rome', amount: 90 }] }],
+      },
+    },
+  });
+  const results = searchPlan(withAgenda, 'dentist');
+  assert.deepEqual(
+    results.map(r => [r.type, r.list, r.id, r.name]),
+    [
+      ['appointment', 'agenda', 'dent0001', 'Dentist'],
+      ['draft', 'drafts:trips', 'rome0001', 'Rome'],
+    ],
+  );
+  assert.equal(results[0].amount, null, 'an appointment has no amount');
+  assert.equal(results[0].date, '2026-11-10');
+  assert.deepEqual(
+    searchPlan(withAgenda, 'card').map(r => r.id),
+    ['dent0001'],
+    'notes are searched too',
+  );
+  assert.deepEqual(
+    searchPlan(withAgenda, 'tv').map(r => [r.type, r.list, r.amount]),
+    [['draft', 'drafts:items', 800]],
+  );
+});

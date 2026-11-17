@@ -9,3 +9,10 @@ tests/fixtures/alpha-*
 # written by the browser tests with a password made for that run
 tests/fixtures/enc.json
 .idea/
+
+# Lighthouse reports and Vite's dependency cache (generated)
+lighthouse/
+.vite/
+# local settings
+.env.local
+.env.*.local

@@ -28,7 +28,7 @@ import { h } from '../dom.js';
 import { icon } from '../icons.js';
 import { UI } from '../state.js';
 import { btn } from './button.js';
-import { isDesignable } from './designPages.js';
+import { isDesignable, pageName } from './designPages.js';
 import { confirmModal } from './modal.js';
 import { closePop, popover } from './popover.js';
 
@@ -105,9 +105,13 @@ export function designToggle(key) {
   );
 }
 
-/** Saves the layout of page `key` and draws the page again. */
-function save(key, layout) {
-  Store.setPref('layouts', { ...Store.db.layouts, [key]: toSaved(layout) });
+/** Saves the layout `key` of page `page` and draws the page again. Written down in the log, like every change. */
+function save(key, layout, page) {
+  Store.setPref(
+    'layouts',
+    { ...Store.db.layouts, [key]: toSaved(layout) },
+    $t('Changed the layout of the page “{0}”', pageName(page)),
+  );
 }
 
 /** Where a card is, in words, for its move button (screen readers read it again after every move). */
@@ -202,7 +206,7 @@ export function designGrid(key, cards, { cols = GRID_COLS, layoutKey = key, orde
       return;
     }
     layout = next;
-    save(layoutKey, next);
+    save(layoutKey, next, key);
     if (after) {
       after();
     }
@@ -535,7 +539,7 @@ export function designGrid(key, cards, { cols = GRID_COLS, layoutKey = key, orde
       () => {
         const next = { ...Store.db.layouts };
         delete next[layoutKey];
-        Store.setPref('layouts', next);
+        Store.setPref('layouts', next, $t('Reset the layout of the page “{0}”', pageName(key)));
       },
     );
   const resetBtn = btn($t('Reset layout'), reset, 'sm');

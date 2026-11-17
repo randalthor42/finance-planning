@@ -86,7 +86,30 @@ export const segc = (opts, current, fn) =>
       h('button', { type: 'button', 'aria-pressed': String(current === o[0]), text: o[1], onclick: () => fn(o[0]) }),
     ),
   );
+/**
+ * One line of a list. With `onclick`, the title is a real button whose click area covers the whole row (a "stretched"
+ * button, see .row-go): a click anywhere on the row opens it, the keyboard reaches it with Tab, and the buttons and
+ * tick boxes inside the row stay separate controls a screen reader can reach (a row that is itself a button would
+ * hide them: "nested interactive").
+ */
 export function row({ title, desc: description, right, onclick, cls: className, left, chips, extra, del, menu }) {
+  const go = onclick
+    ? h(
+        'button',
+        {
+          type: 'button',
+          class: 'row-go',
+          onclick,
+          onkeydown: e => {
+            if (e.key === 'Delete' && del) {
+              e.preventDefault();
+              del();
+            }
+          },
+        },
+        title,
+      )
+    : title;
   const r = h(
     'div',
     { class: 'row ' + (onclick ? 'click ' : '') + (className || '') },
@@ -94,7 +117,7 @@ export function row({ title, desc: description, right, onclick, cls: className, 
     h(
       'div',
       { class: 'grow' },
-      h('div', { class: 't' }, title, ' ', chips),
+      h('div', { class: 't' }, go, ' ', chips),
       description ? h('div', { class: 'd', text: description }) : null,
       extra,
     ),
@@ -116,19 +139,6 @@ export function row({ title, desc: description, right, onclick, cls: className, 
         )
       : null,
   );
-  if (onclick) {
-    r.tabIndex = 0;
-    r.setAttribute('role', 'button');
-    r.addEventListener('click', onclick);
-    r.addEventListener('keydown', e => {
-      if (e.target === r && (e.key === 'Enter' || e.key === ' ')) {
-        e.preventDefault();
-        onclick();
-      } else if (e.target === r && e.key === 'Delete' && del) {
-        del();
-      }
-    });
-  }
   if (menu || del) {
     r.addEventListener('contextmenu', e =>
       ctxMenu(e, [onclick ? [$t('Edit'), onclick] : null, ...(menu || []), del ? [$t('Delete'), del, 'danger'] : null]),

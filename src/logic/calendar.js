@@ -139,11 +139,17 @@ export function eventsIn(events, start, end) {
   return events.filter(ev => ev.date === null || (ev.date <= end && lastDay(ev) >= start));
 }
 
-/** Money in, money out (as a positive number), net, and how many events, over a list. Events without an amount only count. */
+/**
+ * Money in, money out (as a positive number), net, and how many events, over a list. Events without an amount only
+ * count, and so do tentative ones (a draft is not money yet: the month's figures and a day's net leave it out).
+ */
 export function totals(events) {
   let inflow = 0;
   let outflow = 0;
   for (const ev of events) {
+    if (ev.tentative) {
+      continue;
+    }
     if (ev.amount > 0) {
       inflow += ev.amount;
     } else if (ev.amount < 0) {
@@ -187,6 +193,7 @@ export function entryEvents(month) {
       amount: e.amount,
       group: entryGroup(e),
       sub: e.sub || '',
+      note: e.note || '',
       done: !!e.paid,
       data: { entry: e, month },
     }));

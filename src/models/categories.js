@@ -42,4 +42,5 @@ export const SHIFTS = [
   ['next', $t('Next working day')],
   ['prev', $t('Working day before')],
 ];
-export const KEY_RE = /^(inc|bill|item|trip|loan|goal|wish)(:[a-z0-9]{1,16}){1,2}$/;
+/** Keys of ledger lines that can be ticked or changed for one month ("appt:<id>:<day>": a counted appointment). */
+export const KEY_RE = /^(inc|bill|item|trip|loan|goal|wish|appt)(:[a-z0-9]{1,16}){1,2}$/;

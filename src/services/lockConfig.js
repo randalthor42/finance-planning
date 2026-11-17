@@ -1,0 +1,71 @@
+/**
+ * @file The app lock's settings on this device (Settings › Lock and privacy), in their own place in the browser's
+ * storage: they must be readable before the data can be opened (with encryption at rest, the data is sealed until the
+ * PIN is given). Nothing in here can open the data: the PIN is only a salted hash (services/pin.js), the encryption
+ * key is never stored, and biometrics are a public key and the id of a credential the device keeps.
+ *
+ *   { pin: { kdf, iter, salt, hash } | null,   the PIN's salted hash; no PIN, no lock
+ *     timeout: seconds away before it locks (config.js LOCK_TIMEOUTS),
+ *     bio: { id, pub, alg } | null,           biometric unlock (WebAuthn): the credential's id and public key
+ *     encrypt: { salt, iter } | null,         encryption at rest: the salt of its key (needs a PIN)
+ *     fails, until, bioFails,                 wrong tries and the pause (logic/lock.js), kept across reloads
+ *     lastActive }                            when the app was last used (ms), for "lock after"
+ */
+import { isObj } from '../core/util.js';
+import { LOCK_TIMEOUTS } from '../config.js';
+
+export const LOCK_KEY = 'runway.lock.v1';
+const B64 = /^[A-Za-z0-9+/=_-]{4,2000}$/;
+
+/**
+ * Clean lock settings: anything missing or wrong gets its default (no lock).
+ * @returns {{pin: ?object, timeout: number, bio: ?object, encrypt: ?object, fails: number, until: number, bioFails: number, lastActive: ?number}}
+ */
+export function normLock(raw) {
+  const r = isObj(raw) ? raw : {};
+  const int = (v, lo, hi, fallback) => (Number.isFinite(v) && v >= lo && v <= hi ? Math.round(v) : fallback);
+  const pin =
+    isObj(r.pin) && B64.test(r.pin.salt) && B64.test(r.pin.hash) && int(r.pin.iter, 1000, 1e7, 0)
+      ? { kdf: 'PBKDF2-SHA256', iter: r.pin.iter, salt: r.pin.salt, hash: r.pin.hash }
+      : null;
+  return {
+    pin,
+    timeout: LOCK_TIMEOUTS.includes(r.timeout) ? r.timeout : 60,
+    bio:
+      pin && isObj(r.bio) && B64.test(r.bio.id) && B64.test(r.bio.pub) && [-7, -257].includes(r.bio.alg)
+        ? { id: r.bio.id, pub: r.bio.pub, alg: r.bio.alg }
+        : null,
+    encrypt:
+      pin && isObj(r.encrypt) && B64.test(r.encrypt.salt) && int(r.encrypt.iter, 1000, 1e7, 0)
+        ? { salt: r.encrypt.salt, iter: r.encrypt.iter }
+        : null,
+    fails: int(r.fails, 0, 1e6, 0),
+    until: int(r.until, 0, 1e15, 0),
+    bioFails: int(r.bioFails, 0, 1e6, 0),
+    lastActive: Number.isFinite(r.lastActive) ? r.lastActive : null,
+  };
+}
+
+/**
+ * The lock settings stored on this device, cleaned (normLock).
+ * @returns {object} the settings (normLock), the defaults when nothing is stored or it cannot be read
+ */
+export function readLock() {
+  try {
+    return normLock(JSON.parse(localStorage.getItem(LOCK_KEY)));
+  } catch (e) {
+    return normLock(null);
+  }
+}
+/**
+ * Stores the lock settings (cleaned). Returns false when the browser refuses.
+ * @returns {boolean} true when stored
+ */
+export function writeLock(config) {
+  try {
+    localStorage.setItem(LOCK_KEY, JSON.stringify(normLock(config)));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}

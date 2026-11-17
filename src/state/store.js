@@ -109,7 +109,12 @@ export class PlanStore {
   }
   /**
    * The only way plan data changes. fn mutates a draft; the draft is validated by normPlan before it becomes state.
-   * label describes the change in plain words for the log, the notification and undo.
+   * label describes the change in plain words for the log, the notification and undo. opts go to the notification
+   * (undo: true adds an Undo button), and opts.sameMoney says fn changed nothing the projection reads (My calendar
+   * without counted money, the simulation's settings): no number of the projection can change, so it is kept instead
+   * of worked out again (Undo and Redo always recalculate).
+   * Changes made under one tag (Store.tag) are one Undo step and, usually, one line of the log; opts.logEach gives each
+   * of them its own line (the Customise window of My calendar: every switch is a change of its own).
    */
   commit(fn, label, opts) {
     const prev = JSON.stringify(this.plan);
@@ -130,6 +135,7 @@ export class PlanStore {
       return false;
     }
     const merge = !!this.tag && this.tag === this.lastTag;
+    const logEach = !!(opts && opts.logEach);
     if (!merge) {
       this.pushUndo({ snap: prev, label: label || $t('Change') });
     } else if (label) {
@@ -138,9 +144,10 @@ export class PlanStore {
     this.lastTag = this.tag;
     this.redoS = [];
     if (label) {
-      this.log(label, merge);
+      // an autosaving window keeps one line (its last words); changes that each say something keep their own
+      this.log(label, merge && !logEach);
     }
-    this._set(clean);
+    this._set(clean, !!(opts && opts.sameMoney));
     if (label && !merge) {
       this.onNotify(label, opts || {});
     }
@@ -156,9 +163,13 @@ export class PlanStore {
     }
     return true;
   }
-  _set(plan) {
+  /** Makes `plan` the open plan. `sameMoney`: nothing the projection reads changed, so it still holds (see commit). */
+  _set(plan, sameMoney = false) {
     this.db.plans[this.db.active] = plan;
-    this.recalc();
+    // a new day still recalculates: what is past decides budget periods
+    if (!sameMoney || !this.proj || this.day !== D.today()) {
+      this.recalc();
+    }
     this.save();
     this.onChange();
   }
@@ -205,7 +216,7 @@ export class PlanStore {
     this.db.plans[c.id] = c;
     this.log($t('Added plan “{0}”', c.name));
     if (activate) {
-      this.switchTo(c.id);
+      this.switchTo(c.id, true);
     } else {
       this.save();
     }
@@ -220,9 +231,13 @@ export class PlanStore {
     this.save();
     this.onChange();
   }
-  switchTo(id) {
+  /** Opens another plan. Written down in the log, unless `quiet` (a plan just added says so itself). */
+  switchTo(id, quiet = false) {
     if (!this.db.plans[id]) {
       return;
+    }
+    if (!quiet && id !== this.db.active) {
+      this.log($t('Opened plan “{0}”', this.db.plans[id].name));
     }
     this.db.active = id;
     this.reset();
@@ -258,19 +273,35 @@ export class PlanStore {
     }
     this.reset();
   }
-  setPref(k, v) {
+  /**
+   * Sets a browser preference (theme, layouts, calendar settings…): not plan data, no Undo, but written down in the log
+   * like every change. `label` says what changed in words; without it, the name of the setting is used.
+   */
+  setPref(k, v, label) {
+    const before = JSON.stringify(this.db[k]);
     this.db[k] = v;
     this.db = normDB(this.db);
+    if (JSON.stringify(this.db[k]) !== before) {
+      this.log(label || $t('Changed the setting “{0}”', k));
+    }
     this.save();
     this.onChange();
   }
+  /** Writes a line in the log at once, for a change made outside the store (a language) that may reload the page. */
+  note(text) {
+    this.log(text);
+    this.savePending = true;
+    this.flush();
+  }
   clearLog() {
     this.db.log = [];
+    this.log($t('Cleared the activity log'));
     this.save();
     this.onChange();
   }
   wipe() {
     this.db = normDB(null);
+    this.log($t('Erased all data in this browser'));
     this.reset();
   }
 }
