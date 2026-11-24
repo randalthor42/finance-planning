@@ -54,10 +54,12 @@ export function themeColor(theme) {
 /**
  * Everything above, from main.js. The worker waits for the page to finish loading, so it never delays the app. The
  * file to hand out (marked data-standalone by the build) is not an installable app: it has no manifest or worker next
- * to it, and its security policy allows neither.
+ * to it, and its security policy allows neither. Nor is the page inside the Android app (marked data-apk): its files
+ * are on the phone, and a worker would only keep an old version after the app is updated.
  */
 export function startPwa() {
-  if (document.documentElement.hasAttribute('data-standalone')) {
+  const root = document.documentElement;
+  if (root.hasAttribute('data-standalone') || root.hasAttribute('data-apk')) {
     return Promise.resolve(null);
   }
   linkManifest();

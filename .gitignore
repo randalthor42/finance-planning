@@ -19,3 +19,9 @@ lighthouse/
 
 # Vite's dependency cache
 .vite/
+
+# the Android app (npm run build:apk): made from apk.config.json each build
+android/
+dist-apk/
+dist-android/
+capacitor.config.json

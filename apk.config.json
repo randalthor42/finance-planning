@@ -1,0 +1,44 @@
+{
+  "$comment": "The Android app (npm run build:apk). Every key is optional: what is left out takes the default of build/apkConfig.js. Colours are #rrggbb. docs/android.md explains each one.",
+
+  "name": "Runway",
+  "appId": "com.randalthor42.financeplanner",
+  "version": "auto",
+  "versionCode": "auto",
+  "orientation": "any",
+
+  "icon": {
+    "image": null,
+    "background": "#2457d6",
+    "foreground": "#ffffff",
+    "monochrome": true
+  },
+
+  "splash": {
+    "name": "Runway",
+    "tagline": "Money planner",
+    "align": "center",
+    "showIcon": true,
+    "background": { "light": "#f5f6f8", "dark": "#0f141a" },
+    "textColor": { "light": "#10151c", "dark": "#e8edf3" },
+    "taglineColor": { "light": "#5b6573", "dark": "#94a0ae" },
+    "loader": "bar",
+    "loaderColor": { "light": "#2457d6", "dark": "#7aa2ff" },
+    "minDuration": 700,
+    "fade": 350
+  },
+
+  "systemBars": "auto",
+
+  "features": {
+    "camera": true
+  },
+
+  "security": {
+    "allowBackup": false
+  },
+
+  "signing": {
+    "folder": "~/.runway-android/signing"
+  }
+}

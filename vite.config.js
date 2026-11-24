@@ -5,6 +5,8 @@ import path from 'node:path';
 import { csp } from './build/csp.js';
 import { embedQr, qrBundles, writeQr } from './build/qr.js';
 import { TEXTS_FILE, pwa } from './build/pwa.js';
+import { loadApkConfig } from './build/apkConfig.js';
+import { apkSplash } from './build/apkSplash.js';
 
 /** Every text passed to $t() and every word passed to plural() in the source (for "Export language"). */
 function collectTexts() {
@@ -136,10 +138,24 @@ const namedCopy = google => ({
 /** Drive sync is built in: a Google client ID for this mode (.env.local, .env.test). */
 const hasGoogle = mode => !!loadEnv(mode, process.cwd(), 'VITE_').VITE_GOOGLE_CLIENT_ID;
 
+/**
+ * Mode "apk" is the page inside the Android app (scripts/build-apk.mjs): it gets its own splash screen (build/
+ * apkSplash.js, from apk.config.json) and no file to hand out.
+ */
+const apkPlugins = mode => (mode === 'apk' ? [apkSplash(loadApkConfig())] : []);
+
 export default defineConfig(({ mode }) => ({
   // one page, no client-side routes: unknown paths are 404 (dev and preview), as on a static host, not the app's page
   appType: 'mpa',
   // pwa(): the installable app and the site's files (build/pwa.js), written next to the single file
-  plugins: [i18nKeys(), pwa(), strictCsp(hasGoogle(mode)), lazySimulation(), viteSingleFile({ removeViteModuleLoader: true }), namedCopy(hasGoogle(mode))],
+  plugins: [
+    i18nKeys(),
+    pwa(),
+    strictCsp(hasGoogle(mode)),
+    lazySimulation(),
+    ...apkPlugins(mode),
+    viteSingleFile({ removeViteModuleLoader: true }),
+    ...(mode === 'apk' ? [] : [namedCopy(hasGoogle(mode))]),
+  ],
   build: { target: 'es2022', cssMinify: true, minify: 'esbuild' },
 }));
