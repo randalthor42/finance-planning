@@ -28,10 +28,11 @@
     "lighthouse": "vite build && node scripts/lighthouse.mjs after 3"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.6.2",
-    "@capacitor/cli": "^8.6.2",
-    "@capacitor/core": "^8.6.2",
-    "@capacitor/splash-screen": "^8.0.2",
+    "@aparajita/capacitor-biometric-auth": "10.0.0",
+    "@capacitor/android": "8.6.2",
+    "@capacitor/cli": "8.6.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/splash-screen": "8.0.2",
     "@eslint/js": "^10.0.1",
     "esbuild": "^0.25.12",
     "eslint": "^10.15.0",

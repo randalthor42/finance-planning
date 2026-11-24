@@ -6,7 +6,8 @@
  *
  *   { pin: { kdf, iter, salt, hash } | null,   the PIN's salted hash; no PIN, no lock
  *     timeout: seconds away before it locks (config.js LOCK_TIMEOUTS),
- *     bio: { id, pub, alg } | null,           biometric unlock (WebAuthn): the credential's id and public key
+ *     bio: { id, pub, alg } | { kind: 'device' } | null,  biometric unlock: WebAuthn's credential id and public
+ *                                          key, or Android's own check inside the Android app (nothing to keep)
  *     encrypt: { salt, iter } | null,         encryption at rest: the salt of its key (needs a PIN)
  *     fails, until, bioFails,                 wrong tries and the pause (logic/lock.js), kept across reloads
  *     lastActive }                            when the app was last used (ms), for "lock after"
@@ -17,6 +18,20 @@ import { LOCK_TIMEOUTS } from '../config.js';
 
 export const LOCK_KEY = 'runway.lock.v1';
 const B64 = /^[A-Za-z0-9+/=_-]{4,2000}$/;
+
+/** A clean biometric setting, or null: a WebAuthn credential, or the Android app's own check. */
+function normBio(bio) {
+  if (!isObj(bio)) {
+    return null;
+  }
+  if (bio.kind === 'device') {
+    return { kind: 'device' };
+  }
+  if (B64.test(bio.id) && B64.test(bio.pub) && [-7, -257].includes(bio.alg)) {
+    return { id: bio.id, pub: bio.pub, alg: bio.alg };
+  }
+  return null;
+}
 
 /**
  * Clean lock settings: anything missing or wrong gets its default (no lock).
@@ -32,10 +47,7 @@ export function normLock(raw) {
   return {
     pin,
     timeout: LOCK_TIMEOUTS.includes(r.timeout) ? r.timeout : 60,
-    bio:
-      pin && isObj(r.bio) && B64.test(r.bio.id) && B64.test(r.bio.pub) && [-7, -257].includes(r.bio.alg)
-        ? { id: r.bio.id, pub: r.bio.pub, alg: r.bio.alg }
-        : null,
+    bio: pin ? normBio(r.bio) : null,
     encrypt:
       pin && isObj(r.encrypt) && B64.test(r.encrypt.salt) && int(r.encrypt.iter, 1000, 1e7, 0)
         ? { salt: r.encrypt.salt, iter: r.encrypt.iter }

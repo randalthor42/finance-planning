@@ -7,8 +7,16 @@
  *
  * WebAuthn needs a web address: it works when Runway is served over https or from localhost, not when the file is
  * opened from disk (file:// has no domain to tie a credential to). support() says which.
+ *
+ * Inside the Android app (whose web view has no WebAuthn) the same three functions use Android's own fingerprint
+ * prompt instead (services/nativeBiometric.js). Its setting is { kind: 'device' }: there is no credential to keep, as
+ * Android answers whether the person was recognised.
  */
 import { $t } from '../core/i18n.js';
+import { inApp, nativeAvailable, nativeVerify } from './nativeBiometric.js';
+
+/** The setting kept for biometric unlock inside the Android app (services/lockConfig.js). */
+export const DEVICE_BIO = Object.freeze({ kind: 'device' });
 const b64 = bytes => {
   const u8 = new Uint8Array(bytes);
   let text = '';
@@ -27,6 +35,9 @@ const fromB64url = text => unb64(text.replace(/-/g, '+').replace(/_/g, '/') + '=
  * @returns {Promise<{ok: boolean, reason: ''|'file'|'insecure'|'missing'|'none'}>}
  */
 export async function support() {
+  if (inApp()) {
+    return (await nativeAvailable()) ? { ok: true, reason: '' } : { ok: false, reason: 'none' };
+  }
   if (location.protocol === 'file:') {
     return { ok: false, reason: 'file' };
   }
@@ -45,10 +56,21 @@ export async function support() {
 }
 
 /**
- * Makes the credential on this device (the system asks for the fingerprint or face). Returns { id, pub, alg }.
- * @returns {Promise<{id: string, pub: string, alg: number}>} the credential (base64)
+ * Makes the credential on this device (the system asks for the fingerprint or face). Returns { id, pub, alg }; inside
+ * the Android app, once the phone has recognised the person, DEVICE_BIO.
+ * @returns {Promise<{id: string, pub: string, alg: number}|{kind: 'device'}>} the credential (base64), or DEVICE_BIO
  */
 export async function register() {
+  if (inApp()) {
+    const outcome = await nativeVerify($t('Turn on fingerprint unlock'));
+    if (outcome !== 'ok') {
+      // "Use PIN" on this prompt only means "not now": the caller says nothing about it
+      throw Object.assign(new Error($t('Your fingerprint or face was not confirmed.')), {
+        cancelled: outcome === 'cancel',
+      });
+    }
+    return { ...DEVICE_BIO };
+  }
   const cred = await navigator.credentials.create({
     publicKey: {
       rp: { name: 'Runway' },
@@ -99,12 +121,25 @@ export function derToRaw(der) {
 }
 
 /**
- * Asks the device to verify the person with credential `bio` ({ id, pub, alg }). True only when the answer is for
- * this page and this challenge, the person was verified, and the signature is valid. False when it fails or is
- * cancelled.
- * @returns {Promise<boolean>}
+ * Asks the device to verify the person: 'ok', 'fail' (tried and refused, which counts towards the limit of failed
+ * tries) or 'cancel' (no try: the person chose the PIN instead). A DEVICE_BIO setting asks Android's prompt, and only
+ * inside the Android app (copied elsewhere, it unlocks nothing). A WebAuthn credential is 'ok' or 'fail': the browser
+ * does not say whether its check was refused or closed.
+ * @returns {Promise<'ok'|'fail'|'cancel'>}
  */
 export async function verify(bio) {
+  if (bio && bio.kind === 'device') {
+    return inApp() ? nativeVerify() : 'cancel';
+  }
+  return (await verifyWebAuthn(bio)) ? 'ok' : 'fail';
+}
+
+/**
+ * WebAuthn's check with credential `bio` ({ id, pub, alg }). True only when the answer is for this page and this
+ * challenge, the person was verified, and the signature is valid. False when it fails or is cancelled.
+ * @returns {Promise<boolean>}
+ */
+async function verifyWebAuthn(bio) {
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     const assertion = await navigator.credentials.get({

@@ -28,6 +28,15 @@ Copy the APK to the phone (USB, Drive, email) and tap it. The first time, Androi
 The app keeps its own data, apart from Runway in the phone's browser: move a plan over once with the QR transfer or a
 backup file. Uninstalling the app deletes its data.
 
+## Fingerprint unlock
+
+Settings › Lock and privacy › Fingerprint or face works in the app with Android's own prompt (the web view has no
+WebAuthn, which the browser version uses). The page calls the native half of `@aparajita/capacitor-biometric-auth`
+(MIT, pinned) through Capacitor's bridge (`src/services/nativeBiometric.js`); its JavaScript is not bundled. Only strong
+biometrics count (fingerprint, or a face check made for payments), never the phone's own PIN or pattern. The prompt
+opens by itself on the lock screen; "Use PIN" closes it. As in the browser it unlocks the screen lock only, so it is off
+while the data is encrypted (only the PIN makes that key), and after 5 failed tries only the PIN opens the app.
+
 ## The release key
 
 The first release build makes a signing key in `signing.folder` (default `~/.runway-android/signing`: `release.p12` and

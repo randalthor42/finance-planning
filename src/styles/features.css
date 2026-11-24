@@ -471,10 +471,16 @@ tr.dim td {
     background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
-  .top > svg {
+  /* the logo keeps the menu's size: on touch screens its button is 44 px to tap (a11y.css), the picture stays 24 */
+  .top > svg,
+  .top .logobtn svg {
     width: 24px;
     height: 24px;
     flex: none;
+  }
+  .top .logobtn {
+    align-items: center;
+    justify-content: center;
   }
   .top b {
     white-space: nowrap;

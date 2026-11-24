@@ -181,19 +181,23 @@ export const Lock = {
     }
     return true;
   },
-  /** Biometrics on the lock screen: true when the device verified the person. */
+  /**
+   * Biometrics on the lock screen: 'ok' (unlocked), 'fail' (refused: one failed try more) or 'cancel' (the person
+   * chose the PIN, or it was not allowed: nothing is counted).
+   */
   async tryBio() {
     if (!this.cfg.bio || this.cfg.encrypt || !bioAllowed(this.cfg)) {
-      return false;
+      return 'cancel';
     }
-    const ok = await verify(this.cfg.bio);
-    if (!ok) {
+    const outcome = await verify(this.cfg.bio);
+    if (outcome === 'fail') {
       Object.assign(this.cfg, afterBioFailure(this.cfg));
       this.save();
-      return false;
     }
-    this.unlocked();
-    return true;
+    if (outcome === 'ok') {
+      this.unlocked();
+    }
+    return outcome;
   },
   unlocked() {
     const fails = this.cfg.fails;
@@ -389,9 +393,14 @@ function lockScreen({ sealed, broken, done }) {
           hidden: !bioAllowed(Lock.cfg),
           onclick: async () => {
             message.textContent = '';
-            if (await Lock.tryBio()) {
+            const outcome = await Lock.tryBio();
+            if (outcome === 'ok') {
               clearInterval(timer);
               done();
+              return;
+            }
+            if (outcome === 'cancel') {
+              pin.focus(); // "Use PIN": straight to the PIN, nothing to say
               return;
             }
             if (!bioAllowed(Lock.cfg)) {
@@ -437,6 +446,11 @@ function lockScreen({ sealed, broken, done }) {
   );
   if (waitLeft(Lock.cfg, Date.now()) > 0) {
     queueMicrotask(pause);
+  }
+  // in the Android app the phone's fingerprint prompt opens by itself, as in other apps ("Use PIN" closes it); a
+  // browser's check needs a tap first
+  if (bioButton && !bioButton.hidden && Lock.cfg.bio.kind === 'device') {
+    setTimeout(() => d.open && bioButton.click(), 250);
   }
   return d;
 }

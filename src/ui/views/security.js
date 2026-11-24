@@ -107,7 +107,10 @@ function bioRow() {
               }
             } catch (e) {
               input.checked = !value;
-              toast($t('Fingerprint or face could not be set up: {0}', String(e && e.message)), { kind: 'bad' });
+              // closing the phone's prompt ("Use PIN") is a choice, not an error: the switch just stays off
+              if (!(e && e.cancelled)) {
+                toast($t('Fingerprint or face could not be set up: {0}', String(e && e.message)), { kind: 'bad' });
+              }
             }
             after();
           },

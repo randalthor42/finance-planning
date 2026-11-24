@@ -117,10 +117,9 @@
 #toasts {
   margin-bottom: env(safe-area-inset-bottom);
 }
+/* the top bar is kept below the status bar by pwa.css (#app's padding and the bar's sticky top): padding it here
+   too put the status bar's height twice above its buttons in the Android app */
 @media (max-width: 860px) {
-  .top {
-    padding-top: calc(6px + env(safe-area-inset-top));
-  }
   .side {
     padding-bottom: env(safe-area-inset-bottom);
   }
