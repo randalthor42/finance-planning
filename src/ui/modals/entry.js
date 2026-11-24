@@ -10,6 +10,7 @@ import { Store } from '../../state/store.js';
 import { App } from '../app.js';
 import { formModal } from '../components/form.js';
 import { find, mainAcc } from '../helpers.js';
+import { appointmentModal } from './appointment.js';
 import { goalModal } from './goal.js';
 import { itemModal } from './item.js';
 import { RESERVE_HINT, RESERVE_MODES, recModal } from './recurring.js';
@@ -21,6 +22,10 @@ export function entryModal(e, m) {
   const when = M.label(m.k, true);
   if (e.key.startsWith('item:')) {
     return itemModal(e.id);
+  }
+  // the money of an appointment of My calendar: its window, on that day
+  if (e.key.startsWith('appt:')) {
+    return appointmentModal(e.id, null, e.date);
   }
   if (e.group === 'trip') {
     return tripModal(e.id);

@@ -33,16 +33,18 @@ export function modal({ title, body, foot, wide, onClose, guard, err }) {
     c.classList.add('narrow');
   };
   const tryClose = () => (guard && guard() ? ask() : d.close());
+  // a screen reader says the window's title when it opens ("Edit appointment, dialog")
+  const titleId = 'dlg-' + uid();
   const d = h(
     'dialog',
-    { class: 'modal' + (wide ? ' wide' : '') },
+    { class: 'modal' + (wide ? ' wide' : ''), 'aria-labelledby': titleId },
     h(
       'div',
       { class: 'modal-in' },
       h(
         'div',
         { class: 'modal-h' },
-        h('h2', { text: title }),
+        h('h2', { id: titleId, text: title }),
         h(
           'button',
           { type: 'button', class: 'btn ghost icon', 'aria-label': $t('Close'), onclick: tryClose },

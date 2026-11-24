@@ -88,6 +88,17 @@ function labelStep(count, plotWidth) {
   return Math.max(1, Math.ceil(count / Math.max(2, Math.floor(plotWidth / 80))));
 }
 
+/** The text-anchor of month label i of n: the first starts at its point, the last ends there, the others centre. */
+function labelAnchor(i, n) {
+  if (i === 0) {
+    return 'start';
+  }
+  if (i === n - 1) {
+    return 'end';
+  }
+  return 'middle';
+}
+
 /** The 6M / 12M / All switch of the cash chart. */
 function rangeSwitch() {
   const label = value => (value === 'all' ? $t('All') : $t('{0}M', value));
@@ -450,4 +461,138 @@ export function sparkline(series, target) {
       'vector-effect': 'non-scaling-stroke',
     }),
   );
+}
+
+/**
+ * A fan chart of simulated balances (Forecast › Simulation): for each month the middle (median) line, the middle
+ * half of the futures (the 50% band, 25th–75th percentile) and nine in ten (the 90% band, 5th–95th), against zero,
+ * the safety buffer and the plan's own line. `compare`: the same for a what-if, drawn as lines on top.
+ * `rough(v)` writes an amount without false precision (the page's rounding). Hover or touch for a month's numbers.
+ * @param {{months: {k: number, plan: number, p5: number, p25: number, p50: number, p75: number, p95: number}[], buffer: number, compare?: ?object[], compareName?: string, rough: (v: number) => string}} o
+ */
+export function fanChart(o) {
+  return sized('fan', W => drawFan(o, W));
+}
+
+function drawFan({ months, buffer, compare = null, compareName = '', rough }, W) {
+  const n = months.length;
+  const H = 260;
+  const pl = 56;
+  const pr = 14;
+  const pt = 14;
+  const pb = 26;
+  const vals = [0, buffer || 0];
+  for (const m of [...months, ...(compare || [])]) {
+    vals.push(m.p5, m.p95, m.plan);
+  }
+  const [lo, hi, ticks] = niceScale(Math.min(...vals), Math.max(...vals, 1));
+  const x = i => pl + (W - pl - pr) * (n > 1 ? i / (n - 1) : 0.5);
+  const y = v => pt + (H - pt - pb) * (1 - (v - lo) / (hi - lo));
+  const path = (list, f) => list.map((m, i) => x(i).toFixed(1) + ',' + y(f(m)).toFixed(1)).join(' ');
+  // a band goes along its low edge, then back along its high edge
+  const area = (list, low, high, cls) =>
+    sv('polygon', {
+      points: `${path(list, low)} ${list
+        .map((m, i) => [i, m])
+        .reverse()
+        .map(([i, m]) => x(i).toFixed(1) + ',' + y(high(m)).toFixed(1))
+        .join(' ')}`,
+      class: cls,
+    });
+  const line = (list, f, cls) => sv('polyline', { points: path(list, f), class: cls, fill: 'none' });
+  const end = months[n - 1];
+  const svg = sv('svg', {
+    viewBox: `0 0 ${W} ${H}`,
+    width: W,
+    height: H,
+    role: 'img',
+    class: 'fan',
+    'aria-label': $t(
+      'Balance by month in the simulated futures. In {0}: middle {1}, middle half {2} to {3}, nine in ten {4} to {5}.',
+      M.label(end.k, true),
+      rough(end.p50),
+      rough(end.p25),
+      rough(end.p75),
+      rough(end.p5),
+      rough(end.p95),
+    ),
+  });
+  for (const t of ticks) {
+    svg.append(
+      sv('line', { x1: pl, x2: W - pr, y1: y(t), y2: y(t), class: t === 0 ? 'fan-zero' : 'fan-grid' }),
+      sv('text', { x: pl - 8, y: y(t) + 4, 'text-anchor': 'end' }, compact(t)),
+    );
+  }
+  svg.append(
+    area(
+      months,
+      m => m.p5,
+      m => m.p95,
+      'fan-90',
+    ),
+    area(
+      months,
+      m => m.p25,
+      m => m.p75,
+      'fan-50',
+    ),
+  );
+  if (buffer > 0 && buffer < hi) {
+    svg.append(
+      sv('line', { x1: pl, x2: W - pr, y1: y(buffer), y2: y(buffer), class: 'fan-buffer' }),
+      sv('text', { x: W - pr, y: y(buffer) - 5, 'text-anchor': 'end' }, $t('Buffer {0}', compact(buffer))),
+    );
+  }
+  svg.append(
+    line(months, m => m.plan, 'fan-plan'),
+    line(months, m => m.p50, 'fan-mid'),
+  );
+  if (compare) {
+    svg.append(
+      line(compare, m => m.p5, 'fan-cmp-low'),
+      line(compare, m => m.p50, 'fan-cmp'),
+    );
+  }
+  const step = labelStep(n, W - pl - pr);
+  months.forEach((m, i) => {
+    if ((i % step === 0 && i <= n - 1 - step * 0.8) || i === n - 1) {
+      svg.append(sv('text', { x: x(i), y: H - 6, 'text-anchor': labelAnchor(i, n) }, M.label(m.k)));
+    }
+  });
+  const guide = sv('line', { y1: pt, y2: H - pb, class: 'fan-guide', visibility: 'hidden' });
+  svg.append(guide);
+  const tip = h('div', { class: 'tip', hidden: true });
+  const row = (label, value) => h('div', null, h('span', { class: 'key', text: label }), h('span', { text: value }));
+  const at = e => {
+    const r = svg.getBoundingClientRect();
+    return clamp(Math.round(((((e.clientX - r.left) / r.width) * W - pl) / (W - pl - pr)) * (n - 1)), 0, n - 1);
+  };
+  const show = e => {
+    const i = at(e);
+    const m = months[i];
+    const c = compare ? compare[i] : null;
+    const r = svg.getBoundingClientRect();
+    const px = (x(i) / W) * r.width;
+    guide.setAttribute('x1', x(i));
+    guide.setAttribute('x2', x(i));
+    guide.setAttribute('visibility', 'visible');
+    tip.replaceChildren(
+      h('b', { text: M.label(m.k, true) }),
+      row($t('Middle'), rough(m.p50)),
+      row($t('Middle half'), $t('{0} to {1}', rough(m.p25), rough(m.p75))),
+      row($t('Nine in ten'), $t('{0} to {1}', rough(m.p5), rough(m.p95))),
+      row($t('Plan'), money(m.plan)),
+      c ? row(compareName, rough(c.p50)) : null,
+    );
+    tip.hidden = false;
+    tip.style.left = px > r.width / 2 ? '' : px + 14 + 'px';
+    tip.style.right = px > r.width / 2 ? r.width - px + 14 + 'px' : '';
+  };
+  svg.addEventListener('pointermove', show);
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointerleave', () => {
+    tip.hidden = true;
+    guide.setAttribute('visibility', 'hidden');
+  });
+  return [svg, tip];
 }

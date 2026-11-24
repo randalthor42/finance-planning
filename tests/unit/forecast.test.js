@@ -3,14 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  overrunRate,
-  forecastScenario,
-  forecastRange,
-  smoothedLevel,
-  dampedTrend,
-  seededRandom,
-} from '../../src/logic/forecast.js';
+import { overrunRate, forecastScenario, smoothedLevel, dampedTrend, seededRandom } from '../../src/logic/forecast.js';
 
 /** Six months that start at 0. Each entry is what the month leaves over; costs are 1000 a month. */
 const projectionLeaving = leftovers => {
@@ -93,27 +86,6 @@ test('the random generator is repeatable', () => {
   const first = seededRandom(42);
   const second = seededRandom(42);
   assert.deepEqual([first(), first(), first()], [second(), second(), second()]);
-});
-
-test('range of outcomes: low is below middle is below high, and steady months give no spread', () => {
-  const swinging = forecastRange(projectionLeaving([300, -100, 250, -50, 500, 500, 500, 500]), 0, {
-    sampleMonths: 4,
-    runs: 500,
-  });
-  const lastRow = swinging.rows[swinging.rows.length - 1];
-  assert.ok(lastRow.low < lastRow.middle && lastRow.middle < lastRow.high);
-  assert.ok(swinging.chanceBelowZero >= 0 && swinging.chanceBelowZero <= 1);
-
-  const steady = forecastRange(projectionLeaving([100, 100, 100, 100, 500, 500]), 0, { sampleMonths: 4, runs: 200 });
-  const steadyLast = steady.rows[steady.rows.length - 1];
-  assert.equal(steadyLast.low, 600);
-  assert.equal(steadyLast.high, 600);
-  assert.equal(steady.chanceBelowZero, 0);
-});
-
-test('range of outcomes: the same plan gives the same answer every time', () => {
-  const projection = projectionLeaving([300, -100, 250, -50, 500, 500]);
-  assert.deepEqual(forecastRange(projection, 0, { runs: 300 }), forecastRange(projection, 0, { runs: 300 }));
 });
 
 test('income drops: every month from now on has less coming in', () => {

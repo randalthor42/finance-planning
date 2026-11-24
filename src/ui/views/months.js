@@ -120,25 +120,47 @@ V.months = () => {
         ),
       )
     : null;
+  // the months are tabs: one Tab stop (the chosen month), arrow keys, Home and End move between them; "+ Month" is an
+  // action, so it sits next to the tab list, not in it
+  const stripKeys = event => {
+    const to = { ArrowLeft: k - 1, ArrowRight: k + 1, Home: summary.s0, End: summary.s0 + summary.n - 1 }[event.key];
+    if (to === undefined) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (to >= summary.s0 && to < summary.s0 + summary.n) {
+      App.go('months', { month: to });
+      const tab = document.querySelector('.strip [role="tab"][aria-selected="true"]');
+      if (tab) {
+        tab.focus();
+      }
+    }
+  };
   const strip = h(
     'div',
-    { class: 'strip', role: 'tablist', 'aria-label': $t('Months') },
-    projection.months.map(x =>
-      h(
-        'button',
-        {
-          type: 'button',
-          role: 'tab',
-          'aria-selected': String(x.k === k),
-          class: [
-            overlay ? (shownClose(x) < 0 ? 'neg' : '') : x.status,
-            x.k === k ? 'sel' : '',
-            x.k === now ? 'cur' : '',
-          ].join(' '),
-          onclick: () => App.go('months', { month: x.k }),
-        },
-        h('b', { text: M.label(x.k) }),
-        h('span', { text: compact(shownClose(x)) }),
+    { class: 'strip' },
+    h(
+      'div',
+      { class: 'strip-tabs', role: 'tablist', 'aria-label': $t('Months'), onkeydown: stripKeys },
+      projection.months.map(x =>
+        h(
+          'button',
+          {
+            type: 'button',
+            role: 'tab',
+            tabindex: x.k === k ? 0 : -1,
+            'aria-selected': String(x.k === k),
+            class: [
+              overlay ? (shownClose(x) < 0 ? 'neg' : '') : x.status,
+              x.k === k ? 'sel' : '',
+              x.k === now ? 'cur' : '',
+            ].join(' '),
+            onclick: () => App.go('months', { month: x.k }),
+          },
+          h('b', { text: M.label(x.k) }),
+          h('span', { text: compact(shownClose(x)) }),
+        ),
       ),
     ),
     summary.n < 120
@@ -686,20 +708,12 @@ V.months = () => {
               budgets.map(e => {
                 const open = !e.budget.done && !e.budget.closed;
                 const logHere = () => (open ? logSpend(e.id, m) : entryModal(e, m));
+                // the name is the button (stretched over the row, see .row-go), so the ⋯ menu inside stays reachable
                 return h(
                   'div',
                   {
                     class: 'prow click',
-                    role: 'button',
-                    tabindex: 0,
                     title: open ? $t('Log a spend') : $t('Adjust this month'),
-                    onclick: logHere,
-                    onkeydown: event => {
-                      if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-                        event.preventDefault();
-                        logHere();
-                      }
-                    },
                     oncontextmenu: event => ctxMenu(event, budgetActions(e)),
                   },
                   h(
@@ -708,7 +722,13 @@ V.months = () => {
                     h(
                       'span',
                       null,
-                      e.label,
+                      h('button', {
+                        type: 'button',
+                        class: 'row-go',
+                        text: e.label,
+                        'aria-label': open ? $t('{0}: log a spend', e.label) : $t('{0}: adjust this month', e.label),
+                        onclick: logHere,
+                      }),
                       e.budget.reserve ? null : [' ', chip($t('tracked'), 'acc')],
                       open ? null : [' ', chip($t('closed'))],
                     ),

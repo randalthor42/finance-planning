@@ -1,6 +1,7 @@
 /**
  * @file Short notifications (toasts) shown in a corner of the screen.
  */
+import { maskMoney } from '../../core/format.js';
 import { $t } from '../../core/i18n.js';
 import { Store } from '../../state/store.js';
 import { $, h } from '../dom.js';
@@ -14,7 +15,8 @@ export function toast(text, o) {
     'div',
     { class: 'toast ' + (o.kind || ''), role: 'status' },
     icon(o.kind === 'undo' ? 'undo' : o.kind === 'bad' ? 'alert' : 'check'),
-    h('span', { text }),
+    // a toast says what was just done, amounts included: hidden amounts stay hidden in it too
+    h('span', { text: maskMoney(text) }),
     o.undo
       ? h('button', {
           type: 'button',

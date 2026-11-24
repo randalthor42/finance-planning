@@ -76,7 +76,7 @@ export function keepDeleted(list) {
  * The plan's own fields that are not records: a change there is a change of the plan record. Each has the time it
  * last changed (plan.fieldsUpdatedAt), so merging two devices keeps a tick made on one and a note made on the other.
  */
-export const PLAN_FIELDS = ['name', 'settings', 'fixes', 'overrides', 'reserveOver', 'paid', 'notes'];
+export const PLAN_FIELDS = ['name', 'settings', 'fixes', 'overrides', 'reserveOver', 'paid', 'notes', 'agenda', 'sim'];
 
 /**
  * The plan fields that are maps by budget month, and how deep each goes: 1 = one value per month (a correction, a

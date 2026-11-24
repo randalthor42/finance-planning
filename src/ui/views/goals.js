@@ -2,7 +2,7 @@
  * @file Savings goals page.
  */
 import { M } from '../../core/dates.js';
-import { fmtNum, money } from '../../core/format.js';
+import { fmtNum, money, plainMoney } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { Actions } from '../../state/actions.js';
 import { Store } from '../../state/store.js';
@@ -138,7 +138,7 @@ V.goals = () => {
                   'goals',
                   G.id,
                   { monthly: needM },
-                  $t('“{0}” now saves {1} a month', G.name, money(needM)),
+                  $t('“{0}” now saves {1} a month', G.name, plainMoney(needM)),
                 ),
               'sm',
             ),

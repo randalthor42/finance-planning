@@ -2,10 +2,14 @@
  * @file Every change a user can make to a plan. The UI calls these and nothing else writes to the store.
  */
 import { D, M } from '../core/dates.js';
-import { money } from '../core/format.js';
-import { $t } from '../core/i18n.js';
+// labels for the activity log keep their amounts even while amounts are hidden on screen (toasts mask them)
+import { plainMoney as money } from '../core/format.js';
+import { $t, plural } from '../core/i18n.js';
 import { has, isObj, r2, uid } from '../core/util.js';
+import { deleteOccurrence, draftMoney, editOccurrence, moveDrafts, moveTicks } from '../logic/agenda.js';
+import { agendaChanges } from './agendaLog.js';
 import { project } from '../logic/projection.js';
+import { CAT_NAME } from '../models/categories.js';
 import { Store } from './store.js';
 
 /**
@@ -36,6 +40,48 @@ function tickLabel(entry, on, monthName) {
   return on
     ? $t('“{0}” paid in {1} · {2} moved to “You have now”', entry.label, monthName, amount)
     : $t('“{0}” unticked in {1} · {2} back in “Still to pay”', entry.label, monthName, amount);
+}
+/** What of the calendar counts in the plan: appointments whose money is switched on. */
+const countedOf = agenda => JSON.stringify(agenda.entries.filter(e => e.on && e.amount > 0));
+/**
+ * A change of the appointments of My calendar: `change(agenda)` is tried on a copy first, so the commit knows whether
+ * any money that counts moved (an appointment with money switched on added, changed or deleted). When none did, the
+ * projection is kept (sameMoney); otherwise the plan is worked out again. `change` must do the same both times.
+ */
+function agendaCommit(change, label, opts, alsoOnPlan = null) {
+  const trial = JSON.parse(JSON.stringify(Store.plan.agenda));
+  change(trial);
+  const same = countedOf(trial) === countedOf(Store.plan.agenda);
+  return Store.commit(
+    p => {
+      change(p.agenda);
+      if (alsoOnPlan) {
+        alsoOnPlan(p); // in the same commit: one undo step
+      }
+    },
+    label,
+    { ...opts, sameMoney: same },
+  );
+}
+/**
+ * Where a day of appointment `entry` goes when day `day` is edited for `scope` and moved by `by` days, for its tick
+ * (logic/agenda.js moveTicks): the edited day gets the new id `newId` ('one'), the days from it on do ('following'),
+ * or every day moves by `by` (the whole appointment).
+ */
+function tickMap(entry, day, scope, by, newId) {
+  const repeats = entry.repeat !== 'none';
+  return (id, d) => {
+    if (id !== entry.id) {
+      return null;
+    }
+    if (repeats && scope === 'one') {
+      return d === day ? [newId, d + by] : null;
+    }
+    if (repeats && scope === 'following' && day > D.parse(entry.date)) {
+      return d >= day ? [newId, d + by] : null;
+    }
+    return by ? [id, d + by] : null;
+  };
 }
 export const Actions = {
   save(list, obj) {
@@ -392,5 +438,255 @@ export const Actions = {
     return Store.commit(p => {
       p.settings.horizon++;
     }, $t('Added one more month to the plan'));
+  },
+
+  /* --- My calendar (models/agenda.js). Only plan.agenda changes, so the projection is kept (sameMoney), except
+         when drafts are applied: then they are part of the plan and everything is worked out again. --- */
+
+  /** Adds or updates an appointment (the whole of it; one day of a repeat is editOccurrence). */
+  saveEntry(entry) {
+    const isNew = !Store.plan.agenda.entries.some(x => x.id === entry.id);
+    return agendaCommit(
+      agenda => {
+        const i = agenda.entries.findIndex(x => x.id === entry.id);
+        if (i > -1) {
+          agenda.entries[i] = entry;
+        } else {
+          agenda.entries.push(entry);
+        }
+      },
+      isNew ? $t('Added “{0}” to your calendar', entry.title) : $t('Updated “{0}” in your calendar', entry.title),
+    );
+  },
+  removeEntry(id) {
+    const x = Store.plan.agenda.entries.find(y => y.id === id);
+    return (
+      !!x &&
+      agendaCommit(
+        agenda => {
+          agenda.entries = agenda.entries.filter(y => y.id !== id);
+        },
+        $t('Deleted “{0}” from your calendar', x.title),
+        { undo: true },
+      )
+    );
+  },
+  /**
+   * Saves `values` for the day `day` (a day number) of appointment `id`: for that day only ('one'), that day and the
+   * following ones ('following') or every day ('all'). See logic/agenda.js editOccurrence.
+   */
+  editOccurrence(id, day, values, scope) {
+    const x = Store.plan.agenda.entries.find(y => y.id === id);
+    if (!x) {
+      return false;
+    }
+    const ids = [uid()];
+    const when = D.label(day, { year: 'numeric' });
+    const by = D.parse(values.date) - day;
+    let label;
+    if (scope === 'one') {
+      label = $t('Changed “{0}” on {1} only', values.title, when);
+    } else if (scope === 'following') {
+      label = $t('Changed “{0}” from {1} on', values.title, when);
+    } else {
+      label = $t('Updated “{0}” in your calendar', values.title);
+    }
+    return agendaCommit(
+      agenda => {
+        let i = 0;
+        editOccurrence(agenda, id, day, values, scope, () => ids[i++]);
+      },
+      label,
+      undefined,
+      p => moveTicks(p, tickMap(x, day, scope, by, ids[0])),
+    );
+  },
+  /** Deletes day `day` of appointment `id`, that day and the following ones, or every day of it. */
+  deleteOccurrence(id, day, scope) {
+    const x = Store.plan.agenda.entries.find(y => y.id === id);
+    if (!x) {
+      return false;
+    }
+    const when = D.label(day, { year: 'numeric' });
+    let label;
+    if (scope === 'one' && x.repeat !== 'none') {
+      label = $t('“{0}” left out on {1}', x.title, when);
+    } else if (scope === 'following') {
+      label = $t('Deleted “{0}” from {1} on', x.title, when);
+    } else {
+      label = $t('Deleted “{0}” from your calendar', x.title);
+    }
+    return agendaCommit(agenda => deleteOccurrence(agenda, id, day, scope), label, { undo: true });
+  },
+  /** Leaves one day (a day number) out of a repeating appointment; the other days stay. */
+  skipDay(id, day) {
+    return Actions.deleteOccurrence(id, day, 'one');
+  },
+  /**
+   * Changes how the calendar looks: name, own calendars, what of the plan it shows, the number on each day, pins.
+   * The log says exactly what changed (agendaChanges), one line per change even inside one Undo step (logEach).
+   */
+  setAgenda(values) {
+    const before = Store.plan.agenda;
+    const words = agendaChanges(before, { ...before, ...values }, Store.plan);
+    return Store.commit(
+      p => {
+        Object.assign(p.agenda, values);
+      },
+      words.join(' · ') || $t('Updated your calendar'),
+      { sameMoney: true, logEach: true },
+    );
+  },
+  /** Deletes one own calendar with its appointments (normAgenda keeps at least one calendar). */
+  removeCal(id) {
+    const cal = Store.plan.agenda.cals.find(c => c.id === id);
+    return (
+      !!cal &&
+      agendaCommit(
+        agenda => {
+          agenda.cals = agenda.cals.filter(c => c.id !== id);
+          agenda.entries = agenda.entries.filter(e => e.cal !== id);
+        },
+        $t('Deleted the calendar “{0}”', cal.name),
+        { undo: true, logEach: true },
+      )
+    );
+  },
+  /** Adds or updates a draft of `list` ('items' or 'trips'): shaped like a record of the plan, counted for nothing. */
+  saveDraft(list, obj) {
+    const isNew = !Store.plan.agenda.drafts[list].some(x => x.id === obj.id);
+    return Store.commit(
+      p => {
+        const drafts = p.agenda.drafts[list];
+        const i = drafts.findIndex(x => x.id === obj.id);
+        if (i > -1) {
+          drafts[i] = obj;
+        } else {
+          drafts.push(obj);
+        }
+      },
+      isNew ? $t('Added the draft “{0}”', obj.name) : $t('Updated the draft “{0}”', obj.name),
+      { sameMoney: true },
+    );
+  },
+  removeDraft(list, id) {
+    const x = Store.plan.agenda.drafts[list].find(y => y.id === id);
+    return (
+      !!x &&
+      Store.commit(
+        p => {
+          p.agenda.drafts[list] = p.agenda.drafts[list].filter(y => y.id !== id);
+        },
+        $t('Deleted the draft “{0}”', x.name),
+        { undo: true, sameMoney: true },
+      )
+    );
+  },
+  /* --- Forecast › Simulation (plan.sim, models/sim.js): nothing the projection reads, so it is kept (sameMoney).
+         Every change says what it was in the activity log. --- */
+
+  /** Months ahead, runs, seed, safety buffer. */
+  setSim(values) {
+    const parts = [];
+    if (values.horizon !== undefined) {
+      parts.push($t('{0} ahead', plural(values.horizon, 'month')));
+    }
+    if (values.runs !== undefined) {
+      parts.push($t('{0} runs', values.runs));
+    }
+    if (values.seed !== undefined) {
+      parts.push($t('seed {0}', values.seed));
+    }
+    if (values.buffer !== undefined) {
+      parts.push(
+        values.buffer === null ? $t('safety buffer: your cushion') : $t('safety buffer {0}', money(values.buffer)),
+      );
+    }
+    return Store.commit(
+      p => {
+        Object.assign(p.sim, values);
+      },
+      $t('Simulation: {0}', parts.join(' · ')),
+      { sameMoney: true },
+    );
+  },
+  /**
+   * The person's own values for something the simulation learned: a category (`section` 'cats', key: category),
+   * an income ('incomes', key: its id) or the large irregular expenses ('events'). null goes back to what was learned.
+   */
+  setSimOverride(section, key, value) {
+    let name;
+    if (section === 'cats') {
+      name = CAT_NAME[key] || key;
+    } else if (section === 'incomes') {
+      name = (Store.plan.incomes.find(i => i.id === key) || {}).name || key;
+    } else {
+      name = $t('Large irregular expenses');
+    }
+    return Store.commit(
+      p => {
+        if (section === 'events') {
+          p.sim.events = value || {};
+        } else if (value) {
+          p.sim[section][key] = value;
+        } else {
+          delete p.sim[section][key];
+        }
+      },
+      value ? $t('Simulation: your own values for {0}', name) : $t('Simulation: {0} back to what was learned', name),
+      { sameMoney: true },
+    );
+  },
+  /** Adds or updates a what-if scenario. */
+  saveScenario(scenario) {
+    const isNew = !Store.plan.sim.scenarios.some(x => x.id === scenario.id);
+    return Store.commit(
+      p => {
+        const list = p.sim.scenarios;
+        const i = list.findIndex(x => x.id === scenario.id);
+        if (i > -1) {
+          list[i] = scenario;
+        } else {
+          list.push(scenario);
+        }
+      },
+      isNew ? $t('Added the what-if “{0}”', scenario.name) : $t('Updated the what-if “{0}”', scenario.name),
+      { sameMoney: true },
+    );
+  },
+  removeScenario(id) {
+    const x = Store.plan.sim.scenarios.find(y => y.id === id);
+    return (
+      !!x &&
+      Store.commit(
+        p => {
+          p.sim.scenarios = p.sim.scenarios.filter(y => y.id !== id);
+        },
+        $t('Deleted the what-if “{0}”', x.name),
+        { undo: true, sameMoney: true },
+      )
+    );
+  },
+
+  /** Makes the chosen drafts part of the plan, in one step (one Undo takes all of them back to drafts). */
+  applyDrafts(ids) {
+    const agenda = Store.plan.agenda;
+    const chosen = [
+      ...agenda.drafts.items,
+      ...agenda.drafts.trips,
+      ...agenda.entries.filter(draftMoney).map(e => ({ id: e.id, name: e.title })),
+    ].filter(x => ids.includes(x.id));
+    if (!chosen.length) {
+      return false;
+    }
+    return Store.commit(
+      p => {
+        moveDrafts(p, ids);
+      },
+      chosen.length === 1
+        ? $t('Added “{0}” to your plan', chosen[0].name)
+        : $t('Added {0} to your plan', plural(chosen.length, 'draft')),
+      { undo: true },
+    );
   },
 };

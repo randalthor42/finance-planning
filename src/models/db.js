@@ -4,6 +4,7 @@
 import { APP } from '../config.js';
 import { GRID_COLS, GRID_MAX_H } from '../core/grid.js';
 import { ID_RE, clamp, isObj, uid } from '../core/util.js';
+import { REMINDER_DAYS } from '../config.js';
 import { normCalendar } from './calendarPrefs.js';
 import { normPlan } from './plan.js';
 import { timestamp } from './records.js';
@@ -42,6 +43,24 @@ export function normLayouts(raw) {
   }
   return out;
 }
+
+/**
+ * Bill reminders, a browser preference like the theme: on or off, how many days ahead (logic/reminders.js
+ * REMINDER_DAYS), which kinds of payment, and whether the system shows notifications too. Off until turned on.
+ */
+export function normReminders(raw) {
+  const r = isObj(raw) ? raw : {};
+  const yes = (v, fallback) => (typeof v === 'boolean' ? v : fallback);
+  return {
+    on: r.on === true,
+    days: REMINDER_DAYS.includes(r.days) ? r.days : 2,
+    bill: yes(r.bill, true),
+    loan: yes(r.loan, true),
+    oneoff: yes(r.oneoff, true),
+    notify: r.notify === true,
+  };
+}
+
 
 /**
  * The database, cleaned. With keepRaw (a Set), plans other than the open one that look like what the store writes
@@ -120,6 +139,9 @@ export function normPrefs(raw) {
     fileWatch: raw.fileWatch !== false,
     layouts: normLayouts(raw.layouts),
     calendar: normCalendar(raw.calendar),
+    reminders: normReminders(raw.reminders),
+    /** Amounts are hidden on screen until tapped (Settings › Lock and privacy). Off until the person turns it on. */
+    hideAmounts: raw.hideAmounts === true,
     log: Array.isArray(raw.log)
       ? raw.log
           .filter(isObj)

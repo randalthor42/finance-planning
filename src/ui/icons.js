@@ -6,6 +6,7 @@ import { sv } from './dom.js';
 const ICONS = {
   home: 'M3 11l9-8 9 8M5 10v10h14V10',
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  agenda: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M8 14h3v3H8z',
   repeat: 'M4 10V8a2 2 0 012-2h12l-3-3M20 14v2a2 2 0 01-2 2H6l3 3',
   tag: 'M3 12V4h8l10 10-8 8L3 12zM7.5 8.5h.01',
   plane: 'M3 11l18-7-6 17-3-7-9-3z',
@@ -38,9 +39,11 @@ const ICONS = {
   cloud: 'M7 19h10.5a4 4 0 00.6-7.95A6 6 0 006.3 9.6 4.7 4.7 0 007 19z',
   cloudOff: 'M7 19h10.5a4 4 0 00.6-7.95A6 6 0 006.3 9.6 4.7 4.7 0 007 19zM3 3l18 18',
   refresh: 'M20 11a8 8 0 00-14.9-3M4 4v4h4M4 13a8 8 0 0014.9 3M20 20v-4h-4',
-  lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 017 0v3',
   qr: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 19h2M19 14h1',
   camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 10.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z',
+  eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z',
+  eyeoff: 'M3 3l18 18M10.6 6.1A9.7 9.7 0 0112 6c6.4 0 10 6 10 6a17 17 0 01-3.1 3.8M6.6 6.6C3.7 8.4 2 12 2 12s3.6 6 10 6c1.6 0 3-.4 4.3-1M9.9 9.9a3 3 0 004.2 4.2',
+  lock: 'M6 11h12v10H6zM8 11V8a4 4 0 018 0v3',
 };
 export const icon = n =>
   sv(

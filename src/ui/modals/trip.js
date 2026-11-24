@@ -14,7 +14,7 @@ import { moneyInp } from '../components/moneyInput.js';
 import { monthField } from '../components/pickers.js';
 import { grip, moveIn, sortable } from '../components/sortable.js';
 import { h } from '../dom.js';
-import { find, remove, upsert } from '../helpers.js';
+import { inPlan } from '../helpers.js';
 import { icon } from '../icons.js';
 import { selK } from '../state.js';
 
@@ -33,9 +33,17 @@ function editTitle(kind) {
   }
   return $t('Edit trip');
 }
+/** The window title: a draft made on the calendar, or a trip of the plan; new or being edited. */
+function windowTitle(current, draft) {
+  if (draft) {
+    return current ? $t('Edit draft') : $t('Draft a trip or event');
+  }
+  return current ? editTitle(current.kind) : $t('Plan a trip or event');
+}
 
-export function tripModal(id, preset) {
-  const current = id && find('trips', id);
+/** The window of a trip or event. `target` is where it saves (helpers.js): the plan, or the drafts of My calendar. */
+export function tripModal(id, preset, target = inPlan) {
+  const current = id && target.find('trips', id);
   const settings = Store.plan.settings;
   const t = current
     ? JSON.parse(JSON.stringify(current))
@@ -75,7 +83,7 @@ export function tripModal(id, preset) {
       return false;
     }
     err.textContent = '';
-    upsert('trips', { ...t, items: A.on ? t.items : t.items.filter(i => i.name.trim() || i.amount) });
+    target.save('trips', { ...t, items: A.on ? t.items : t.items.filter(i => i.name.trim() || i.amount) });
     return true;
   };
   const A = autosaver(save, true, () => t);
@@ -347,6 +355,13 @@ export function tripModal(id, preset) {
   const body = h(
     'div',
     { class: 'form' },
+    target.draft
+      ? h('div', {
+          class: 'preview',
+          style: 'grid-column:1/-1',
+          text: $t('A draft: your plan does not change until you apply it on your calendar.'),
+        })
+      : null,
     h('label', { class: 'fld' }, h('span', { class: 'fld-l', text: $t('Name') }), name),
     h('div', { class: 'fld' }, h('span', { class: 'fld-l', text: $t('Type') }), kindSeg, kindHint),
     opt,
@@ -395,7 +410,7 @@ export function tripModal(id, preset) {
   );
   drawKind();
   const d = modal({
-    title: current ? editTitle(current.kind) : $t('Plan a trip or event'),
+    title: windowTitle(current, target.draft),
     wide: true,
     body,
     err,
@@ -408,7 +423,7 @@ export function tripModal(id, preset) {
             () => {
               A.discard();
               d.close();
-              remove('trips', id);
+              target.remove('trips', id);
             },
             'danger ghost',
             'trash',

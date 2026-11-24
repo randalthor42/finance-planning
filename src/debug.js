@@ -78,6 +78,27 @@ import * as m73 from './ui/modals/importPreview.js';
 import * as m74 from './ui/modals/qrTransfer.js';
 import * as m75 from './ui/views/syncSettings.js';
 import * as m76 from './ui/qrLoader.js';
+import * as m77 from './models/agenda.js';
+import * as m78 from './logic/agenda.js';
+import * as m79 from './ui/components/agendaData.js';
+import * as m80 from './ui/modals/appointment.js';
+import * as m81 from './ui/modals/applyDrafts.js';
+import * as m82 from './ui/modals/agendaSettings.js';
+import * as m83 from './ui/modals/pinPicker.js';
+import * as m84 from './ui/components/sheet.js';
+import * as m85 from './ui/components/gestures.js';
+import * as m86 from './core/gesture.js';
+import * as m87 from './logic/occurrences.js';
+import * as m88 from './ui/simRun.js';
+import * as m89 from './services/lazySim.js';
+import * as m90 from './ui/simFormat.js';
+import * as m91 from './ui/lock.js';
+import * as m92 from './ui/reminders.js';
+import * as m93 from './logic/lock.js';
+import * as m94 from './logic/reminders.js';
+import * as m95 from './services/pin.js';
+import * as m96 from './services/lockConfig.js';
+import * as m97 from './services/biometric.js';
 
 export const expose = () =>
   Object.assign(
@@ -159,4 +180,25 @@ export const expose = () =>
     m74,
     m75,
     m76,
+    m77,
+    m78,
+    m79,
+    m80,
+    m81,
+    m82,
+    m83,
+    m84,
+    m85,
+    m86,
+    m87,
+    m88,
+    m89,
+    m90,
+    m91,
+    m92,
+    m93,
+    m94,
+    m95,
+    m96,
+    m97,
   );

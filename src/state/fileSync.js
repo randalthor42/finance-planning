@@ -267,6 +267,9 @@ export class FileSync {
   }
   /** Runs a file operation after the ones before it. Errors become a status; the browser copy is never touched. */
   run(fn) {
+    if (!this.store.db) {
+      return Promise.resolve(); // nothing read yet (the app is locked with its data encrypted: ui/lock.js)
+    }
     const gen = this.gen;
     this.busy++;
     const next = this.chain

@@ -50,6 +50,8 @@
  * @property {number} createdAt Epoch ms. Every record in the lists has createdAt, updatedAt and deletedAt too.
  * @property {number} updatedAt Epoch ms: the last save that changed the plan or one of its records.
  * @property {null} deletedAt A live plan; a deleted plan is a DeletedPlan in the database.
+ * @property {Agenda} agenda My calendar: the person's own calendars, appointments, drafts and what of the plan it shows.
+ * @property {Sim} sim Simulation settings (Forecast › Simulation). Never read by the projection.
  */
 
 /**
@@ -70,6 +72,56 @@
  * @property {?string} active The open plan's id.
  * @property {Object<string, {id: string, createdAt: number, updatedAt: number, deletedAt: number}>} deletedPlans
  *   Deleted plans, as markers, so that a deletion reaches other devices (at most 100).
+ */
+
+/**
+ * Simulation settings of a plan (models/sim.js normSim). A missing override means "as learned from history".
+ * @typedef {object} Sim
+ * @property {number} runs Monte Carlo runs, 100 to 10,000 (default 2,000).
+ * @property {3|6|12|24} horizon Months ahead.
+ * @property {number} seed Seed of the random numbers: the same seed gives the same answer.
+ * @property {?number} buffer The safety buffer for "below the buffer"; null: the plan's cushion.
+ * @property {Object<string, {median?: number, spread?: number, off?: boolean}>} cats Per spending category.
+ * @property {{perYear?: number, size?: number, off?: boolean}} events Large irregular expenses.
+ * @property {Object<string, {mode?: string, spread?: number, delay?: number, cutChance?: number, cutPct?: number, raiseChance?: number, raisePct?: number}>} incomes
+ *   Per income id.
+ * @property {{id: string, name: string, changes: {kind: 'income'|'cost'|'oneoff'|'saving', amount?: number, percent?: number, from?: ?string, goal?: ?string}[]}[]} scenarios
+ *   What-if scenarios.
+ */
+
+/**
+ * My calendar (models/agenda.js normAgenda). Nothing in it counts in the plan until drafts are applied.
+ * @typedef {object} Agenda
+ * @property {string} name The page title; '' for "My calendar" in the language of the app.
+ * @property {{id: string, name: string, tone: string}[]} cals The person's own calendars (at least one).
+ * @property {AgendaEntry[]} entries Appointments.
+ * @property {string[]} layers Calendar groups of the plan shown (models/calendarPrefs.js CAL_GROUPS).
+ * @property {string[]} cats Spending categories shown; [] for all.
+ * @property {'balance'|'net'|'spent'|'none'} figure The number on each day.
+ * @property {{items: object[], trips: object[]}} drafts One-offs and trips shaped like plan records, not counted yet.
+ * @property {{list: string, id: string}[]} pins Records of the plan always shown.
+ */
+
+/**
+ * @typedef {object} AgendaEntry
+ * @property {string} id
+ * @property {string} cal Id of its calendar.
+ * @property {string} title
+ * @property {string} date First day, 'YYYY-MM-DD'.
+ * @property {?string} end Last day when it lasts several days.
+ * @property {string} time 'HH:MM' or '' (all day).
+ * @property {string} endTime 'HH:MM' or ''.
+ * @property {'none'|'day'|'week'|'month'|'year'} repeat
+ * @property {?string} until Last day it can repeat on.
+ * @property {string[]} skip Days left out of a repeat.
+ * @property {string} note
+ * @property {number} amount What it costs or brings, per occurrence; 0 for none.
+ * @property {'out'|'in'} kind Money out (spent) or in (received).
+ * @property {string} cat Category (CATS for money out, INCATS for money in).
+ * @property {boolean} on Its money counts in the plan (one ledger line "appt:<id>:<day>" per occurrence). Until then
+ *   it is a draft: shown dashed, listed with the drafts, applied by switching it on.
+ * @property {?string} series The appointment it came from: a day changed on its own, or the rest of a repeat split
+ *   in two ("this and following days"). Deleting every day of a repeat deletes these too.
  */
 
 /**
@@ -121,7 +173,11 @@
  * @property {string} [tone] Colour of this event only: good, bad, warn, acc, cash, save, debt, trip, wish, muted.
  * @property {string} [color] Any CSS colour for this event only; wins over tone.
  * @property {string} [sub] A second line in lists and tooltips.
+ * @property {string} [note] Notes, shown with every detail of the line (the bottom sheet opened full).
  * @property {boolean} [done] Paid or received: drawn quieter.
+ * @property {boolean} [tentative] Not certain yet (a draft of My calendar): drawn dashed.
+ * @property {string} [time] Time of day, 'HH:MM', shown before the title in the grid.
+ * @property {string} [timeText] The time as lists show it, e.g. '09:30–10:15'. Default: `time`.
  * @property {*} [data] Anything the page wants back in onEvent (the plan adapters keep the ledger line here).
  */
 

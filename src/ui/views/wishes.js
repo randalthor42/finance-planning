@@ -352,7 +352,7 @@ V.wishes = () => {
           ['list', $t('List')],
         ],
         Store.db.wishView,
-        v => Store.setPref('wishView', v),
+        v => Store.setPref('wishView', v, v === 'list' ? $t('Wishlist shown as a list') : $t('Wishlist shown as cards')),
       ),
       btn($t('Add a wish'), () => wishModal(), 'primary', 'plus'),
     ],

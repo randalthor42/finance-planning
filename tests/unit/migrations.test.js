@@ -66,6 +66,8 @@ test('migration 7 → 8: each plan gets the time of each of its own fields (its 
       reserveOver: NOW,
       paid: NOW,
       notes: NOW,
+      agenda: NOW,
+      sim: NOW,
     });
   }
   const strip = x =>

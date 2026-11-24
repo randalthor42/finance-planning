@@ -6,6 +6,7 @@ import { SHIFTS } from '../models/categories.js';
 import { Actions } from '../state/actions.js';
 import { Store } from '../state/store.js';
 import { confirmModal } from './components/modal.js';
+import { UI } from './state.js';
 
 /* --- 6.7 the page changes data only through Actions (section 4) --- */
 export const upsert = (list, obj) => Actions.save(list, obj);
@@ -51,3 +52,23 @@ export const dayFields = inc => [
   },
   { k: 'shift', type: 'select', half: true, label: $t('If that day is a weekend'), options: SHIFTS },
 ];
+/**
+ * Where an editing window saves its record: the plan (inPlan, the default) or the drafts of My calendar (inDrafts),
+ * which count for nothing until they are applied. The windows of one-offs and trips take one (itemModal, tripModal),
+ * so a draft is made in the same window, with the same checks, as the record it will become.
+ */
+export const inPlan = {
+  draft: false,
+  find: (list, id) => find(list, id),
+  save: (list, obj) => upsert(list, obj),
+  remove: (list, id) => remove(list, id),
+};
+export const inDrafts = {
+  draft: true,
+  find: (list, id) => Store.plan.agenda.drafts[list].find(x => x.id === id),
+  save: (list, obj) => {
+    UI.agendaTouched.add(obj.id); // leaving My calendar asks whether to apply it (views/agenda.js)
+    return Actions.saveDraft(list, obj);
+  },
+  remove: (list, id) => Actions.removeDraft(list, id),
+};

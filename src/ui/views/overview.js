@@ -2,7 +2,7 @@
  * @file Overview page: where you are this month, insights, charts, upcoming payments.
  */
 import { D, M } from '../../core/dates.js';
-import { fmtNum, money, signed } from '../../core/format.js';
+import { fmtNum, money, plainMoney, signed } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
 import { clamp } from '../../core/util.js';
 import { budgetTrend } from '../../logic/advice.js';
@@ -34,6 +34,7 @@ import { rollModal, settingsModal } from '../modals/settings.js';
 import { tripModal } from '../modals/trip.js';
 import { UI, curK, monthAt, nowK, rangeLabel } from '../state.js';
 import { designable } from '../components/designPages.js';
+import { dueSoonCard } from '../reminders.js';
 import { V } from './registry.js';
 import { reviewPeriod } from '../../logic/review.js';
 import { forecastScenario } from '../../logic/forecast.js';
@@ -126,7 +127,7 @@ function insights() {
               'bills',
               b.id,
               { amount: Math.round(b.avg) },
-              $t('“{0}” budget set to {1}', b.name, money(Math.round(b.avg))),
+              $t('“{0}” budget set to {1}', b.name, plainMoney(Math.round(b.avg))),
             ),
         ],
       }),
@@ -785,6 +786,7 @@ V.overview = () => {
     ),
     null,
     [
+      titled('reminders', $t('Due soon'), dueSoonCard(), { w: 12 }),
       ...kpis,
       titled('starter', $t('Build your plan'), starter, { w: 12 }),
       titled('now', M.label(currentMonth, true), nowCard(), { w: 8, minW: 4 }),

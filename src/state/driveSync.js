@@ -94,7 +94,9 @@ export class DriveSync {
     this.meta = options.meta || localState(DRIVE.stateKey);
     this.isOnline = options.online || (() => typeof navigator === 'undefined' || navigator.onLine !== false);
     this.debounce = options.debounce ?? DRIVE.debounce;
-    this.keepBackup = options.backup || backup;
+    // through the store's adapter when it has one: with encryption at rest on, the copy is kept sealed
+    this.keepBackup =
+      options.backup || ((text, info) => (store.adapter && store.adapter.backup ? store.adapter.backup(text, info) : backup(text, info)));
     this.now = options.now || (() => Date.now());
     const saved = this.meta.load();
     /** What is remembered between visits: on or off, the file and its version at the last sync, waiting changes. */
@@ -472,8 +474,8 @@ export class DriveSync {
     return this.token && this.token.expiresAt - DRIVE.margin > this.now() ? this.token : null;
   }
   async once() {
-    if (!this.enabled) {
-      return;
+    if (!this.enabled || !this.store.db) {
+      return; // off, or nothing read yet (the app is locked with its data encrypted: ui/lock.js)
     }
     if (!this.isOnline()) {
       return this.setStatus('offline');

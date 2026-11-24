@@ -3,7 +3,7 @@
  */
 import { APP } from '../../config.js';
 import { D, M } from '../../core/dates.js';
-import { FMT, money } from '../../core/format.js';
+import { FMT, maskMoney, money } from '../../core/format.js';
 import { $t, ordinal, plural } from '../../core/i18n.js';
 import { samplePlan } from '../../models/samplePlan.js';
 import { Drive } from '../../state/driveSync.js';
@@ -21,15 +21,29 @@ import { exportModal, importFlow } from '../modals/backup.js';
 import { newPlanModal, renamePlanModal, rollModal, settingsModal } from '../modals/settings.js';
 import { UI, curK, monthAt } from '../state.js';
 import { calendarSettingsCards } from './calendarSettings.js';
+import { reminderCards, securityCards } from './security.js';
 import { languageCard } from './language.js';
 import { storageCards } from './storageSettings.js';
 import { V } from './registry.js';
 
+/** Choices of the Appearance card, with the words the activity log uses for them. */
+const THEMES = () => [
+  ['auto', $t('Auto')],
+  ['light', $t('Light')],
+  ['dark', $t('Dark')],
+];
+const TOAST_PLACES = () => [
+  ['tr', $t('Top right')],
+  ['br', $t('Bottom right')],
+  ['tl', $t('Top left')],
+  ['bl', $t('Bottom left')],
+];
+const nameIn = (choices, value) => (choices.find(c => c[0] === value) || [value, value])[1];
 const logRow = e =>
   h(
     'div',
     { class: 'row' },
-    h('span', { class: 'grow', text: e.text }),
+    h('span', { class: 'grow', text: maskMoney(e.text) }),
     h('span', {
       class: 'd',
       text: (d =>
@@ -49,6 +63,8 @@ export const STABS = [
   ['calendar', $t('Calendar')],
   ['language', $t('Language')],
   ['storage', $t('Storage')],
+  ['security', $t('Lock and privacy')],
+  ['reminders', $t('Reminders')],
   ['backup', $t('Backup')],
   ['activity', $t('Activity')],
 ];
@@ -123,7 +139,7 @@ V.settings = () => {
     type: 'checkbox',
     checked: db.autosave,
     'aria-label': $t('Autosave'),
-    onchange: () => Store.setPref('autosave', auto.checked),
+    onchange: () => Store.setPref('autosave', auto.checked, auto.checked ? $t('Autosave: on') : $t('Autosave: off')),
   });
   const design = h('input', {
     type: 'checkbox',
@@ -134,7 +150,7 @@ V.settings = () => {
       if (!design.checked) {
         UI.design = null;
       }
-      Store.setPref('designMode', design.checked);
+      Store.setPref('designMode', design.checked, design.checked ? $t('Design mode: on') : $t('Design mode: off'));
     },
   });
   const pages = {
@@ -185,32 +201,15 @@ V.settings = () => {
           opt(
             $t('Theme'),
             null,
-            segc(
-              [
-                ['auto', $t('Auto')],
-                ['light', $t('Light')],
-                ['dark', $t('Dark')],
-              ],
-              db.theme,
-              v => Store.setPref('theme', v),
-            ),
+            segc(THEMES(), db.theme, v => Store.setPref('theme', v, $t('Theme: {0}', nameIn(THEMES(), v)))),
           ),
           opt(
             $t('Notifications'),
             $t('Where the short messages appear.'),
-            segc(
-              [
-                ['tr', $t('Top right')],
-                ['br', $t('Bottom right')],
-                ['tl', $t('Top left')],
-                ['bl', $t('Bottom left')],
-              ],
-              db.toastPos,
-              v => {
-                Store.setPref('toastPos', v);
-                toast($t('Notifications appear here'));
-              },
-            ),
+            segc(TOAST_PLACES(), db.toastPos, v => {
+              Store.setPref('toastPos', v, $t('Notifications: {0}', nameIn(TOAST_PLACES(), v)));
+              toast($t('Notifications appear here'));
+            }),
           ),
           opt(
             $t('Autosave'),
@@ -249,6 +248,8 @@ V.settings = () => {
     language: languageCard,
     calendar: calendarSettingsCards,
     storage: storageCards,
+    security: securityCards,
+    reminders: reminderCards,
     plans: () => [
       card(
         $t('Plans'),

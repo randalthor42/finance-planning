@@ -9,7 +9,11 @@
 @import './months.css';
 @import './charts.css';
 @import './calendar.css';
+@import './agenda.css';
+@import './sim.css';
 @import './features.css';
 @import './design.css';
 @import './pwa.css';
 @import './sync.css';
+@import './lock.css';
+@import './a11y.css';

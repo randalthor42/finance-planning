@@ -2,9 +2,9 @@
  * @file Forecast page: the plan month by month or year by year, and scenarios that look ahead more carefully.
  */
 import { M } from '../../core/dates.js';
-import { compact, money, signed } from '../../core/format.js';
+import { money, signed } from '../../core/format.js';
 import { $t, plural } from '../../core/i18n.js';
-import { forecastRange, forecastScenario } from '../../logic/forecast.js';
+import { forecastScenario } from '../../logic/forecast.js';
 import { IO } from '../../services/backup.js';
 import { Store } from '../../state/store.js';
 import { App } from '../app.js';
@@ -15,7 +15,9 @@ import { card, page, segc } from '../components/layout.js';
 import { h } from '../dom.js';
 import { memo } from '../memo.js';
 import { UI, nowK } from '../state.js';
+import { simulation } from '../simRun.js';
 import { V } from './registry.js';
+import { simulationPage } from './simulation.js';
 
 /** The plan table: every month (or year) with what each part of the plan adds or takes. */
 function planTable(projection, now, yearly) {
@@ -167,36 +169,6 @@ function scenarioTable(result, now) {
   });
 }
 
-/** The range of outcomes: for every month the plan, a low (1 in 10 worse), the middle and a high (1 in 10 better). */
-function rangeTable(range, now) {
-  return dataTable({
-    id: 'forecast-range',
-    rows: range.rows,
-    maxHeight: '72vh',
-    rowProps: row => ({
-      class: 'click ' + (row.low < 0 ? 'tight' : '') + (row.k === now ? ' sel' : ''),
-      tabindex: 0,
-      onclick: () => App.go('months', { month: row.k }),
-    }),
-    columns: [
-      { label: $t('Month'), value: row => row.k, cell: row => M.label(row.k) },
-      { label: $t('Cash at end, plan'), value: row => row.planClose, cell: row => money(row.planClose) },
-      {
-        label: $t('Low (1 in 10 worse)'),
-        value: row => row.low,
-        cell: row => money(row.low),
-        cellProps: row => ({ class: row.low < 0 ? 'bad' : '' }),
-      },
-      {
-        label: $t('Middle'),
-        value: row => row.middle,
-        cell: row => h('b', { class: row.middle < 0 ? 'bad' : '', text: money(row.middle) }),
-      },
-      { label: $t('High (1 in 10 better)'), value: row => row.high, cell: row => money(row.high) },
-    ],
-  });
-}
-
 /** A small whole-number input for the scenario settings. */
 function numberInput(label, value, min, max, onChange) {
   const input = h('input', {
@@ -226,13 +198,13 @@ export const FTABS = [
   ['trend', $t('Follow the trend')],
   ['cautious', $t('Costs run higher')],
   ['income', $t('Income drops')],
-  ['range', $t('Range of outcomes')],
+  ['sim', $t('Simulation')],
 ];
 const forecastName = type => (FTABS.find(tab => tab[0] === type) || FTABS[0])[1];
 
 /**
  * Runs one forecast with the settings chosen on the Forecast page. Shared with the month planner overlay.
- * The result only depends on the plan and these inputs (the Monte Carlo range is seeded), so it is cached:
+ * The result only depends on the plan and these inputs, so it is cached:
  * redraws that change nothing (sorting, folding, opening a menu) reuse it.
  */
 function runForecast(type) {
@@ -249,9 +221,6 @@ function runForecast(type) {
   return memo('forecast:' + type, inputs, () => computeForecast(type, projection, currentPosition, settings));
 }
 function computeForecast(type, projection, currentPosition, settings) {
-  if (type === 'range') {
-    return { range: forecastRange(projection, currentPosition, { sampleMonths: settings.sampleMonths }) };
-  }
   const percent = type === 'income' ? settings.incomePercent : settings.percent;
   const scenario = { type, sampleMonths: settings.sampleMonths, percent, alpha: settings.alphaPercent / 100 };
   return { result: forecastScenario(projection, currentPosition, scenario) };
@@ -266,7 +235,7 @@ function computeForecast(type, projection, currentPosition, settings) {
 export function forecastInputs(type, apply) {
   const settings = UI.forecast;
   return [
-    ['pace', 'smooth', 'trend', 'range'].includes(type)
+    ['pace', 'smooth', 'trend'].includes(type)
       ? numberInput($t('Months to learn from'), settings.sampleMonths, 1, 24, sampleMonths => apply({ sampleMonths }))
       : null,
     type === 'smooth'
@@ -292,9 +261,15 @@ export function forecastCloses(type) {
   if (!type || type === 'plan' || !FTABS.some(tab => tab[0] === type)) {
     return null;
   }
-  const { result, range } = runForecast(type);
-  const rows = range ? range.rows.map(row => [row.k, row.middle]) : result.rows.map(row => [row.k, row.close]);
-  return { name: forecastName(type), closes: new Map(rows) };
+  if (type === 'sim') {
+    // the middle of the simulated futures, once the simulation is ready (it runs in the background: the planner shows
+    // the plan meanwhile and is drawn again when the numbers come)
+    const state = simulation(UI.simScenario, () => App.render());
+    const months = state.status === 'ready' && state.result ? state.result.months : [];
+    return { name: forecastName(type), closes: new Map(months.map(m => [m.k, m.p50])) };
+  }
+  const { result } = runForecast(type);
+  return { name: forecastName(type), closes: new Map(result.rows.map(row => [row.k, row.close])) };
 }
 
 V.forecast = () => {
@@ -308,11 +283,12 @@ V.forecast = () => {
     App.render();
   };
 
-  const isRange = type === 'range';
-  const isScenario = type !== 'plan' && !isRange;
-  const { result, range } = type === 'plan' ? {} : runForecast(type);
+  if (type === 'sim') {
+    return simulationPage($t('Forecast: {0}', forecastName(type)));
+  }
+  const isScenario = type !== 'plan';
+  const { result } = type === 'plan' ? {} : runForecast(type);
   const lastRow = result ? result.rows[result.rows.length - 1] : null;
-  const lastRange = range ? range.rows[range.rows.length - 1] : null;
   const sampleText = plural(settings.sampleMonths, 'month');
 
   // each way of looking ahead in one plain sentence; the method and the maths sit behind the "i"
@@ -357,13 +333,6 @@ V.forecast = () => {
     method = $t(
       'Measured when you updated your balances: what you really spent against the planned costs paid by then. The only forecast here based on what really happened. Method: budget variance (cost performance index).',
     );
-  } else if (isRange) {
-    explanation = $t('Your plan run 2,000 times with realistic ups and downs. Low and High are 1-in-10 outcomes.');
-    method = $t(
-      'In each run every later month is pushed up or down by as much as one of your next {0} differs from their average ({1}). “Low” is the result that only 1 run in 10 falls below, “High” the one only 1 in 10 beats. Method: Monte Carlo simulation with bootstrapped shocks.',
-      sampleText,
-      money(range.average),
-    );
   }
   // the plain table explains its colours with a legend instead of a sentence
   const intro =
@@ -377,20 +346,6 @@ V.forecast = () => {
       : h('p', { class: 'small muted', style: 'margin-bottom:10px' }, explanation, ' ', method ? info(method) : null);
 
   const download = () => {
-    if (isRange) {
-      const rows = [
-        [$t('Month'), $t('Cash at end, plan'), $t('Low (1 in 10 worse)'), $t('Middle'), $t('High (1 in 10 better)')],
-        ...range.rows.map(row => [
-          row.key,
-          row.planClose.toFixed(2),
-          row.low.toFixed(2),
-          row.middle.toFixed(2),
-          row.high.toFixed(2),
-        ]),
-      ];
-      IO.download(`runway-forecast-range-${M.key(now)}.csv`, IO.csvText(rows), 'text/csv');
-      return;
-    }
     if (!isScenario) {
       IO.download(`runway-forecast-${M.key(now)}.csv`, IO.csv(projection), 'text/csv');
       return;
@@ -456,23 +411,7 @@ V.forecast = () => {
             flowBox($t('Difference'), signed(lastRow.close - lastRow.planClose)),
           )
         : null,
-      isRange
-        ? h(
-            'div',
-            { class: 'flow' },
-            flowBox($t('End of the plan, as planned'), money(lastRange.planClose)),
-            flowBox(
-              $t('Low · middle · high'),
-              `${compact(lastRange.low)} · ${compact(lastRange.middle)} · ${compact(lastRange.high)}`,
-            ),
-            flowBox(
-              $t('Chance of going below zero after the next {0}', sampleText),
-              Math.round(range.chanceBelowZero * 100) + '%',
-              range.chanceBelowZero >= 0.5 ? 'bad' : range.chanceBelowZero >= 0.1 ? 'warn' : 'good',
-            ),
-          )
-        : null,
-      isRange ? rangeTable(range, now) : isScenario ? scenarioTable(result, now) : planTable(projection, now, yearly),
+      isScenario ? scenarioTable(result, now) : planTable(projection, now, yearly),
     ),
   );
 };

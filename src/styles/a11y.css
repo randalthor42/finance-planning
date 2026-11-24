@@ -1,0 +1,148 @@
+/* Accessibility: keyboard, screen readers, touch (Android, iOS). Loaded last: these rules win.
+   WCAG 2.2 AA asks for targets of at least 24 px; Apple (44 pt) and Android (48 dp) ask for more on touch screens,
+   which is what the (pointer: coarse) part gives. */
+
+/* --- a row whose title is its button, stretched over the row (components/layout.js row, the budgets card) --- */
+.row.click,
+.prow.click {
+  position: relative;
+}
+.row-go {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+}
+/* the whole row is its click area… */
+.row-go::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+/* …and the row shows its focus */
+.row-go:focus-visible {
+  outline: none;
+}
+.row.click:has(.row-go:focus-visible),
+.prow.click:has(.row-go:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--surface-2);
+}
+/* the controls inside a row stay above its click area: separate buttons, tick boxes, menus */
+.row.click :is(button:not(.row-go), a, input, select, textarea, label, summary, [tabindex]),
+.prow.click :is(button:not(.row-go), a, input, select, textarea, label, summary, [tabindex]) {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- the months of the planner are a tab list; "+ Month" sits next to it, laid out as before --- */
+.strip-tabs {
+  display: contents;
+}
+
+/* --- targets of at least 24 px everywhere (WCAG 2.2, 2.5.8) --- */
+.check {
+  width: 22px;
+  height: 22px;
+  margin: 1px;
+}
+.grp-toggle,
+.thsort {
+  min-height: 24px;
+}
+.tipbtn {
+  position: relative;
+}
+/* the "i" stays small to the eye; what reacts to a click or a tap is 24 px (44 px on touch) */
+.tipbtn::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+/* --- touch screens (Android, iOS) --- */
+@media (pointer: coarse) {
+  /* iOS zooms into a field whose text is under 16 px, and the page stays zoomed: 16 px keeps it still */
+  input,
+  select,
+  textarea,
+  .inp {
+    font-size: 16px;
+  }
+  .btn.icon,
+  .logobtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .btn {
+    min-height: 44px;
+  }
+  .check {
+    width: 26px;
+    height: 26px;
+  }
+  .switch {
+    min-height: 44px;
+  }
+  .grp-toggle,
+  .thsort,
+  .spendfold {
+    min-height: 44px;
+  }
+  .tipbtn::before {
+    inset: -14px;
+  }
+  .cal[data-mode='mini'] .cal-d {
+    min-height: 44px;
+  }
+  .cal-lg {
+    min-height: 36px;
+  }
+}
+
+/* --- iOS: the page runs under the notch and the home bar (viewport-fit=cover): keep what matters clear of them --- */
+.sheet-body {
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+}
+#toasts {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+@media (max-width: 860px) {
+  .top {
+    padding-top: calc(6px + env(safe-area-inset-top));
+  }
+  .side {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* --- "Skip to the content": the first Tab stop of the page, seen only when it has the focus --- */
+.skip {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  z-index: 3000;
+  padding: 8px 14px;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+.skip:focus {
+  transform: none;
+}
+/* the page title that gets the focus when a page is opened from the menu: no ring, it is not a control */
+#main h1:focus {
+  outline: none;
+}

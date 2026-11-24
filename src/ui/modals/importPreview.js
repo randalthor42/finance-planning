@@ -65,7 +65,11 @@ export function mergeImport(merged) {
     toast($t('Not merged: that would make more than {0} plans.', APP.maxPlans), { kind: 'bad' });
     return false;
   }
-  backup(Store.dbText(), { from: APP.schema, to: APP.schema, reason: 'before merging an import' }).catch(() => {});
+  // through the store's adapter: with encryption at rest on, the copy is kept sealed
+  const info = { from: APP.schema, to: APP.schema, reason: 'before merging an import' };
+  Promise.resolve(Store.adapter.backup ? Store.adapter.backup(Store.dbText(), info) : backup(Store.dbText(), info)).catch(
+    () => {},
+  );
   const changed = merged.summary.filter(s => s.status !== 'same').length;
   Store.adoptMerged(merged.plans, merged.deletedPlans, $t('Merged an import into {0}', plural(changed, 'plan')));
   UI.month = null;

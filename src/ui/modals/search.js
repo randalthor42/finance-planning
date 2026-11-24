@@ -3,13 +3,15 @@
  */
 import { money } from '../../core/format.js';
 import { $t } from '../../core/i18n.js';
-import { M } from '../../core/dates.js';
+import { D, M } from '../../core/dates.js';
 import { searchPlan } from '../../logic/search.js';
 import { Store } from '../../state/store.js';
 import { chip } from '../components/layout.js';
 import { modal } from '../components/modal.js';
 import { h } from '../dom.js';
+import { inDrafts } from '../helpers.js';
 import { accountModal } from './account.js';
+import { appointmentModal } from './appointment.js';
 import { goalModal } from './goal.js';
 import { itemModal } from './item.js';
 import { loanModal } from './loan.js';
@@ -30,6 +32,8 @@ const typeLabel = type =>
     goal: $t('Savings goal'),
     loan: $t('Loan'),
     account: $t('Account'),
+    appointment: $t('Appointment'),
+    draft: $t('Draft'),
   })[type] || type;
 
 /** Opens the editing window that belongs to a result. */
@@ -43,9 +47,21 @@ function openResult(result) {
     goals: () => goalModal(result.id),
     loans: () => loanModal(result.id),
     accounts: () => accountModal(result.id),
+    agenda: () => appointmentModal(result.id),
+    'drafts:items': () => itemModal(result.id, null, null, inDrafts),
+    'drafts:trips': () => tripModal(result.id, null, inDrafts),
   };
   openers[result.list]();
 }
+
+/** When a result happens: its day (an appointment, a draft), else its month. */
+const whenOf = result => {
+  const day = D.parse(result.date);
+  if (day !== null) {
+    return D.label(day, { weekday: 'short', year: 'numeric' });
+  }
+  return result.month ? M.label(M.parse(result.month), true) : '';
+};
 
 export function searchModal() {
   if (!Store.plan) {
@@ -73,10 +89,10 @@ export function searchModal() {
         'span',
         { class: 'grow' },
         h('span', { class: 't', text: result.name }),
-        result.month ? h('span', { class: 'd', text: M.label(M.parse(result.month), true) }) : null,
+        whenOf(result) ? h('span', { class: 'd', text: whenOf(result) }) : null,
       ),
       chip(typeLabel(result.type)),
-      h('span', { class: 'amt', text: money(result.amount) }),
+      result.amount !== null ? h('span', { class: 'amt', text: money(result.amount) }) : null,
     );
   const draw = () => {
     const query = input.value.trim();

@@ -6,7 +6,8 @@
  *            net, narrower a grid of dots (cells at least 44 px) with the day's or the month's lines underneath
  *   mini     a small month in a card (the Overview): dots and the status colour of each day only
  * Inside, compact is drawn by two renderers ("tablet" and "mobile", by width); the page never picks those.
- * It knows nothing about the plan: a page hands it events. calendarData.js has ready-made events for the plan.
+ * It knows nothing about the plan: a page hands it events. calendarData.js has ready-made events for the plan, and
+ * agendaData.js the person's own calendar (appointments with times, tentative drafts).
  * The arithmetic (weeks, spans, totals) is in logic/calendar.js; this file only draws.
  *
  * Usage:
@@ -21,7 +22,10 @@
  * Options (only `id` is required; use one id per calendar on screen, it keys the state in UI.calendars):
  *   mode         'full' | 'compact' | 'mini' (CAL_MODES). Default 'full'. Chosen by the page, never by the calendar.
  *   modes        densities the person may switch between, e.g. ['full', 'compact']. Omit for no switch.
- *   events       an array of events (types.js CalendarEvent), or a function of the days drawn that returns one:
+ *   events       an array of events (types.js CalendarEvent), or a function of the days drawn that returns one.
+ *                An event with a `time` ('09:30') shows it before its title, and `timeText` ('09:30–10:15') in lists;
+ *                a `tentative` one (not certain yet: a draft) is drawn dashed and its money is not added up in
+ *                the month's figures or a day's net (logic/calendar.js totals). Either way:
  *                ({ k, start, end, from, to }) => events. k is the month, start…end its days, from…to the whole grid.
  *                It is asked once per month shown and the answer is kept while the calendar is on the page (redraw
  *                the page when the data changes: App.render does, after every change to the plan).
@@ -44,6 +48,7 @@
  *   summary      show money in, out and net of the month (only the figures that are not zero). Default true.
  *   monthList    mobile: list the whole month under the grid while no day is chosen. Default true.
  *   listPage     that list draws whole days up to about this many lines, then "Show 150 more". Default 150.
+ *                With the sheet, the phone keeps this list under the grid while a day is open.
  *   dayInfo      (day, mode, events) => ({ text, tone, title, panel? }) | null: one figure per day (a balance, what
  *                was spent) and its colour. `events` are that day's events still shown after the legend filters.
  *                panel: false leaves it out of the day panel (when it would repeat the day's total there).
@@ -58,6 +63,12 @@
  *                place of onAdd. Return [] for days that have no menu. className 'danger' draws a deleting item red.
  *   eventMenu    ev => [[label, fn, className?], …]: the context menu of a line, in the grid and in the day panel,
  *                where each line also gets a "⋯" button for touch screens and the keyboard.
+ *   sheet        on a tablet or phone (compact), a chosen day opens in a bottom sheet, as in Google Calendar: it peeks
+ *                up with the day's lines; press and drag it up (or "More details") for every detail and action of
+ *                each line; swipe it sideways for the day before or after; drag it down to close. Default true.
+ *                Without it, the day is listed under the grid as on a wide screen.
+ *   swipe        with a finger: swipe the grid sideways to change month; with the sheet, press and hold a day then
+ *                swipe up to pull its details up. Default true. (A mouse uses the buttons and menus.)
  *   defer        the first time this calendar is drawn in the visit, draw it just after the page is painted (it keeps
  *                about its height meanwhile). For a calendar further down a page; later redraws are immediate.
  *   label        accessible name of the grid. Default: the title.
@@ -83,7 +94,9 @@ import { icon } from '../icons.js';
 import { UI } from '../state.js';
 import { btn, ibtn } from './button.js';
 import { amt, row } from './layout.js';
+import { gridGestures } from './gestures.js';
 import { closePop, ctxMenu, popover } from './popover.js';
+import { closeSheet, setSheet, sheetFollow, sheetRelease, sheetState, sheetToggleLabel, showSheet } from './sheet.js';
 
 /** The densities a page can choose (audit 6.3), in the order of the switch. */
 export const CAL_MODES = ['full', 'compact', 'mini'];
@@ -102,6 +115,17 @@ const FIT = [
 ];
 const fitFor = width => FIT.find(([min]) => width >= min)[1];
 
+/** Lines drawn in the sheet's peek: about what it shows (it does not scroll; "N more" opens every detail). */
+const PEEK_LINES = 6;
+/** The id of the calendar whose chosen day is open in the bottom sheet (there is one sheet at a time). */
+let sheetCal = null;
+/**
+ * The sheet is being closed by a calendar itself (the window got wider, the day left the grid), not by the person:
+ * the day stays chosen. Shared, because the sheet may still answer to the calendar drawn before this one.
+ */
+let quietClose = false;
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** The state of one calendar for this visit, created the first time. */
 export function calendarState(id) {
   if (!UI.calendars[id]) {
@@ -114,6 +138,8 @@ export function calendarState(id) {
       hidden: new Set(),
       listLimit: null,
       drawn: false, // drawn once in this visit (see the defer option)
+      sheet: null, // the chosen day is open in the bottom sheet: 'peek' or 'full' (see the sheet option)
+      enter: 0, // the month came from a swipe: the new grid slides in from that side (1 from the right)
     };
   }
   return UI.calendars[id];
@@ -173,9 +199,14 @@ const longDay = n => D.label(n, { weekday: 'long', month: 'long' });
 /**
  * What a screen reader says for a day: whole sentences, each translated on its own, with the status of the day in
  * words as well as in colour ("Below zero.", "Under your cushion."), and the day's markers (payday, lowest day…).
+ * It starts with the day as it is shown (`shown`: "2", or "26 Oct" where a month starts). A day's lines are buttons of
+ * their own with their own names; the day's label sums them up rather than repeating each (a grid read day by day
+ * would otherwise read every line on every arrow key), which axe's "label in name" heuristic reports on days that
+ * have lines: reviewed, on purpose (see README, Accessibility).
  */
-function dayLabel(n, today, list, t, info) {
-  const parts = [longDay(n) + '.'];
+function dayLabel(n, today, list, t, info, shown) {
+  // the label contains what the day shows ("26 Oct" where a month starts), so speech input ("click 26 Oct") finds it
+  const parts = [shown.includes(' ') ? $t('{0}, {1}.', shown, D.fmt(n, { weekday: 'long' })) : longDay(n) + '.'];
   if (n === today) {
     parts.push($t('Today.'));
   }
@@ -209,6 +240,8 @@ export function calendar(options) {
     summary: true,
     monthList: true,
     listPage: 150,
+    sheet: true,
+    swipe: true,
     ...options,
   };
   const state = calendarState(o.id);
@@ -303,10 +336,20 @@ export function calendar(options) {
   };
   const dot = ev => {
     const l = look(ev);
-    return h('i', { class: 'cal-dot' + l.class, style: l.style, 'aria-hidden': 'true' });
+    return h('i', {
+      class: 'cal-dot' + l.class + (ev.tentative ? ' tentative' : ''),
+      style: l.style,
+      'aria-hidden': 'true',
+    });
   };
   const tip = ev =>
-    [ev.title, ev.amount !== null ? signed(ev.amount) : '', ev.sub, (groups.get(ev.group) || {}).label]
+    [
+      ev.timeText || ev.time,
+      ev.title,
+      ev.amount !== null ? signed(ev.amount) : '',
+      ev.sub,
+      (groups.get(ev.group) || {}).label,
+    ]
       .filter(Boolean)
       .join(' · ');
 
@@ -401,6 +444,19 @@ export function calendar(options) {
     const focusCell = cellOf(at);
     if (focusCell) {
       focusCell.tabIndex = 0;
+    }
+    // with the sheet, the day opens in it (or it closes); what is under the grid does not follow the chosen day
+    if (onScreen.sheet) {
+      if (day === null) {
+        if (sheetCal === o.id && sheetState()) {
+          closeSheet();
+        }
+        state.sheet = null;
+      } else {
+        state.sheet = state.sheet || 'peek';
+        onScreen.showDay(day);
+      }
+      return;
     }
     // the focus was in what goes away (Close the day): it goes to the day instead of being lost
     const lost = onScreen.below && onScreen.below.contains(document.activeElement);
@@ -506,6 +562,8 @@ export function calendar(options) {
         ? D.label(range.start) + ' – ' + D.label(range.end)
         : null;
     const wide = mode === 'full' || mode === 'tablet';
+    // tablet and phone: the chosen day opens in a bottom sheet (the sheet option)
+    const useSheet = o.sheet !== false && (mode === 'tablet' || mode === 'mobile');
 
     /* header: title, layout switch, ‹ Today › */
     const prev = ibtn($t('Previous month'), () => navigate(k - 1), '', 'left');
@@ -619,21 +677,27 @@ export function calendar(options) {
           )
         : null;
 
+    /** What a line in the grid shows when the page does not draw it: its time, title and (full grid) amount. */
+    const chipContent = ev => [
+      ev.time ? h('span', { class: 'cal-tm', text: ev.time }) : null,
+      h('span', { class: 'cal-et', text: ev.title }),
+      mode === 'full' && ev.amount !== null ? h('span', { class: 'cal-ea', text: short(ev.amount) }) : null,
+    ];
     /* a line in a day of the grid */
     const chipOf = (ev, n) => {
       const l = look(ev);
-      const content = o.eventContent
-        ? o.eventContent(ev, mode)
-        : [
-            h('span', { class: 'cal-et', text: ev.title }),
-            mode === 'full' && ev.amount !== null ? h('span', { class: 'cal-ea', text: short(ev.amount) }) : null,
-          ];
+      const content = o.eventContent ? o.eventContent(ev, mode) : chipContent(ev);
       return h(
         'button',
         {
           type: 'button',
           tabindex: -1,
-          class: 'cal-e' + l.class + (ev.done ? ' done' : '') + (ev.amount > 0 ? ' pos' : ''),
+          class:
+            'cal-e' +
+            l.class +
+            (ev.done ? ' done' : '') +
+            (ev.amount > 0 ? ' pos' : '') +
+            (ev.tentative ? ' tentative' : ''),
           style: l.style,
           title: tip(ev),
           onclick: e => {
@@ -693,7 +757,12 @@ export function calendar(options) {
         {
           type: 'button',
           tabindex: -1,
-          class: 'cal-e cal-span' + l.class + (lane.first ? ' s' : '') + (lane.last ? ' e' : ''),
+          class:
+            'cal-e cal-span' +
+            l.class +
+            (lane.first ? ' s' : '') +
+            (lane.last ? ' e' : '') +
+            (ev.tentative ? ' tentative' : ''),
           style: l.style,
           title: tip(ev) + ' · ' + $t('Day {0} of {1}', lane.index, lane.length),
           onclick: e => {
@@ -726,7 +795,8 @@ export function calendar(options) {
       const info = o.dayInfo ? o.dayInfo(n, mode, list) : null;
       const t = totals(list);
       const first = D.js(n).getUTCDate() === 1 || n === from;
-      const label = dayLabel(n, today, list, t, info);
+      const shown = wide && first ? D.label(n) : String(D.js(n).getUTCDate());
+      const label = dayLabel(n, today, list, t, info, shown);
       const body = [];
       if (wide) {
         const cap = mode === 'full' ? o.maxChips : Math.min(2, o.maxChips);
@@ -783,7 +853,7 @@ export function calendar(options) {
         h(
           'div',
           { class: 'cal-dh' },
-          h('span', { class: 'cal-n', text: wide && first ? D.label(n) : String(D.js(n).getUTCDate()) }),
+          h('span', { class: 'cal-n', text: shown }),
           ((info && info.marks) || []).map(mark =>
             h('span', {
               class: 'cal-mark ' + mark.kind,
@@ -877,9 +947,13 @@ export function calendar(options) {
       }
       const menu = o.eventMenu ? o.eventMenu(ev).filter(Boolean) : [];
       const line = row({
-        left: h('i', { class: 'cal-dot' + l.class, style: l.style, 'aria-hidden': 'true' }),
+        left: h('i', {
+          class: 'cal-dot' + l.class + (ev.tentative ? ' tentative' : ''),
+          style: l.style,
+          'aria-hidden': 'true',
+        }),
         title: ev.title,
-        desc: [when, ev.sub, (groups.get(ev.group) || {}).label].filter(Boolean).join(' · '),
+        desc: [ev.timeText || ev.time, when, ev.sub, (groups.get(ev.group) || {}).label].filter(Boolean).join(' · '),
         right: [
           ev.amount !== null ? amt(ev.amount) : null,
           // the same menu as a right click, for touch screens (no right click, often no long press) and the keyboard
@@ -902,7 +976,7 @@ export function calendar(options) {
             : null,
         ],
         onclick: o.onEvent ? () => o.onEvent(ev) : null,
-        cls: ev.done ? 'done' : '',
+        cls: (ev.done ? 'done' : '') + (ev.tentative ? ' tentative' : ''),
       });
       if (menu.length) {
         line.addEventListener('contextmenu', e => openMenu(e, menu));
@@ -937,6 +1011,166 @@ export function calendar(options) {
           : h('p', { class: 'muted small cal-none', text: $t('Nothing on this day.') }),
       );
     };
+    /* --- the day in the bottom sheet (tablet and phone): a peek with its lines, or every detail --- */
+    /** One line with everything about it, and what can be done with it as buttons (the sheet opened full). */
+    const detailOf = (ev, n) => {
+      const l = look(ev);
+      const span = lastDay(ev) > ev.date && ev.date !== null;
+      let doneText = null;
+      if (ev.done) {
+        doneText = ev.amount > 0 ? $t('Received') : $t('Paid');
+      }
+      const facts = [
+        ev.timeText || ev.time,
+        span ? $t('{0} – {1}', D.label(ev.date), D.label(lastDay(ev))) : null,
+        span && n !== null ? $t('Day {0} of {1}', n - ev.date + 1, lastDay(ev) - ev.date + 1) : null,
+        ev.sub,
+        (groups.get(ev.group) || {}).label,
+        doneText,
+      ].filter(Boolean);
+      const menu = (o.eventMenu ? o.eventMenu(ev) : []).filter(Array.isArray);
+      let actions = [];
+      if (menu.length) {
+        actions = menu.map(([label, fn, cls]) =>
+          btn(
+            label,
+            () => {
+              fn();
+            },
+            'sm ' + (cls === 'danger' ? 'danger ghost' : 'ghost'),
+          ),
+        );
+      } else if (o.onEvent) {
+        actions = [btn($t('Open'), () => openEvent(ev, n), 'sm ghost')];
+      }
+      return h(
+        'article',
+        {
+          class: 'sheet-ev' + l.class + (ev.tentative ? ' tentative' : '') + (ev.done ? ' done' : ''),
+          style: l.style,
+        },
+        h(
+          'div',
+          { class: 'sheet-ev-h' },
+          h('i', { class: 'cal-dot' + (ev.tentative ? ' tentative' : ''), 'aria-hidden': 'true' }),
+          h('b', { text: ev.title }),
+          h('span', { class: 'grow' }),
+          ev.amount !== null ? amt(ev.amount) : null,
+        ),
+        facts.length ? h('div', { class: 'small muted', text: facts.join(' · ') }) : null,
+        ev.note ? h('p', { class: 'sheet-note', text: ev.note }) : null,
+        actions.length ? h('div', { class: 'acts sheet-acts' }, actions) : null,
+      );
+    };
+    /** What the sheet shows for day n in `view` ('peek' or 'full'): a head to drag, with its buttons, and the lines. */
+    const sheetContent = (n, view) => {
+      const list = eventsOn(layout, n);
+      const info = o.dayInfo ? o.dayInfo(n, mode, list) : null;
+      const t = totals(list);
+      const flow = [
+        t.in ? $t('{0} in', signed(t.in)) : null,
+        t.out ? $t('{0} out', money(t.out)) : null,
+        t.in && t.out ? $t('net {0}', signed(t.net)) : null,
+      ].filter(Boolean);
+      const head = [
+        h(
+          'div',
+          { class: 'sheet-h' },
+          // short enough for a phone ("Tuesday 10 Nov"); the sheet's name says it in full
+          h('b', { class: 'sheet-t', text: D.label(n, { weekday: 'long' }) }),
+          info && info.text
+            ? h('span', { class: 'chip ' + (info.tone || ''), text: info.text, title: info.title })
+            : null,
+          h('span', { class: 'grow' }),
+          ibtn($t('Previous day'), () => select(n - 1), 'ghost sm', 'left'),
+          ibtn($t('Next day'), () => select(n + 1), 'ghost sm', 'right'),
+          ibtn($t('Close the day'), () => select(n), 'ghost sm', 'x'),
+        ),
+        h(
+          'div',
+          { class: 'sheet-sub' },
+          h('span', {
+            class: 'muted small grow',
+            text: list.length ? [plural(list.length, 'item'), ...flow].join(' · ') : $t('Nothing on this day.'),
+          }),
+          canAdd(n) ? btn($t('Add'), e => addOn(e, n), 'sm', 'plus') : null,
+          h('button', {
+            type: 'button',
+            class: 'btn sm ghost',
+            'aria-expanded': String(view === 'full'),
+            text: sheetToggleLabel(view),
+            onclick: () => setSheet(view === 'full' ? 'peek' : 'full'),
+          }),
+        ),
+      ];
+      if (view !== 'full') {
+        // the peek does not scroll: only the lines it can show are drawn (a busy day has dozens), then "N more"
+        const shown = list.slice(0, PEEK_LINES);
+        const more = list.length - shown.length;
+        let moreButton = null;
+        if (more > 0) {
+          moreButton = h('button', {
+            type: 'button',
+            class: 'btn sm ghost sheet-more',
+            text: $t('{0} more · every detail', more),
+            onclick: () => setSheet('full'),
+          });
+        }
+        return {
+          head,
+          body: list.length
+            ? h(
+                'div',
+                { class: 'rows' },
+                shown.map(ev => lineOf(ev, n)),
+                moreButton,
+              )
+            : null,
+        };
+      }
+      // every detail: the day's own facts (its balance, payday, lowest day…), then each line with its actions
+      const dayFacts = [info && info.title, ...((info && info.marks) || []).map(mark => mark.title)].filter(Boolean);
+      return {
+        head,
+        body: [
+          dayFacts.length ? h('p', { class: 'sheet-day small' }, dayFacts.join(' ')) : null,
+          list.length
+            ? h(
+                'div',
+                { class: 'sheet-evs' },
+                list.map(ev => detailOf(ev, n)),
+              )
+            : h('p', { class: 'muted small cal-none', text: $t('Nothing on this day.') }),
+        ],
+      };
+    };
+    /** Opens day n in the sheet (or shows it in the open one). */
+    const showDay = n => {
+      sheetCal = o.id;
+      showSheet({
+        owner: root,
+        label: longDay(n),
+        state: state.sheet || 'peek',
+        render: view => sheetContent(n, view),
+        onState: view => {
+          if (view !== 'closed') {
+            state.sheet = view;
+          } else if (sheetCal === o.id && !quietClose) {
+            // closed by the person: the day is no longer chosen
+            sheetCal = null;
+            state.sheet = null;
+            if (state.sel !== null && root.isConnected) {
+              choose(null, state.sel);
+            } else {
+              state.sel = null;
+            }
+          }
+        },
+        onSwipe: step => select(n + step),
+        returnFocus: () => root.querySelector(`.cal-d[data-day="${state.focus ?? n}"]`),
+      });
+    };
+
     /* mobile without a chosen day: the whole month as a list, day by day; a trip is listed once, on its first day */
     const monthList = () => {
       const block = (label, list, n, info) =>
@@ -1022,7 +1256,7 @@ export function calendar(options) {
           : $t('{0}: nothing on this day.', D.label(day, { weekday: 'short' }));
         return h('div', { class: 'cal-cap', text });
       }
-      if (day !== null) {
+      if (day !== null && !useSheet) {
         return dayPanel(day);
       }
       return mode === 'mobile' && o.monthList ? monthList() : null;
@@ -1032,7 +1266,88 @@ export function calendar(options) {
     root.dataset.mode = mode;
     // unlike h(), replaceChildren would write a missing part as the text "null"
     root.replaceChildren(...[head, legend, summary, undated, grid, below].filter(Boolean));
-    onScreen = { from, to, below, belowFor };
+    onScreen = { from, to, below, belowFor, sheet: useSheet, showDay };
+
+    // the chosen day stays open in the sheet when the calendar is drawn again (a change saved, another month)
+    if (useSheet && sel !== null && state.sheet) {
+      showDay(sel);
+    } else if (sheetCal === o.id && sheetState()) {
+      // a wider window (the day is listed under the grid instead, still chosen), or no day chosen any more
+      quietClose = true;
+      closeSheet();
+      quietClose = false;
+      sheetCal = null;
+      state.sheet = null;
+    }
+    // a month that came from a swipe slides in from that side
+    const gridEl = grid.firstChild;
+    if (state.enter && !reducedMotion() && gridEl.animate) {
+      gridEl.animate(
+        [
+          { transform: `translateX(${state.enter * 35}%)`, opacity: 0.25 },
+          { transform: 'none', opacity: 1 },
+        ],
+        { duration: 220, easing: 'ease-out' },
+      );
+    }
+    state.enter = 0;
+    if (o.swipe) {
+      touchGrid(grid, gridEl, k, useSheet);
+    }
+  }
+  /** Swipes on the grid (components/gestures.js): months sideways; with the sheet, hold a day and swipe up. */
+  function touchGrid(wrap, gridEl, k, withSheet) {
+    const slide = (dx, fade) => {
+      gridEl.style.transform = dx ? `translateX(${dx}px)` : '';
+      gridEl.style.opacity = fade ? String(fade) : '';
+    };
+    gridGestures(wrap, {
+      canStep: step => inBounds(k + step),
+      onSwipe: (dx, width) => {
+        gridEl.classList.add('swiping');
+        slide(dx, 1 - Math.min(0.5, Math.abs(dx) / width / 2));
+      },
+      onSwipeEnd: step => {
+        gridEl.classList.remove('swiping');
+        if (!step) {
+          slide(0);
+          return;
+        }
+        state.enter = step;
+        navigate(k + step);
+      },
+      hold: target => {
+        const cell = withSheet && target.closest ? target.closest('.cal-d') : null;
+        return cell ? Number(cell.dataset.day) : null;
+      },
+      onHold: day => {
+        const cell = root.querySelector(`.cal-d[data-day="${day}"]`);
+        if (cell) {
+          cell.classList.add('held');
+        }
+      },
+      onPull: (day, height) => {
+        if (!sheetState()) {
+          // the held day is chosen and its sheet opens, then follows the finger
+          state.sheet = 'peek';
+          const range = rangeOf(state.k);
+          if (day >= range.start && day <= range.end) {
+            choose(day, day);
+            if (o.onSelect) {
+              o.onSelect(day);
+            }
+          } else {
+            select(day);
+          }
+        }
+        sheetFollow(height);
+      },
+      onPullEnd: (day, height, speed) => {
+        root.querySelector('.cal-d.held')?.classList.remove('held');
+        sheetRelease(height, speed);
+      },
+      onHoldCancel: () => root.querySelector('.cal-d.held')?.classList.remove('held'),
+    });
   }
 
   if (o.defer && !state.drawn) {

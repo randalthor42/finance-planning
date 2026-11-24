@@ -333,3 +333,13 @@ test('months before the plan’s first month keep no change times', () => {
   const rolled = normPlan({ ...p, settings: { ...p.settings, startMonth: '2027-01' } });
   assert.deepEqual(rolled.keysUpdatedAt.paid.at, {}, 'dropped once the plan starts later');
 });
+
+test('My calendar and the simulation settings travel like the plan’s other fields: the later change wins', () => {
+  const p = base();
+  const a = edit(p, d => (d.sim = { ...d.sim, runs: 5000 }), at(1));
+  const b = edit(p, d => (d.agenda = { ...d.agenda, name: 'Family' }), at(2));
+  for (const r of [mergeData(db(a), db(b)), mergeData(db(b), db(a))]) {
+    assert.equal(r.plans[0].sim.runs, 5000, 'the simulation change from A');
+    assert.equal(r.plans[0].agenda.name, 'Family', 'the calendar change from B');
+  }
+});

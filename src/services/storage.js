@@ -4,6 +4,12 @@
  * (state/fileSync.js) for its small record and its file handle, the translations (core/i18n.js) for language packs.
  * Nothing here talks to a network: it is all on this device.
  *
+ * Optional encryption at rest (Settings › Lock and privacy): the database is then stored sealed (AES-256-GCM, a key
+ * made from the PIN, services/pin.js). The browser's storage is synchronous and its cryptography is not, so while the
+ * app is unlocked the adapter keeps the opened text in memory for read(), and write() seals in the background, in
+ * order (the last write wins). While it is on, nothing readable is kept anywhere else: no record index, and backups
+ * are kept sealed (LocalStorageAdapter.backup, .index).
+ *
  * localStorage, key "runway.db.v1": the database (plans, browser preferences, activity log), read at start so the app
  * opens at once.
  * IndexedDB, database "runway" (version 2):
@@ -15,7 +21,12 @@
  *   backups   the database as it was before each migration (models/migrations.js)
  * See docs/data.md.
  */
+import { $t } from '../core/i18n.js';
 import { newId } from '../core/util.js';
+import { isSealed, openText, sealText, sealedKeyInfo } from './pin.js';
+
+/** The error shown when the browser refuses to store the data (full, or private mode). */
+const notStored = () => new Error($t('The data could not be saved: the browser’s storage is full or not allowed.'));
 
 /* --- localStorage --- */
 
@@ -277,32 +288,93 @@ export async function clearCopies() {
 
 /* --- the database --- */
 
-/** The database in localStorage. The store's adapter: swap this class to store plans elsewhere. */
+/** The database in localStorage, sealed when encryption at rest is on. The store's adapter. */
 export class LocalStorageAdapter {
   constructor(key) {
     this.key = key;
+    /** The key of the encryption at rest while it is on and the app is unlocked, else null. Never stored. */
+    this.cryptoKey = null;
+    /** The opened text while sealed (read() parses it). */
+    this.opened = null;
+    /** The salt and iterations of that key, written into every sealed write (services/pin.js sealText). */
+    this.keyInfo = null;
+    this.writing = Promise.resolve();
+    /** Called when a sealed write fails (the page says "Not saved"). */
+    this.onError = () => {};
+    /**
+     * Another tab changed the PIN or the encryption: this tab's key and data are out of date. Nothing more is written
+     * from here (the page reloads), so it can never store data sealed with a key nobody has any more.
+     */
+    this.frozen = false;
   }
-  /** The stored text, as it is (a migration keeps it as a backup). */
-  readText() {
-    return readText(this.key);
+  /** Stops all writes from this tab (see frozen). */
+  freeze() {
+    this.frozen = true;
+    this.cryptoKey = null;
+    this.opened = null;
   }
-  read() {
-    return readJSON(this.key);
+  raw() {
+    try {
+      return JSON.parse(localStorage.getItem(this.key));
+    } catch (e) {
+      return null;
+    }
+  }
+  /** Whether what is stored is sealed (encrypted at rest). */
+  sealed() {
+    return isSealed(this.raw());
   }
   /**
-   * text: the database already serialised (PlanStore keeps each plan's text, see dbText); made here otherwise. When
-   * the storage is full, backups kept beside it are given up for the data itself. Returns false when it still fails
-   * (the menu then says the data is not saved).
+   * The stored text, as the store reads it (a migration keeps it as a backup): the opened text while sealed and
+   * unlocked; null while sealed and locked (nothing can be read then).
+   */
+  readText() {
+    if (this.cryptoKey) {
+      return this.opened;
+    }
+    return this.sealed() ? null : readText(this.key);
+  }
+  read() {
+    if (this.cryptoKey) {
+      return this.opened ? JSON.parse(this.opened) : null;
+    }
+    const stored = this.raw();
+    return isSealed(stored) ? null : stored; // sealed and locked: nothing can be read
+  }
+  /**
+   * text: the database already serialised (PlanStore keeps each plan's text, see dbText); made here otherwise. Sealed
+   * in the background while encryption at rest is on. When the storage is full, backups kept beside it are given up
+   * for the data itself. Returns false when it still fails (the menu then says the data is not saved).
    */
   write(db, text) {
+    if (this.frozen) {
+      return false;
+    }
     const value = text === undefined ? JSON.stringify(db) : text;
+    if (this.cryptoKey) {
+      this.opened = value;
+      const key = this.cryptoKey;
+      this.writing = this.writing
+        .then(() => sealText(value, key, this.keyInfo))
+        .then(sealed => {
+          if (this.cryptoKey === key) {
+            localStorage.setItem(this.key, JSON.stringify(sealed));
+          }
+        })
+        .catch(error => this.onError(error));
+      return true;
+    }
     if (writeText(this.key, value)) {
       return true;
     }
     return dropLocalBackups() && writeText(this.key, value);
   }
+  /**
+   * Keeps a backup of the data (before a migration, a first Drive sync, a merge). While encryption at rest is on, the
+   * copy kept is the sealed data as stored, never the opened text.
+   */
   backup(text, info) {
-    return backup(text, info);
+    return backup(this.cryptoKey ? readText(this.key) : text, info);
   }
   /**
    * The highest data format this browser's Runway has written (its own key, which an older version of the app does not
@@ -316,17 +388,86 @@ export class LocalStorageAdapter {
       writeText(this.key + '.schema', String(version));
     }
   }
-  /** The record index (IndexedDB) follows the database: see records. */
+  /** The record index (IndexedDB) follows the database: see records. None while encryption at rest is on. */
   index(entries, marks) {
-    return records.put(entries, marks);
+    return this.cryptoKey ? Promise.resolve() : records.put(entries, marks);
   }
   indexCurrent(planId, updatedAt) {
-    return records.current(planId, updatedAt);
+    return this.cryptoKey ? Promise.resolve(true) : records.current(planId, updatedAt);
   }
   reindex(planId, entries, updatedAt, pause) {
-    return records.rebuild(planId, entries, updatedAt, pause);
+    return this.cryptoKey ? Promise.resolve() : records.rebuild(planId, entries, updatedAt, pause);
   }
   clearCopies() {
     return clearCopies();
+  }
+  /** Opens sealed data with `key` (or plain data, as it is). Throws with the wrong key. */
+  async unlock(key) {
+    const stored = this.raw();
+    this.opened = isSealed(stored) ? await openText(stored, key) : JSON.stringify(stored);
+    this.cryptoKey = key;
+    this.keyInfo = sealedKeyInfo(stored) || this.keyInfo;
+  }
+  /**
+   * Opens again what another tab stored (the storage event), with the key already here. Throws when that no longer
+   * fits this tab: the data cannot be opened with this key, or is not sealed any more (the caller then reloads).
+   */
+  async reload() {
+    if (this.cryptoKey) {
+      if (!this.sealed()) {
+        throw new Error('stored data is no longer sealed');
+      }
+      await this.unlock(this.cryptoKey);
+    }
+  }
+  /**
+   * Stores `db` sealed with `key` (made with `meta`: { salt, iter }, kept in the sealed data), then uses that key from
+   * now on. Resolves once it is stored; throws (and changes nothing) when it could not be.
+   */
+  async seal(key, db, meta) {
+    const text = JSON.stringify(db);
+    const wasPlain = !this.cryptoKey;
+    const job = this.writing.then(async () => {
+      const sealed = await sealText(text, key, meta);
+      try {
+        localStorage.setItem(this.key, JSON.stringify(sealed));
+      } catch (e) {
+        throw notStored();
+      }
+      this.cryptoKey = key;
+      this.keyInfo = meta || null;
+      this.opened = text;
+    });
+    this.writing = job.catch(() => {});
+    await job;
+    if (wasPlain) {
+      // the copies kept in readable form until now (record index, backups) go: nothing readable stays beside it
+      await clearCopies();
+    }
+  }
+  /** Stores `db` plain again and stops sealing. Throws (and changes nothing) when it could not be stored. */
+  async unseal(db) {
+    await this.settled();
+    try {
+      localStorage.setItem(this.key, JSON.stringify(db));
+    } catch (e) {
+      throw notStored();
+    }
+    this.cryptoKey = null;
+    this.keyInfo = null;
+    this.opened = null;
+  }
+  /** "Forgot your PIN": removes the data and these other keys (the lock settings) from this browser. */
+  erase(otherKeys = []) {
+    this.freeze();
+    for (const key of [this.key, ...otherKeys]) {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {}
+    }
+  }
+  /** Waits for the sealed writes under way. */
+  settled() {
+    return this.writing;
   }
 }

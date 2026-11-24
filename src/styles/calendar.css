@@ -325,8 +325,34 @@
 .cal-e:hover {
   background: var(--surface-3);
 }
+/* paid or received: a quieter chip with readable text (WCAG AA), not a see-through one */
 .cal-e.done {
-  opacity: 0.6;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+}
+.cal-e.done .cal-ea {
+  color: var(--faint);
+}
+/* tentative (a draft of My calendar): a dashed outline and a light wash of its colour, not a solid line */
+.cal-e.tentative {
+  border: 1px dashed var(--cal-c);
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--cal-c) 8%, var(--surface));
+}
+.cal-dot.tentative {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--cal-c);
+}
+.row.tentative .t {
+  font-style: italic;
+}
+/* the time of an appointment, before its title */
+.cal-tm {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
 }
 .cal-et {
   flex: 1;
@@ -518,7 +544,11 @@
 .cal[data-mode='mini'] .cal-d.out {
   background: none;
 }
-/* days of the months around: faded, but the number stays readable (--faint, 4.6:1), so only the marks fade */
+/* a day of the month before or after: a quieter number (still AA, --faint) and fainter marks, not a see-through day */
+.cal[data-mode='mini'] .cal-d.out .cal-n {
+  color: var(--faint);
+  font-weight: 400;
+}
 .cal[data-mode='mini'] .cal-d.out .cal-mark,
 .cal[data-mode='mini'] .cal-d.out .cal-dots {
   opacity: 0.5;
@@ -659,4 +689,166 @@
 }
 .cal-pop .cal-e {
   flex: none;
+}
+
+/* ============================================================
+   TOUCH: swipe the month, hold a day and swipe up, the day in a bottom sheet (components/gestures.js, sheet.js)
+   ============================================================ */
+/* the page still scrolls up and down over the grid; sideways is the calendar's */
+.cal-gw {
+  touch-action: pan-y;
+}
+.cal-grid {
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+.cal-grid.swiping {
+  transition: none;
+  will-change: transform;
+}
+/* a day held under the finger lifts a little: swipe up now to pull its details */
+.cal-d.held {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  transform: scale(0.96);
+  transition: transform 0.12s ease;
+}
+
+html.sheet-lock {
+  overflow: hidden;
+}
+.sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--scrim);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  touch-action: none;
+}
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  height: var(--sheet-full, 90vh);
+  max-width: 680px;
+  margin: 0 auto;
+  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  outline: none;
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sheet.dragging {
+  transition: none;
+}
+.sheet-in {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+/* the head is where the sheet is held to be dragged, in any state */
+.sheet-grab {
+  padding: 4px 12px 8px;
+  border-bottom: 1px solid var(--line);
+  touch-action: none;
+  cursor: grab;
+}
+.sheet-handle {
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 4px auto 8px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.sheet-h,
+.sheet-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sheet-sub {
+  margin-top: 4px;
+}
+.sheet-t {
+  font-size: 1.05rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* peeking, the list does not scroll: a drag anywhere moves the sheet; open, it scrolls */
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 12px 28px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+.sheet[data-state='full'] .sheet-body {
+  overflow: auto;
+  touch-action: pan-y;
+}
+.sheet-day {
+  margin: 4px 0 10px;
+  color: var(--muted);
+}
+.sheet-evs {
+  display: grid;
+  gap: 10px;
+}
+.sheet-ev {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--cal-c);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.sheet-ev.tentative {
+  border-style: dashed;
+  border-left-style: solid;
+}
+.sheet .grow {
+  flex: 1;
+  min-width: 0;
+}
+/* a paid line reads quieter; its buttons do not, they still work */
+.sheet-ev.done .sheet-ev-h,
+.sheet-ev.done > .small {
+  opacity: 0.65;
+}
+.sheet-ev-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sheet-note {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+.sheet-acts {
+  margin-top: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-scrim,
+  .cal-grid,
+  .cal-d.held {
+    transition: none;
+  }
+}
+/* a sheet sliding away lets taps through to the page at once */
+.sheet.closing,
+.sheet-scrim.closing {
+  pointer-events: none;
 }

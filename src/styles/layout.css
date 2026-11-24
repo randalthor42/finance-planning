@@ -176,8 +176,14 @@ main[data-view='audit'] {
 .btn.hide {
   visibility: hidden;
 }
+/* switched off (not counted in the plan): greyed by colour, so its text stays readable (WCAG AA) */
 .card.off {
-  opacity: 0.6;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.card.off :is(canvas, svg, .bar) {
+  opacity: 0.55;
+  filter: grayscale(1);
 }
 
 /* the logo is a button that goes to the overview */

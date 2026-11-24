@@ -21,6 +21,9 @@ export function designable(key, name) {
   return key;
 }
 
+/** The name of page `key` for people (the activity log says which page's layout changed). */
+export const pageName = key => pages.get(key) || key;
+
 /** True when page `key` has declared that it offers Design mode. */
 export const isDesignable = key => pages.has(key);
 

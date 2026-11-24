@@ -6,6 +6,8 @@ import { D, M, Period } from '../core/dates.js';
 import { $t } from '../core/i18n.js';
 import { ID_RE, clamp, isObj, newId, r2 } from '../core/util.js';
 import { project } from '../logic/projection.js';
+import { normAgenda } from './agenda.js';
+import { normSim } from './sim.js';
 import { CATS, EVERY, INCATS, KEY_RE, SHIFTS } from './categories.js';
 import {
   DELETED_FULL,
@@ -242,6 +244,7 @@ export function normPlan(p) {
   const incomeOf = x => rec(x, inIds, 'salary');
   const budgetIds = bills.filter(b => b.budget).map(b => b.id);
 
+  /** A one-off: a purchase, a spend from a budget, money in. Also cleans the drafts of My calendar (models/agenda.js). */
   const itemOf = x => {
     const kind = pick(x.kind, ['out', 'in'], 'out');
     const dn = D.parse(x.date);
@@ -267,6 +270,7 @@ export function normPlan(p) {
     pay: mon(i.pay),
     note: note(i),
   });
+  /** A trip, event or someday idea with its costs. Also cleans the drafts of My calendar. */
   const tripOf = x => {
     // kind 'idea' = somewhere you would like to go one day: never counted until you plan it
     const kind = pick(x.kind, ['trip', 'event', 'idea'], 'trip');
@@ -353,6 +357,11 @@ export function normPlan(p) {
     ),
     notes: monthMap(p.notes, v => (typeof v === 'string' && v.trim() ? v.slice(0, 600) : undefined)),
   };
+  // My calendar, last: the plan's own records claim their ids first (a draft never takes the id of one), and its pins
+  // are checked against the clean lists
+  out.agenda = normAgenda(p.agenda, { id, str, num, day, note, item: itemOf, trip: tripOf, records: out });
+  // Forecast › Simulation: settings, the person's own values for what it learned, what-if scenarios (models/sim.js)
+  out.sim = normSim(p.sim, { id, incomeIds: out.incomes.map(x => x.id), goalIds: out.goals.map(x => x.id) });
   // deleted records: those kept in `deleted`, and those found in a list with deletedAt. Each keeps its id (a live
   // record with the same id wins); the newest deletion of an id is kept, the newest DELETED_MAX of each kind.
   dead = true;

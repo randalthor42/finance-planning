@@ -16,7 +16,7 @@
     "test:storage": "vite build --mode test --outDir dist-test && node tests/regression/storage.ui.cjs",
     "test:drive": "vite build --mode test --outDir dist-test && node tests/regression/drive.ui.cjs",
     "test:qr": "vite build --mode test --outDir dist-test && node tests/regression/qr.ui.cjs",
-    "test:ui": "vite build && vite build --mode test --outDir dist-test && node tests/regression/pwa.ui.cjs && node tests/regression/overview.ui.cjs && node tests/regression/storage.ui.cjs && node tests/regression/filesync.ui.cjs && node tests/regression/drive.ui.cjs && node tests/regression/qr.ui.cjs && node tests/regression/calendar.ui.cjs && node tests/regression/ui.test.cjs && node tests/regression/smoke.cjs",
+    "test:ui": "vite build && vite build --mode test --outDir dist-test && node tests/regression/pwa.ui.cjs && node tests/regression/overview.ui.cjs && node tests/regression/storage.ui.cjs && node tests/regression/filesync.ui.cjs && node tests/regression/drive.ui.cjs && node tests/regression/qr.ui.cjs && node tests/regression/agenda.ui.cjs && node tests/regression/calendar.touch.ui.cjs && node tests/regression/simulation.ui.cjs && node tests/regression/a11y.ui.cjs && node tests/regression/lock.ui.cjs && node tests/regression/calendar.ui.cjs && node tests/regression/ui.test.cjs && node tests/regression/smoke.cjs",
     "lint": "eslint src tests/unit build",
     "format": "prettier --write src tests/unit build",
     "check": "npm run lint && npm test && npm run build",

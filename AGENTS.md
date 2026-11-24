@@ -97,6 +97,12 @@ Imports only point **down**. Nothing outside `src/ui/` touches the page (three d
 | The plan on a calendar: events, day figure and markers, menus | `src/ui/components/calendarData.js` (`planCalendar`) |
 | Calendar arithmetic: weeks, spans, end-of-day balances, the next 7 days | `src/logic/calendar.js` (Day by day uses `dayBalances` too) |
 | Calendar settings (Settings › Calendar) | `src/models/calendarPrefs.js` (`normCalendar`) and `src/ui/views/calendarSettings.js` |
+| My calendar: own calendars, appointments, repeats, drafts (`plan.agenda`) | `src/models/agenda.js` (`normAgenda`), `src/logic/agenda.js`, `src/logic/occurrences.js`, `src/ui/views/agenda.js`, `src/ui/modals/appointment.js`; the activity log's sentences `src/state/agendaLog.js` |
+| Appointments whose money counts in the plan (`appt:<id>:<day>` lines) | the appointment block of `project()` in `src/logic/projection.js`; ticks follow edited days: `moveTicks` in `src/logic/agenda.js` |
+| Bill reminders (in the app, and the system's notifications while it is open) | `src/logic/reminders.js` (which, when) and `src/ui/reminders.js` (showing them) |
+| The calendar on phones: bottom sheet, swipes, hold-then-pull | `src/ui/components/sheet.js`, `src/ui/components/gestures.js`, `src/core/gesture.js` |
+| Simulation (Monte Carlo of the months ahead, what-if scenarios) | `src/logic/sim/` (pure: fit, engine, backtest, risks), `src/models/sim.js` (`plan.sim`), `src/ui/views/simulation.js`, `SIMULATION.md`; loaded on demand: `src/services/lazySim.js` and `lazySimulation` in `vite.config.js` |
+| App lock: PIN, biometrics, encryption of the data on this device | `src/ui/lock.js` (screen and settings flow), `src/logic/lock.js` (rules), `src/services/pin.js` (hash, key, sealing), `src/services/biometric.js`, `src/services/lockConfig.js`, `src/ui/views/security.js` |
 | Money formatting and parsing | `src/core/format.js` |
 | The currency and formats a first plan starts with (from the browser language) | `src/core/locale.js` |
 | "New plan" in three steps, and the plan settings fields | `newPlanModal` and `planFields` in `src/ui/modals/settings.js` |
@@ -224,6 +230,20 @@ Add a method to `Actions` (`src/state/actions.js`) that calls `Store.commit(plan
 - `logic/` functions are pure. Same input, same output.
 - No module may run code that calls into another UI module while it is loading (UI modules import each other in cycles; top-level code must only define things).
 
+**App lock and encryption at rest** (read before touching `src/ui/lock.js` or `services/storage.js`)
+
+- With encryption on, the data under `APP.key` is sealed (AES-256-GCM, key from the PIN with PBKDF2). The sealed data carries the salt of its key (`sealText` version 2), so the data and what opens it change in **one write**: never write the lock settings first and the data after. Seal or unseal first; change the settings only once that write succeeded (`seal`/`unseal` throw when the browser refuses).
+- With sealed data, the PIN is right when it opens the data, whatever the stored hash says (`Lock.openSealed`), and the settings are put right from the data.
+- A tab whose key is out of date (another tab changed the PIN or the encryption) must never write: it calls `Store.adapter.freeze()` and reloads (`Lock.reload`, the `storage` listener in `main.js`).
+- A short PIN is weak against someone who copies the browser's storage (every 4–6 digit PIN can be tried quickly); the texts say so and suggest 8 digits or more. Do not claim more.
+- Sealed writes are asynchronous (Web Crypto): an edit made in the very last moment before a tab is killed can be lost.
+- While encryption is on, nothing readable is kept beside the data: the record index is not written
+  (`LocalStorageAdapter.index`), backups are kept sealed (`.backup`; Drive sync and the import preview go through it),
+  and turning it on clears the readable copies made before. New code that keeps a copy of the data must go through the
+  adapter too. The data file and Google Drive (without a passphrase) hold plain copies by the person's choice.
+- While the app is locked with encrypted data, `Store.db` is not read yet: the data file and Drive sync do nothing until
+  `Lock.boot` has run `Store.init()`.
+
 **Defensive coding**
 
 - Validate at the boundaries: `normPlan` for all plan data, `normDB` for the stored database, `IO.read` for imported files. Inside those boundaries, trust the data.
@@ -296,3 +316,5 @@ tests/
 - **Deleting a "from savings" cover line** does not put the money back in the savings account (undo does).
 - **Drive sync has only been tested against a fake Google** (`tests/unit/helpers/fakeDrive.js`). Check against the real API, in particular whether `If-Match` on an upload is honoured and whether the `ETag` header can be read cross-origin. Correctness does not depend on either (a replaced write is repaired by its device at its next sync), but conflicts cost an extra round when they are not.
 - **Clocks.** The newer edit wins by time. A device whose clock runs far ahead still wins its own edits against the others until they have merged its changes (from then on their times start after its times).
+- **Older versions of the app and encrypted data.** A version from before the app lock reads sealed data as an empty database and would save over it. Do not open data encrypted on this device with an older copy of the app.
+- **Simulation backtest** runs on the main thread in one go (about 37 ms on a desktop): above the 50 ms budget on a slow phone. Chunk it if it is measured as a problem (`npm run perf`).

@@ -58,6 +58,57 @@ function i18nKeys() {
 const strictCsp = google => ({ name: 'runway-csp', apply: 'build', transformIndexHtml: html => html.replace('<meta name="referrer"', `<meta http-equiv="Content-Security-Policy" content="${csp({ google })}">\n<meta name="referrer"`) });
 
 /**
+ * The simulation (src/logic/sim) is kept out of the code that runs at start-up: it is built on its own as one script
+ * that sets `globalThis.RunwaySim`, and put in the page as inert text (<script type="text/plain" id="runway-sim">),
+ * which the browser neither parses nor runs. services/lazySim.js runs it the first time Forecast › Simulation is
+ * opened, as an inline script (allowed by the policy above: nothing is fetched, no blob: or eval).
+ * Its date helpers do not need the app's formatting or languages: that import is replaced by a stub, so the script
+ * has no second copy of the translations.
+ */
+function lazySimulation() {
+  let code = '';
+  const FORMAT_STUB = '\0runway-format-stub';
+  return {
+    name: 'runway-lazy-simulation',
+    apply: 'build',
+    async buildStart() {
+      const { build } = await import('vite');
+      const result = await build({
+        configFile: false,
+        logLevel: 'silent',
+        plugins: [
+          {
+            name: 'runway-format-stub',
+            enforce: 'pre',
+            resolveId: (id, importer) => (id === './format.js' && importer && importer.endsWith(path.join('core', 'dates.js')) ? FORMAT_STUB : null),
+            load: id => (id === FORMAT_STUB ? "export const FMT = { dloc: 'en-GB' };" : null),
+          },
+        ],
+        build: {
+          write: false,
+          target: 'es2022',
+          minify: 'esbuild',
+          copyPublicDir: false,
+          lib: { entry: path.resolve('src/logic/sim/index.js'), formats: ['iife'], name: 'RunwaySim', fileName: () => 'sim.js' },
+        },
+      });
+      const output = (Array.isArray(result) ? result[0] : result).output;
+      code = output.find(chunk => chunk.type === 'chunk').code;
+    },
+    transformIndexHtml: {
+      order: 'post',
+      // "</script" cannot appear inside the block: written "<\/script" it means the same in the code. A function,
+      // not a string, as the replacement: the code contains "$&" and friends, which a string would expand
+      handler: html =>
+        html.replace(
+          '</body>',
+          () => `<script type="text/plain" id="runway-sim">${code.replace(/<\/script/gi, () => '<\\/script')}</script>\n</body>`,
+        ),
+    },
+  };
+}
+
+/**
  * One file to hand out: dist/index.html is also written as runway-money-planner.html. What the page loads only when
  * used, the QR modules (build/qr.js) and the texts to translate, is written next to the page and embedded in the file
  * to hand out, which must work alone.
@@ -89,6 +140,6 @@ export default defineConfig(({ mode }) => ({
   // one page, no client-side routes: unknown paths are 404 (dev and preview), as on a static host, not the app's page
   appType: 'mpa',
   // pwa(): the installable app and the site's files (build/pwa.js), written next to the single file
-  plugins: [i18nKeys(), pwa(), strictCsp(hasGoogle(mode)), viteSingleFile({ removeViteModuleLoader: true }), namedCopy(hasGoogle(mode))],
+  plugins: [i18nKeys(), pwa(), strictCsp(hasGoogle(mode)), lazySimulation(), viteSingleFile({ removeViteModuleLoader: true }), namedCopy(hasGoogle(mode))],
   build: { target: 'es2022', cssMinify: true, minify: 'esbuild' },
 }));

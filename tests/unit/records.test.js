@@ -240,6 +240,8 @@ test('the plan’s own fields (settings, ticks, notes…) each have the time the
     'reserveOver',
     'paid',
     'notes',
+    'agenda',
+    'sim',
   ]);
   assert.ok(Object.values(prev.fieldsUpdatedAt).every(t => t === T0));
   const next = JSON.parse(JSON.stringify(prev));

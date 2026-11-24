@@ -56,7 +56,7 @@ export const I18N = {
     this.loading = null;
   },
   ORD: { one: 'st', two: 'nd', few: 'rd', other: 'th' },
-  IRREG: { person: 'people', entry: 'entries', wish: 'wishes' },
+  IRREG: { person: 'people', entry: 'entries', wish: 'wishes', try: 'tries' },
   init() {
     try {
       const raw = readJSON(this.KEY);

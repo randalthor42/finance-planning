@@ -42,5 +42,9 @@ export const SHIFTS = [
   ['next', $t('Next working day')],
   ['prev', $t('Working day before')],
 ];
+/**
+ * Keys of ledger lines that can be ticked or changed for one month ("appt:<id>:<day>": a counted appointment). An id
+ * is the app's short id, or a UUID (a record that arrived without an id: core/util.js newId).
+ */
 export const KEY_RE =
-  /^(inc|bill|item|trip|loan|goal|wish)(:(?:[a-z0-9]{1,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})){1,2}$/;
+  /^(inc|bill|item|trip|loan|goal|wish|appt)(:(?:[a-z0-9]{1,16}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})){1,2}$/;
