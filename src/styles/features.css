@@ -451,6 +451,10 @@ tr.dim td {
 @media (max-width: 900px) {
   #app {
     grid-template-columns: minmax(0, 1fr);
+    /* the top bar keeps its own height; the page takes what is left. Without this a short page (one tab of Settings)
+       shares the screen's spare height with the bar, which then grows */
+    grid-template-rows: auto 1fr;
+    align-content: start;
   }
   main {
     min-width: 0;
@@ -961,4 +965,25 @@ tr.dim td {
 }
 .lang-card .acts {
   margin-top: auto;
+}
+
+/* Overview › the current month: one gap between every part (progress, the sum, the surplus, the buttons), and the
+   buttons at the foot of the card when the row makes it taller than its content */
+.nowcard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.nowcard > .card-h {
+  margin-bottom: 0;
+}
+.nowcard .meq {
+  margin: 0;
+}
+.nowcard > p {
+  margin: -4px 0 0;
+}
+.nowcard > .acts {
+  margin-top: auto;
+  padding-top: 2px;
 }

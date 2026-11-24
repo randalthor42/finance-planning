@@ -231,6 +231,23 @@ function dayLabel(n, today, list, t, info, shown) {
  * Draws a calendar. Returns its element; month, day and layout changes redraw only the calendar, not the page.
  * @param {object} options see the top of this file
  */
+/**
+ * The month of a mini calendar in one figure: the net when there is money in and out, else the one that there is.
+ * @returns {?{text: string, tone: string}} null when the month moves no money
+ */
+function oneFigure(sum) {
+  if (sum.in && sum.out) {
+    return { text: $t('Net {0}', signed(sum.net)), tone: sum.net < 0 ? 'bad' : 'good' };
+  }
+  if (sum.in) {
+    return { text: $t('In {0}', signed(sum.in)), tone: 'good' };
+  }
+  if (sum.out) {
+    return { text: $t('Out {0}', money(-sum.out)), tone: '' };
+  }
+  return null;
+}
+
 export function calendar(options) {
   const o = {
     mode: 'full',
@@ -604,6 +621,15 @@ export function calendar(options) {
             ),
         )
       : null;
+    /* money in, out and net of the month (lines without a day belong to it) */
+    const sum = totals(eventsIn(shown, range.start, range.end));
+    // the mini calendar (a card) says the month in one figure under its name, instead of the pay-period dates (those
+    // stay in the title's tooltip) and a row of totals: three lines of text become one
+    const miniFigure = mode === 'mini' && o.summary ? oneFigure(sum) : null;
+    let subLine = dates ? h('span', { class: 'muted small', text: dates }) : null;
+    if (miniFigure) {
+      subLine = h('span', { class: 'cal-fig small ' + miniFigure.tone, text: miniFigure.text });
+    }
     const head = !o.header
       ? null
       : h(
@@ -611,9 +637,9 @@ export function calendar(options) {
           { class: 'cal-head' },
           h(
             'div',
-            { class: 'cal-title', 'aria-live': 'polite' },
+            { class: 'cal-title', 'aria-live': 'polite', title: dates || null },
             h('b', { text: titleText }),
-            dates ? h('span', { class: 'muted small', text: dates }) : null,
+            subLine,
           ),
           h(
             'div',
@@ -660,14 +686,12 @@ export function calendar(options) {
           )
         : null;
 
-    /* money in, out and net of the month (lines without a day belong to it) */
-    const sum = totals(eventsIn(shown, range.start, range.end));
     const figure = (label, value, className) =>
       h('span', null, h('span', { class: 'l', text: label }), h('b', { class: className || '', text: value }));
     // only what says something: no "Money in 0" on a calendar of spending, no net when it repeats the one figure
     const both = sum.in && sum.out;
     const summary =
-      o.summary && (sum.in || sum.out)
+      o.summary && !miniFigure && (sum.in || sum.out)
         ? h(
             'div',
             { class: 'cal-sum' },

@@ -444,7 +444,7 @@ function nowCard() {
             plural(m.end + 1 - today, 'day'),
             D.label(m.end + 1, { weekday: 'short' }),
           );
-  return card(
+  const el = card(
     M.label(currentMonth, true) + (settings.payDay ? ' · ' + rangeLabel(m) : ''),
     sub,
     btn($t('Open month'), () => App.go('months', { month: currentMonth }), 'sm'),
@@ -483,6 +483,8 @@ function nowCard() {
       ),
     ),
   );
+  el.classList.add('nowcard'); // its own spacing (features.css)
+  return el;
 }
 /** The current month in two lines: the best thing and the thing most worth watching, with a way into the full review. */
 function monthReviewCard() {
@@ -626,15 +628,20 @@ function overviewCalendar() {
     }),
   );
 }
-/** "Next 7 days: 4 payments · 610 € · lowest 54 € on Mon 30 Nov" (or that nothing is due). */
+/**
+ * The card's one line about the week ahead: "6 payments in 7 days · 645 €". The lowest balance is added only when it
+ * goes under the cushion, the one case worth reading about (the Lowest point card has the rest).
+ */
 function nextDaysText(next) {
-  const lowest = next.lowest
-    ? $t('lowest {0} on {1}', money(next.lowest.balance), D.label(next.lowest.day, { weekday: 'short' }))
-    : '';
-  if (!next.payments) {
-    return lowest ? $t('Next 7 days: nothing due · {0}', lowest) : $t('Next 7 days: nothing due');
-  }
-  return $t('Next 7 days: {0} · {1} · {2}', plural(next.payments, 'payment'), money(next.out), lowest);
+  const cushion = Store.plan.settings.cushion;
+  const low =
+    next.lowest && next.lowest.balance < cushion
+      ? $t('low {0} on {1}', money(next.lowest.balance), D.label(next.lowest.day, { weekday: 'short' }))
+      : null;
+  const due = next.payments
+    ? $t('{0} in 7 days · {1}', plural(next.payments, 'payment'), money(next.out))
+    : $t('Nothing due in 7 days');
+  return low ? due + ' · ' + low : due;
 }
 
 V.overview = () => {

@@ -523,6 +523,12 @@
 .cal[data-mode='mini'] .cal-title b {
   font-size: 0.95rem;
 }
+/* the mini calendar's one figure, under the month's name */
+.cal-fig {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .cal[data-mode='mini'] .cal-grid {
   gap: 2px;
   border: 0;
