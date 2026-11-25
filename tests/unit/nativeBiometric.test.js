@@ -67,6 +67,19 @@ test("the prompt asks for strong biometrics only, never the phone's own PIN", as
   leaveApp();
 });
 
+test("the prompt has one line, its title, without the app's name (Android shows it already)", async () => {
+  const calls = fakeApp();
+  await nativeVerify();
+  await register();
+  for (const call of calls.filter(c => c.method === 'internalAuthenticate')) {
+    assert.ok(call.options.androidTitle);
+    assert.doesNotMatch(call.options.androidTitle, /Runway/);
+    assert.equal(call.options.androidSubtitle, undefined);
+    assert.equal(call.options.reason, undefined);
+  }
+  leaveApp();
+});
+
 test('turning it on confirms the finger first and keeps no credential', async () => {
   fakeApp();
   assert.deepEqual(await register(), { kind: 'device' });

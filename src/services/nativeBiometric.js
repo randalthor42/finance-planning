@@ -60,19 +60,19 @@ const FAILED = new Set(['authenticationFailed', 'biometryLockout']);
 /**
  * Shows Android's fingerprint prompt: 'ok' when the phone recognised the person, 'fail' when a finger or face was
  * tried and refused, 'cancel' when the person chose "Use PIN" or the prompt closed or could not be shown.
- * @param {string} [reason] the line under the prompt's title
+ * The prompt has one line of text, its title: Android (15 and later) already shows the app's icon and name above it,
+ * so the title does not name the app again, and there is no subtitle or description repeating it.
+ * @param {string} [title] the prompt's title
  * @returns {Promise<'ok'|'fail'|'cancel'>}
  */
-export async function nativeVerify(reason = $t('Unlock Runway')) {
+export async function nativeVerify(title = $t('Unlock with your fingerprint or face')) {
   const cap = bridge();
   if (!cap) {
     return 'cancel';
   }
   try {
     await cap.nativePromise(PLUGIN, 'internalAuthenticate', {
-      reason,
-      androidTitle: 'Runway',
-      androidSubtitle: reason,
+      androidTitle: title,
       cancelTitle: $t('Use PIN'),
       allowDeviceCredential: false,
       androidConfirmationRequired: false,
